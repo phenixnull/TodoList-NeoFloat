@@ -29,6 +29,7 @@
   <img alt="Repo stars" src="https://img.shields.io/github/stars/phenixnull/TodoList-NeoFloat?style=flat-square" />
   <img alt="Last commit" src="https://img.shields.io/github/last-commit/phenixnull/TodoList-NeoFloat?style=flat-square" />
   <img alt="Top language" src="https://img.shields.io/github/languages/top/phenixnull/TodoList-NeoFloat?style=flat-square" />
+  <img alt="License" src="https://img.shields.io/github/license/phenixnull/TodoList-NeoFloat?style=flat-square" />
 </p>
 
 ## Overview
@@ -147,3 +148,7 @@ npm test
 ## Repository Goal
 
 This repository tracks the application itself only. Generated output, machine-local runtime files, and personal to-do data are not committed.
+
+## License
+
+This project is licensed under `GNU AGPL v3.0`. See `LICENSE` for the full text.
