@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manual Collapse Badge</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "Segoe UI", sans-serif;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: transparent;
+      }
+
+      body {
+        display: flex;
+        align-items: stretch;
+        justify-content: stretch;
+      }
+
+      button {
+        all: unset;
+        box-sizing: border-box;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(28, 38, 56, 0.94);
+        color: #f4f7ff;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+        user-select: none;
+        -webkit-user-select: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+      }
+
+      body.edge-left button,
+      body.edge-right button {
+        border-radius: 6px;
+      }
+
+      button:hover {
+        background: rgba(44, 60, 88, 0.98);
+      }
+
+      button:active {
+        background: rgba(58, 78, 112, 1);
+      }
+    </style>
+  </head>
+  <body class="edge-top">
+    <button id="badge" type="button" aria-label="Expand collapsed window">v</button>
+    <script>
+      const badge = document.getElementById('badge')
+
+      let edgeState = { side: 'top', hidden: true, manual: true }
+      let dragState = null
+      let dragTarget = null
+      let dragInFlight = false
+      let suppressClickUntil = 0
+
+      function getGlyph(side) {
+        if (side === 'left') return '>'
+        if (side === 'right') return '<'
+        return 'v'
+      }
+
+      function applyEdgeState(nextState) {
+        if (!nextState || typeof nextState !== 'object') {
+          return
+        }
+        edgeState = { ...edgeState, ...nextState }
+        const side = edgeState.side || 'top'
+        document.body.className = `edge-${side}`
+        badge.textContent = getGlyph(side)
+        badge.setAttribute('aria-label', `Expand ${side} collapsed window`)
+      }
+
+      async function syncEdgeState() {
+        try {
+          applyEdgeState(await window.todoAPI.getEdgeState())
+        } catch {}
+      }
+
+      async function flushDragTarget() {
+        if (dragInFlight || !dragTarget) {
+          return
+        }
+
+        dragInFlight = true
+        const nextPosition = dragTarget
+        dragTarget = null
+
+        try {
+          await window.todoAPI.setWindowPosition(nextPosition)
+        } catch {}
+
+        dragInFlight = false
+        if (dragTarget) {
+          void flushDragTarget()
+        }
+      }
+
+      async function beginDrag(event) {
+        if (event.button !== 0) {
+          return
+        }
+
+        event.preventDefault()
+        badge.setPointerCapture?.(event.pointerId)
+
+        const origin = await window.todoAPI.getWindowPosition()
+        if (!origin) {
+          return
+        }
+
+        dragState = {
+          pointerId: event.pointerId,
+          startX: event.screenX,
+          startY: event.screenY,
+          originX: origin.x,
+          originY: origin.y,
+          moved: false,
+        }
+      }
+
+      function moveDrag(event) {
+        if (!dragState || event.pointerId !== dragState.pointerId) {
+          return
+        }
+
+        const dx = Math.round(event.screenX - dragState.startX)
+        const dy = Math.round(event.screenY - dragState.startY)
+
+        if (!dragState.moved && Math.abs(dx) + Math.abs(dy) < 3) {
+          return
+        }
+
+        dragState.moved = true
+        dragTarget = {
+          x: dragState.originX + dx,
+          y: dragState.originY + dy,
+        }
+        suppressClickUntil = Date.now() + 180
+        void flushDragTarget()
+      }
+
+      function endDrag(event) {
+        if (!dragState || event.pointerId !== dragState.pointerId) {
+          return
+        }
+
+        badge.releasePointerCapture?.(event.pointerId)
+        if (dragState.moved) {
+          suppressClickUntil = Date.now() + 180
+        }
+        dragState = null
+      }
+
+      badge.addEventListener('pointerdown', (event) => {
+        void beginDrag(event)
+      })
+      badge.addEventListener('pointermove', moveDrag)
+      badge.addEventListener('pointerup', endDrag)
+      badge.addEventListener('pointercancel', endDrag)
+      badge.addEventListener('lostpointercapture', () => {
+        dragState = null
+      })
+
+      badge.addEventListener('click', async (event) => {
+        if (Date.now() < suppressClickUntil) {
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+
+        try {
+          await window.todoAPI.toggleEdgeCollapse()
+        } catch {}
+      })
+
+      window.todoAPI.onEdgeState((nextState) => {
+        applyEdgeState(nextState)
+      })
+
+      void syncEdgeState()
+    </script>
+  </body>
+</html>

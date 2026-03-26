@@ -1,0 +1,8 @@
+{
+  "name": "neo-float-todo-sync",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js"
+  }
+}

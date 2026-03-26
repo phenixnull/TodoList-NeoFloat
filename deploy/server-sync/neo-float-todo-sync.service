@@ -1,0 +1,14 @@
+[Unit]
+Description=Neo Float Todo Sync Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/neo-float-todo-sync
+ExecStart=/bin/bash /srv/neo-float-todo-sync/run-sync-server.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
