@@ -9,6 +9,14 @@
 </p>
 
 <p align="center">
+  <img src="docs/assets/neo-float-todo-showcase.png" alt="Neo Float Todo showcase" width="100%" />
+</p>
+
+<p align="center">
+  <sub>GitHub-ready showcase view of the floating desktop app</sub>
+</p>
+
+<p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white" />
   <img alt="Electron" src="https://img.shields.io/badge/Electron-40-47848F?style=for-the-badge&logo=electron&logoColor=white" />
   <img alt="React" src="https://img.shields.io/badge/React-19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" />
