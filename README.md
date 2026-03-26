@@ -151,4 +151,4 @@ This repository tracks the application itself only. Generated output, machine-lo
 
 ## License
 
-This project is licensed under `GNU AGPL v3.0`. See `LICENSE` for the full text.
+This project is licensed under `MIT`. See `LICENSE` for the full text.
