@@ -147,6 +147,14 @@ npm test
 
 ## Update Log
 
+### 2026-04-04
+
+- Added the Expo-based `native-app/` Android source branch and aligned the mobile APK workflow with a desktop-inspired task-strip UI instead of a generic card layout.
+- Refined the Android task strips with stronger running-state spectrum borders, internal animated gradients, centered editing sheets, and swipe-left delete actions.
+- Stabilized the desktop live editor so the visible editing layer is the actual `textarea`, preventing caret drift after line wraps.
+- Updated desktop live-editor autosizing to use textarea-driven height while editing and preview-driven height while browsing, avoiding premature card growth before the cursor reaches the next line.
+- Added regression coverage for native task-strip source expectations and desktop live-editor measurement behavior.
+
 ### 2026-04-03
 
 - Added per-task duration display controls with right-click actions for current-item show/hide, all-items show/hide, and explicit `single-line` vs `2+1` duration layouts.

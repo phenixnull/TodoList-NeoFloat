@@ -138,6 +138,21 @@ export function resolveTaskActionRowHeight(input: { isCollapsed: boolean; compac
   return input.compact ? 22 : 24
 }
 
+export function resolveLiveEditorMeasuredHeight(input: {
+  previewHeight: number
+  inputHeight: number
+  isEditing: boolean
+}): number {
+  const previewHeight = Math.max(0, input.previewHeight)
+  const inputHeight = Math.max(0, input.inputHeight)
+
+  if (input.isEditing) {
+    return inputHeight > 0 ? inputHeight : previewHeight
+  }
+
+  return previewHeight > 0 ? previewHeight : inputHeight
+}
+
 export function resolveTaskLayoutMetrics(input: {
   isCollapsed: boolean
   showDuration: boolean

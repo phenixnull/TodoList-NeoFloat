@@ -8,7 +8,7 @@ import rehypeKatex from 'rehype-katex'
 import type { Components } from 'react-markdown'
 import type { Task, TaskCardMode, TaskContentDisplayMode, TaskPaletteMode } from '../types/domain'
 import { markdownWithHardBreaks } from '../lib/math'
-import { resolveTaskLayoutMetrics } from '../lib/taskCardLayout'
+import { resolveLiveEditorMeasuredHeight, resolveTaskLayoutMetrics } from '../lib/taskCardLayout'
 import { parseTaskImageId, TASK_IMAGE_SRC_PREFIX } from '../lib/taskImages'
 import { calcTaskDuration, formatDuration } from '../lib/time'
 
@@ -268,7 +268,11 @@ export function TaskCard({
     const preferredHeight = previewHeight
     const fallbackHeight = inputHeight
     const autoHeightBuffer = isInnerScrollMode ? 0 : 0
-    const measuredHeight = preferredHeight > 0 ? preferredHeight : fallbackHeight
+    const measuredHeight = resolveLiveEditorMeasuredHeight({
+      previewHeight: preferredHeight,
+      inputHeight: fallbackHeight,
+      isEditing,
+    })
     const contentHeight = Math.max(minHeight, measuredHeight + autoHeightBuffer)
     const nextHeight = Math.max(minHeight, Math.min(maxHeight, contentHeight))
     const shouldScroll = isInnerScrollMode && contentHeight > maxHeight
@@ -445,6 +449,7 @@ export function TaskCard({
             className="live-input"
             rows={1}
             value={task.contentRaw}
+            placeholder={LABEL_EMPTY_TASK}
             onChange={(event) => onContentChange(task.id, event.target.value)}
             onPaste={(event) => void handlePaste(event)}
             onPointerDown={stopDragPropagation}

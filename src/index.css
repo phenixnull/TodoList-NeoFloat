@@ -800,14 +800,20 @@ textarea {
 
 .live-editor.is-editing .live-input {
   pointer-events: auto;
+  color: var(--text-main);
 }
 
 .live-editor.is-editing .live-preview {
   pointer-events: none;
+  opacity: 0;
 }
 
 .live-input:focus {
   outline: 0;
+}
+
+.live-input::placeholder {
+  color: rgba(229, 236, 255, 0.72);
 }
 
 .live-input::selection {

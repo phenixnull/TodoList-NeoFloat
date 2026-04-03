@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   normalizeReportedEditorWidth,
+  resolveLiveEditorMeasuredHeight,
   resolveTaskActionRowHeight,
   resolveTaskLayoutMetrics,
   shouldInlineDuration,
@@ -203,5 +204,34 @@ test('shouldInlineVisibleDurationRow stays off when any shown task is multiline 
       ],
     }),
     false,
+  )
+})
+
+test('resolveLiveEditorMeasuredHeight prefers the visible textarea height while editing', () => {
+  assert.equal(
+    resolveLiveEditorMeasuredHeight({
+      previewHeight: 38,
+      inputHeight: 62,
+      isEditing: true,
+    }),
+    62,
+  )
+
+  assert.equal(
+    resolveLiveEditorMeasuredHeight({
+      previewHeight: 84,
+      inputHeight: 62,
+      isEditing: true,
+    }),
+    62,
+  )
+
+  assert.equal(
+    resolveLiveEditorMeasuredHeight({
+      previewHeight: 52,
+      inputHeight: 36,
+      isEditing: false,
+    }),
+    52,
   )
 })
