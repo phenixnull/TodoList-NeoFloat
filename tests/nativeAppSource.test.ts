@@ -39,3 +39,15 @@ test('native task strip keeps default paused rows neutral and centers the editor
   assert.match(appEntry, /editorOverlay/)
   assert.match(appEntry, /position: 'absolute', left: 4, right: 4, bottom: 3/)
 })
+
+test('native task strip supports swipe-to-delete and vivid running spectrum chrome', () => {
+  const appEntryPath = path.join(nativeAppRoot, 'src', 'app', 'NativeTodoApp.tsx')
+  const appEntry = readFileSync(appEntryPath, 'utf8')
+
+  assert.match(appEntry, /PanResponder\.create/)
+  assert.match(appEntry, /SWIPE_DELETE_WIDTH/)
+  assert.match(appEntry, /删除任务/)
+  assert.match(appEntry, /runningSpectrumColors/)
+  assert.match(appEntry, /runningBorderTop/)
+  assert.match(appEntry, /runningContentSweep/)
+})

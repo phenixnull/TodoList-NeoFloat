@@ -7,6 +7,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Modal,
+  PanResponder,
   Platform,
   Pressable,
   SafeAreaView,
@@ -27,6 +28,9 @@ const DEFAULT_CHROME_ACCENT = '#94a3b8'
 const ACTIVE_SIGNAL_ACCENT = '#39d0ff'
 const TRACKED_SIGNAL_ACCENT = '#67d4ff'
 const FINISHED_SIGNAL_ACCENT = '#8fb1ff'
+const SWIPE_DELETE_WIDTH = 92
+const SWIPE_GESTURE_THRESHOLD = 8
+const SWIPE_OPEN_THRESHOLD = 36
 
 function two(value: number): string {
   return String(value).padStart(2, '0')
@@ -65,6 +69,15 @@ function taskSignalAccent(task: Task, durationMs: number): string {
   if (task.status === 'doing') return ACTIVE_SIGNAL_ACCENT
   if (durationMs > 0) return task.status === 'finished' ? FINISHED_SIGNAL_ACCENT : TRACKED_SIGNAL_ACCENT
   return task.archived ? '#8c98ab' : DEFAULT_CHROME_ACCENT
+}
+
+function runningSpectrumColors(signalAccent: string): [string, string, string, string] {
+  return [
+    hexToRgba('#6a5dff', 0.96),
+    hexToRgba(signalAccent, 0.98),
+    hexToRgba('#2ce6c5', 0.94),
+    hexToRgba('#b7f764', 0.9),
+  ]
 }
 
 function timerColors(task: Task, signalAccent: string, durationMs: number): [string, string] {
@@ -135,6 +148,7 @@ type TaskStripProps = {
   onOpenEditor: (task: Task) => void
   onToggleTimer: (task: Task) => void
   onToggleFinished: (task: Task) => void
+  onDeleteTask: (task: Task) => void
   onOpenMenu: (task: Task) => void
   formatDuration: (durationMs: number) => string
   calcTaskDuration: (task: Task, nowMs: number) => number
@@ -150,6 +164,7 @@ function TaskStrip({
   onOpenEditor,
   onToggleTimer,
   onToggleFinished,
+  onDeleteTask,
   onOpenMenu,
   formatDuration,
   calcTaskDuration,
@@ -165,14 +180,20 @@ function TaskStrip({
   const isRunning = task.status === 'doing'
   const isFinished = task.status === 'finished'
   const isArchived = task.archived
+  const swipeX = useRef(new Animated.Value(0)).current
+  const swipeStartRef = useRef(0)
+  const swipeValueRef = useRef(0)
+  const swipeOpenRef = useRef(false)
+  const runningSpectrum = runningSpectrumColors(signalAccent)
+  const runningSpectrumReversed: [string, string, string, string] = [runningSpectrum[3], runningSpectrum[2], runningSpectrum[1], runningSpectrum[0]]
   const shellBorder = hasUserAccent
     ? hexToRgba(chromeAccent, 0.82)
     : isRunning
-      ? 'rgba(186, 232, 255, 0.78)'
+      ? 'transparent'
       : isFinished
         ? 'rgba(226, 236, 250, 0.76)'
         : 'rgba(255,255,255,0.68)'
-  const shellShadow = isRunning ? hexToRgba(signalAccent, 0.34) : hasUserAccent ? hexToRgba(chromeAccent, 0.24) : 'rgba(0,0,0,0.46)'
+  const shellShadow = isRunning ? hexToRgba(signalAccent, 0.46) : hasUserAccent ? hexToRgba(chromeAccent, 0.24) : 'rgba(0,0,0,0.46)'
   const energyWidth = isRunning ? '100%' : isFinished ? '70%' : isArchived ? '24%' : hasTrackedTime ? '58%' : '34%'
   const primaryActionTone = hasUserAccent
     ? { backgroundColor: hexToRgba(chromeAccent, 0.28), borderColor: hexToRgba(chromeAccent, 0.46) }
@@ -189,69 +210,190 @@ function TaskStrip({
 
   const leftActionLabel = isArchived ? '↺' : isFinished ? '↺' : isRunning ? '||' : '▶'
   const rightActionLabel = isArchived ? '⋯' : isFinished ? '✓' : '■'
+  const contentGradientColors: [string, string, string] = isRunning
+    ? [hexToRgba('#4153ff', 0.8), hexToRgba(signalAccent, 0.76), hexToRgba('#20c997', 0.74)]
+    : [slotColors(task, chromeAccent)[0], slotColors(task, chromeAccent)[1], slotColors(task, chromeAccent)[1]]
+  const actionGradientColors: [string, string, string] = isRunning
+    ? [hexToRgba('#2044de', 0.68), hexToRgba(signalAccent, 0.56), hexToRgba('#159a8a', 0.52)]
+    : [actionRailColors(task, chromeAccent)[0], actionRailColors(task, chromeAccent)[1], actionRailColors(task, chromeAccent)[1]]
+
+  useEffect(() => {
+    const listenerId = swipeX.addListener(({ value }) => {
+      swipeValueRef.current = value
+    })
+    return () => {
+      swipeX.removeListener(listenerId)
+    }
+  }, [swipeX])
+
+  useEffect(() => {
+    swipeX.setValue(0)
+    swipeStartRef.current = 0
+    swipeValueRef.current = 0
+    swipeOpenRef.current = false
+  }, [swipeX, task.id])
+
+  function animateSwipe(toValue: number) {
+    swipeOpenRef.current = toValue !== 0
+    Animated.spring(swipeX, {
+      toValue,
+      useNativeDriver: true,
+      overshootClamping: true,
+      tension: 180,
+      friction: 24,
+    }).start()
+  }
+
+  function closeSwipe() {
+    animateSwipe(0)
+  }
+
+  const swipeResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          const horizontalIntent = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) + 4
+          if (swipeOpenRef.current) return horizontalIntent
+          return horizontalIntent && gestureState.dx < -SWIPE_GESTURE_THRESHOLD
+        },
+        onPanResponderGrant: () => {
+          swipeX.stopAnimation((value) => {
+            swipeStartRef.current = value
+            swipeValueRef.current = value
+          })
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const nextValue = Math.max(-SWIPE_DELETE_WIDTH, Math.min(0, swipeStartRef.current + gestureState.dx))
+          swipeX.setValue(nextValue)
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const releaseValue = swipeValueRef.current
+          const shouldOpen = gestureState.dx < -SWIPE_OPEN_THRESHOLD || releaseValue <= -SWIPE_DELETE_WIDTH * 0.56
+          animateSwipe(shouldOpen ? -SWIPE_DELETE_WIDTH : 0)
+        },
+        onPanResponderTerminate: () => {
+          const shouldStayOpen = swipeValueRef.current <= -SWIPE_DELETE_WIDTH * 0.56
+          animateSwipe(shouldStayOpen ? -SWIPE_DELETE_WIDTH : 0)
+        },
+      }),
+    [swipeX],
+  )
 
   return (
-    <View style={[styles.stripShell, { borderColor: shellBorder, shadowColor: shellShadow }]}>
-      <LinearGradient colors={shellColors(task, chromeAccent)} style={StyleSheet.absoluteFillObject} />
-      {isRunning ? (
-        <>
-          <Animated.View pointerEvents="none" style={[styles.runningGlow, { backgroundColor: hexToRgba(signalAccent, 0.18), opacity: glowOpacity }]} />
-          <Animated.View
-            pointerEvents="none"
-            style={[styles.runningSweep, { backgroundColor: hexToRgba('#ffffff', 0.12), opacity: glowOpacity, transform: [{ translateX: sweepX }, { rotate: '18deg' }] }]}
-          />
-        </>
-      ) : null}
+    <View style={styles.stripSwipeFrame}>
+      <Pressable
+        onPress={() => {
+          closeSwipe()
+          onDeleteTask(task)
+        }}
+        style={styles.deleteRevealButton}
+      >
+        <LinearGradient colors={['#ff6b7a', '#ef4444', '#9f1239']} style={styles.deleteRevealFill}>
+          <Text style={styles.deleteRevealLabel}>删除任务</Text>
+        </LinearGradient>
+      </Pressable>
 
-      <Pressable delayLongPress={220} onLongPress={() => onOpenMenu(task)} style={styles.stripPressable}>
-        <View style={styles.stripRow}>
-          <LinearGradient colors={numberColors(task, chromeAccent)} style={[styles.orderCapsule, isRunning ? { borderColor: hexToRgba(signalAccent, 0.5) } : null]}>
-            <Text style={styles.orderText}>#{displayOrder}</Text>
-          </LinearGradient>
+      <Animated.View style={[styles.stripAnimatedWrap, { transform: [{ translateX: swipeX }] }]} {...swipeResponder.panHandlers}>
+        <View style={[styles.stripShell, { borderColor: shellBorder, shadowColor: shellShadow }]}>
+          <LinearGradient colors={shellColors(task, chromeAccent)} style={StyleSheet.absoluteFillObject} />
+          {isRunning ? (
+            <>
+              <Animated.View pointerEvents="none" style={[styles.runningGlow, { backgroundColor: hexToRgba(signalAccent, 0.2), opacity: glowOpacity }]} />
+              <LinearGradient colors={runningSpectrum} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.runningBorderTop} />
+              <LinearGradient colors={runningSpectrumReversed} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.runningBorderBottom} />
+              <LinearGradient colors={runningSpectrum} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.runningBorderLeft} />
+              <LinearGradient colors={runningSpectrumReversed} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.runningBorderRight} />
+              <Animated.View
+                pointerEvents="none"
+                style={[styles.runningSweep, { backgroundColor: hexToRgba('#ffffff', 0.14), opacity: glowOpacity, transform: [{ translateX: sweepX }, { rotate: '18deg' }] }]}
+              />
+            </>
+          ) : null}
 
-          <Pressable onPress={() => onOpenEditor(task)} style={styles.contentPressable}>
-            <LinearGradient colors={slotColors(task, chromeAccent)} style={styles.contentCapsule}>
-              <View style={styles.contentTextWrap}>
-                <Text numberOfLines={2} style={styles.stripContentText}>{previewText}</Text>
-              </View>
-              <View style={styles.bottomMetaRow}>
-                <Text style={styles.stripHintText}>{runtimeText ?? taskStatusText(task)}</Text>
-                {task.attachments.length > 0 ? <Text style={styles.attachBadge}>{task.attachments.length} 图</Text> : null}
-              </View>
-            </LinearGradient>
-          </Pressable>
+          <Pressable
+            delayLongPress={220}
+            onLongPress={() => {
+              closeSwipe()
+              onOpenMenu(task)
+            }}
+            style={styles.stripPressable}
+          >
+            <View style={styles.stripRow}>
+              <LinearGradient colors={numberColors(task, chromeAccent)} style={[styles.orderCapsule, isRunning ? { borderColor: hexToRgba(signalAccent, 0.62) } : null]}>
+                <Text style={styles.orderText}>#{displayOrder}</Text>
+              </LinearGradient>
 
-          <LinearGradient colors={actionRailColors(task, chromeAccent)} style={styles.actionRail}>
-            <View style={styles.actionButtonRow}>
-              <Pressable onPress={() => (isArchived ? onOpenMenu(task) : isFinished ? onToggleFinished(task) : onToggleTimer(task))} style={[styles.iconButton, primaryActionTone]}>
-                <Text style={styles.iconGlyph}>{leftActionLabel}</Text>
+              <Pressable
+                onPress={() => {
+                  closeSwipe()
+                  onOpenEditor(task)
+                }}
+                style={styles.contentPressable}
+              >
+                <LinearGradient colors={contentGradientColors} style={styles.contentCapsule}>
+                  {isRunning ? (
+                    <>
+                      <LinearGradient colors={[hexToRgba('#ffffff', 0.18), hexToRgba('#7dd3fc', 0.06), hexToRgba('#ffffff', 0)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.runningContentAura} />
+                      <Animated.View pointerEvents="none" style={[styles.runningContentSweep, { opacity: glowOpacity, transform: [{ translateX: sweepX }, { rotate: '14deg' }] }]}>
+                        <LinearGradient colors={[hexToRgba('#ffffff', 0), hexToRgba('#ffffff', 0.22), hexToRgba('#ffffff', 0)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFillObject} />
+                      </Animated.View>
+                    </>
+                  ) : null}
+                  <View style={styles.contentTextWrap}>
+                    <Text numberOfLines={2} style={styles.stripContentText}>{previewText}</Text>
+                  </View>
+                  <View style={styles.bottomMetaRow}>
+                    <Text style={styles.stripHintText}>{runtimeText ?? taskStatusText(task)}</Text>
+                    {task.attachments.length > 0 ? <Text style={styles.attachBadge}>{task.attachments.length} 图</Text> : null}
+                  </View>
+                </LinearGradient>
               </Pressable>
-              <Pressable onPress={() => (isArchived ? onOpenMenu(task) : isFinished ? onOpenMenu(task) : onToggleFinished(task))} style={[styles.iconButton, secondaryActionTone]}>
-                <Text style={styles.iconGlyph}>{rightActionLabel}</Text>
-              </Pressable>
+
+              <LinearGradient colors={actionGradientColors} style={styles.actionRail}>
+                <View style={styles.actionButtonRow}>
+                  <Pressable
+                    onPress={() => {
+                      closeSwipe()
+                      isArchived ? onOpenMenu(task) : isFinished ? onToggleFinished(task) : onToggleTimer(task)
+                    }}
+                    style={[styles.iconButton, primaryActionTone]}
+                  >
+                    <Text style={styles.iconGlyph}>{leftActionLabel}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => {
+                      closeSwipe()
+                      isArchived ? onOpenMenu(task) : isFinished ? onOpenMenu(task) : onToggleFinished(task)
+                    }}
+                    style={[styles.iconButton, secondaryActionTone]}
+                  >
+                    <Text style={styles.iconGlyph}>{rightActionLabel}</Text>
+                  </Pressable>
+                </View>
+
+                <Animated.View style={[styles.timerAnimatedWrap, isRunning ? { transform: [{ scale: pulseScale }] } : null]}>
+                  <LinearGradient colors={timerColors(task, signalAccent, durationMs)} style={[styles.timerChip, { borderColor: hexToRgba(signalAccent, task.showDuration ? 0.4 : 0.18) }]}>
+                    <Text style={styles.timerChipText}>{durationText}</Text>
+                  </LinearGradient>
+                </Animated.View>
+              </LinearGradient>
             </View>
 
-            <Animated.View style={[styles.timerAnimatedWrap, isRunning ? { transform: [{ scale: pulseScale }] } : null]}>
-              <LinearGradient colors={timerColors(task, signalAccent, durationMs)} style={[styles.timerChip, { borderColor: hexToRgba(signalAccent, task.showDuration ? 0.4 : 0.18) }]}>
-                <Text style={styles.timerChipText}>{durationText}</Text>
-              </LinearGradient>
-            </Animated.View>
-          </LinearGradient>
+            <View style={styles.energyTrack}>
+              <Animated.View
+                style={[
+                  styles.energyFill,
+                  {
+                    width: energyWidth,
+                    backgroundColor: isRunning ? hexToRgba(signalAccent, 0.96) : hasTrackedTime ? hexToRgba(signalAccent, isFinished ? 0.58 : 0.42) : 'rgba(255,255,255,0.14)',
+                    opacity: isRunning ? glowOpacity : 1,
+                  },
+                ]}
+              />
+            </View>
+          </Pressable>
         </View>
-
-        <View style={styles.energyTrack}>
-          <Animated.View
-            style={[
-              styles.energyFill,
-              {
-                width: energyWidth,
-                backgroundColor: isRunning ? hexToRgba(signalAccent, 0.96) : hasTrackedTime ? hexToRgba(signalAccent, isFinished ? 0.58 : 0.42) : 'rgba(255,255,255,0.14)',
-                opacity: isRunning ? glowOpacity : 1,
-              },
-            ]}
-          />
-        </View>
-      </Pressable>
+      </Animated.View>
     </View>
   )
 }
@@ -393,6 +535,7 @@ export function NativeTodoApp() {
                   onOpenEditor={(item) => setEditorTaskId(item.id)}
                   onToggleTimer={(item) => board.toggleTaskTimer(item.id)}
                   onToggleFinished={(item) => board.toggleTaskFinished(item.id)}
+                  onDeleteTask={(item) => board.deleteTask(item.id)}
                   onOpenMenu={(item) => board.setTaskMenuId(item.id)}
                   formatDuration={board.formatDuration}
                   calcTaskDuration={board.calcTaskDuration}
@@ -745,15 +888,26 @@ const styles = StyleSheet.create({
   filterChipLabelActive: { color: '#f8fbff' },
   filterChipCount: { color: '#9bd97a', fontSize: 12, fontWeight: '800' },
   taskList: { gap: 10 },
+  stripSwipeFrame: { position: 'relative' },
+  deleteRevealButton: { position: 'absolute', top: 0, right: 0, bottom: 0, width: SWIPE_DELETE_WIDTH, borderRadius: 16, overflow: 'hidden' },
+  deleteRevealFill: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
+  deleteRevealLabel: { color: '#fff3f5', fontSize: 13, fontWeight: '900', textAlign: 'center' },
+  stripAnimatedWrap: { position: 'relative' },
   stripShell: { position: 'relative', borderRadius: 16, borderWidth: 1.5, overflow: 'hidden', shadowOffset: { width: 0, height: 14 }, shadowRadius: 20, shadowOpacity: 0.22, elevation: 7 },
   stripPressable: { position: 'relative', paddingBottom: 2 },
   runningGlow: { ...StyleSheet.absoluteFillObject },
+  runningBorderTop: { position: 'absolute', top: 0, left: 0, right: 0, height: 2.5 },
+  runningBorderBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 2.5 },
+  runningBorderLeft: { position: 'absolute', top: 0, bottom: 0, left: 0, width: 2.5 },
+  runningBorderRight: { position: 'absolute', top: 0, bottom: 0, right: 0, width: 2.5 },
   runningSweep: { position: 'absolute', top: -20, bottom: -20, left: -160, width: 110 },
   stripRow: { flexDirection: 'row', alignItems: 'stretch', gap: 6, paddingTop: 4, paddingHorizontal: 4, paddingBottom: 6 },
   orderCapsule: { width: 48, minHeight: 52, borderRadius: 11, borderWidth: 1, borderColor: 'rgba(255,255,255,0.62)', alignItems: 'center', justifyContent: 'center' },
   orderText: { color: '#ffffff', fontSize: 14, fontWeight: '900' },
   contentPressable: { flex: 1 },
-  contentCapsule: { minHeight: 52, borderRadius: 11, borderWidth: 1, borderColor: 'rgba(255,255,255,0.34)', paddingHorizontal: 12, paddingVertical: 7 },
+  contentCapsule: { minHeight: 52, borderRadius: 11, borderWidth: 1, borderColor: 'rgba(255,255,255,0.34)', paddingHorizontal: 12, paddingVertical: 7, overflow: 'hidden' },
+  runningContentAura: { ...StyleSheet.absoluteFillObject },
+  runningContentSweep: { position: 'absolute', top: -10, bottom: -10, left: -120, width: 94 },
   contentTextWrap: { flex: 1, justifyContent: 'center' },
   bottomMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4 },
   attachBadge: { color: '#fff7c2', fontSize: 10, fontWeight: '900' },
