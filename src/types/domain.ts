@@ -57,6 +57,7 @@ export interface AppSettings {
   taskCardMode: TaskCardMode
   taskContentDisplayMode: TaskContentDisplayMode
   taskPaletteMode: TaskPaletteMode
+  contextMenuOrder: string[]
 }
 
 export interface PersistedState {

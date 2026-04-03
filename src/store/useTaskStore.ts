@@ -2,6 +2,7 @@
 import type { AppSettings, EventDraft, PersistedState, Task, TaskImageAttachment } from '../types/domain'
 import { createContentPersistScheduler } from '../lib/contentPersistScheduler'
 import { DEFAULT_APP_SETTINGS } from '../lib/defaultSettings.ts'
+import { normalizeContextMenuOrder } from '../lib/contextMenuOrder.ts'
 import { applyTaskOrder } from '../lib/taskOrder'
 import { applyTaskDurationLayoutMode } from '../lib/taskDurationLayout'
 import { shouldHideArchivedTask } from '../lib/taskVisibility'
@@ -208,6 +209,7 @@ export const useTaskStore = create<TaskStore>((set, get) => {
         nextSettings.archivedRangeStart = normalizeDateText(nextSettings.archivedRangeStart)
         nextSettings.archivedRangeEnd = normalizeDateText(nextSettings.archivedRangeEnd)
         nextSettings.edgeAutoHide = normalizeEdgeAutoHide(nextSettings.edgeAutoHide)
+        nextSettings.contextMenuOrder = normalizeContextMenuOrder(nextSettings.contextMenuOrder)
 
         set({
           tasks: nextTasks,
@@ -748,6 +750,7 @@ export const useTaskStore = create<TaskStore>((set, get) => {
       next.archivedRangeStart = normalizeDateText(next.archivedRangeStart)
       next.archivedRangeEnd = normalizeDateText(next.archivedRangeEnd)
       next.edgeAutoHide = normalizeEdgeAutoHide(next.edgeAutoHide)
+      next.contextMenuOrder = normalizeContextMenuOrder(next.contextMenuOrder)
       const shouldApplyFontToAll = Object.hasOwn(patch, 'defaultFontFamily') || Object.hasOwn(patch, 'defaultFontSize')
       const now = toLocalIso()
 

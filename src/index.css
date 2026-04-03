@@ -1061,6 +1061,7 @@ textarea {
 }
 
 .task-context-menu {
+  --context-menu-row-min-height: 36px;
   position: fixed;
   z-index: 1200;
   min-width: 220px;
@@ -1104,6 +1105,7 @@ textarea {
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
   text-align: left;
+  min-height: var(--context-menu-row-min-height);
   padding: 6px 8px;
   cursor: pointer;
   font-size: 12px;
@@ -1131,6 +1133,38 @@ textarea {
   border-radius: 8px;
   background: rgba(3, 7, 15, 0.52);
   padding: 6px;
+}
+
+.task-context-menu .context-menu-sortable-item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+}
+
+.task-context-menu .context-menu-sortable-item.is-dragging {
+  opacity: 0.88;
+}
+
+.task-context-menu .context-menu-drag-handle {
+  min-height: var(--context-menu-row-min-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 0;
+  text-align: center;
+  cursor: grab;
+  color: rgba(220, 234, 255, 0.82);
+}
+
+.task-context-menu .context-menu-drag-handle:active {
+  cursor: grabbing;
+}
+
+.task-context-menu .context-menu-item-body {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
 }
 
 .task-context-menu .submenu-note {

@@ -2,7 +2,14 @@
 import { closestCenter, DndContext, PointerSensor, type DragEndEvent, useSensor, useSensors } from '@dnd-kit/core'
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { SettingsPanel } from './components/SettingsPanel'
+import { SortableContextMenuItem } from './components/SortableContextMenuItem'
 import { TaskCard } from './components/TaskCard'
+import { normalizeContextMenuOrder, reorderContextMenuOrder, type ContextMenuItemId } from './lib/contextMenuOrder'
+import {
+  CONTEXT_MENU_FINISH_TEXT,
+  CONTEXT_MENU_INSERT_AFTER_TEXT,
+  CONTEXT_MENU_UNFINISH_TEXT,
+} from './lib/contextMenuLabels'
 import { resolveHiddenArchiveRangeDefaults, shouldShowTaskInList } from './lib/taskVisibility'
 import { useTaskStore } from './store/useTaskStore'
 import { calcTaskDuration, formatDuration, localDateTimeText } from './lib/time'
@@ -62,6 +69,22 @@ const TASK_COLOR_PRESETS: Array<{ id: string; label: string; value: string }> = 
   { id: 'dusk', label: '暮色', value: 'linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899)' },
   { id: 'forest', label: '森林', value: 'linear-gradient(135deg, #22c55e, #16a34a, #15803d)' },
 ]
+
+const CONTEXT_MENU_ORDER_LABELS: Record<ContextMenuItemId, string> = {
+  stats: '时间统计查看',
+  'toggle-duration': '当前任务用时显示/隐藏',
+  'toggle-all-durations': '全部任务用时显示/隐藏',
+  'toggle-duration-layout': '当前任务用时布局切换',
+  'set-inline-layout': '所有显示任务设为单行布局',
+  'set-stacked-layout': '所有显示任务设为 2+1 布局',
+  'insert-after': '在下方插入任务',
+  'toggle-finish': '完成状态切换',
+  'toggle-archive': '归档操作',
+  color: '任务配色',
+  'show-archived': '显示隐藏任务',
+  'hide-archived': '隐藏归档任务',
+  delete: '永久删除',
+}
 
 function normalizeHexForPicker(value: string | undefined): string | null {
   if (!value) {
@@ -186,6 +209,7 @@ function App() {
   const suppressManualBadgeClickRef = useRef(false)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+  const contextMenuSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 10 } }))
 
   const orderedTasks = useMemo(() => [...tasks].sort((a, b) => a.order - b.order), [tasks])
   const todayDate = useMemo(() => toDateInputText(new Date(nowMs)), [nowMs])
@@ -193,6 +217,7 @@ function App() {
     return orderedTasks.filter((task) => shouldShowTaskInList(task, settings, todayDate))
   }, [orderedTasks, settings, todayDate])
   const visibleTaskIds = useMemo(() => visibleTasks.map((task) => task.id), [visibleTasks])
+  const contextMenuOrder = useMemo(() => normalizeContextMenuOrder(settings.contextMenuOrder), [settings.contextMenuOrder])
   const contextTask = useMemo(
     () => (contextMenu ? tasks.find((task) => task.id === contextMenu.taskId) ?? null : null),
     [contextMenu, tasks],
@@ -649,6 +674,25 @@ function App() {
     reorderTasks(moved)
   }
 
+  const onContextMenuDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) {
+      return
+    }
+
+    const nextOrder = reorderContextMenuOrder({
+      order: contextMenuOrder,
+      activeId: String(active.id),
+      overId: String(over.id),
+    })
+
+    if (nextOrder.every((entry, index) => entry === contextMenuOrder[index])) {
+      return
+    }
+
+    updateSettings({ contextMenuOrder: nextOrder })
+  }
+
   const customColorPreview = useMemo(
     () => buildTaskColorValue(customColorMode, customColorA, customColorB, customColorAngle),
     [customColorMode, customColorA, customColorB, customColorAngle],
@@ -685,6 +729,7 @@ function App() {
   const toggleColorSubmenu = () => {
     const nextOpen = !colorSubmenuOpen
     setArchiveSubmenuOpen(false)
+    setHideArchiveSubmenuOpen(false)
     if (nextOpen && contextTask) {
       const parsed = parseTaskColorValue(contextTask.colorValue)
       if (parsed) {
@@ -768,6 +813,389 @@ function App() {
     hideArchivedTasks({ mode: 'range', start, end })
     closeContextMenu()
   }
+
+  const renderContextMenuItemContent = (itemId: ContextMenuItemId) => {
+    if (!contextTask) {
+      return null
+    }
+
+    switch (itemId) {
+      case 'stats':
+        return (
+          <button
+            key={itemId}
+            type="button"
+            onClick={() => {
+              setStatsTaskId(contextTask.id)
+              closeContextMenu()
+            }}
+          >
+            📊 时间统计查看
+          </button>
+        )
+      case 'toggle-duration':
+        return (
+          <button
+            key={itemId}
+            type="button"
+            onClick={() => {
+              toggleTaskDurationVisibility(contextTask.id)
+              setLayoutPulse((value) => value + 1)
+              closeContextMenu()
+            }}
+          >
+            {contextTask.showDuration === false ? '🕒 显示用时（当前隐藏）' : '🙈 隐藏用时（当前显示）'}
+          </button>
+        )
+      case 'toggle-all-durations':
+        return (
+          <button
+            key={itemId}
+            type="button"
+            onClick={() => {
+              setAllTaskDurationVisibility(allTaskDurationsHidden)
+              setLayoutPulse((value) => value + 1)
+              closeContextMenu()
+            }}
+          >
+            {allTaskDurationsHidden ? '🕒 显示（全部）用时' : '🙈 隐藏（全部）用时'}
+          </button>
+        )
+      case 'toggle-duration-layout':
+        return (
+          <button
+            key={itemId}
+            type="button"
+            onClick={() => {
+              setTaskDurationLayoutMode(contextTask.id, contextTask.durationLayoutMode === 'inline' ? 'stacked' : 'inline')
+              setLayoutPulse((value) => value + 1)
+              closeContextMenu()
+            }}
+          >
+            {contextTask.durationLayoutMode === 'inline' ? '↕️ 切换为 2+1 用时布局' : '↔️ 切换为单行用时布局'}
+          </button>
+        )
+      case 'set-inline-layout':
+        return (
+          <button
+            key={itemId}
+            type="button"
+            onClick={() => {
+              setTasksDurationLayoutMode(visibleTaskIds, 'inline')
+              setLayoutPulse((value) => value + 1)
+              closeContextMenu()
+            }}
+          >
+            ↔️ 所有显示任务设为单行布局
+          </button>
+        )
+      case 'set-stacked-layout':
+        return (
+          <button
+            key={itemId}
+            type="button"
+            onClick={() => {
+              setTasksDurationLayoutMode(visibleTaskIds, 'stacked')
+              setLayoutPulse((value) => value + 1)
+              closeContextMenu()
+            }}
+          >
+            ↕️ 所有显示任务设为 2+1 布局
+          </button>
+        )
+      case 'insert-after':
+        return (
+          <button
+            key={itemId}
+            type="button"
+            onClick={() => {
+              insertTaskAfter(contextTask.id)
+              closeContextMenu()
+            }}
+          >
+            {CONTEXT_MENU_INSERT_AFTER_TEXT}
+          </button>
+        )
+      case 'toggle-finish':
+        return contextTask.status === 'finished' ? (
+          <button
+            key={itemId}
+            type="button"
+            onClick={() => {
+              unfinishTask(contextTask.id)
+              closeContextMenu()
+            }}
+          >
+            {CONTEXT_MENU_UNFINISH_TEXT}
+          </button>
+        ) : (
+          <button
+            key={itemId}
+            type="button"
+            onClick={() => {
+              finishTask(contextTask.id)
+              closeContextMenu()
+            }}
+          >
+            {CONTEXT_MENU_FINISH_TEXT}
+          </button>
+        )
+      case 'toggle-archive':
+        return !contextTask.archived ? (
+          <section key={itemId} className="menu-layer">
+            <button
+              type="button"
+              onClick={() => {
+                archiveTask(contextTask.id)
+                closeContextMenu()
+              }}
+            >
+              🗂️ 归档
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                archiveAndHideTask(contextTask.id)
+                closeContextMenu()
+              }}
+            >
+              📥 归档 + 隐藏
+            </button>
+          </section>
+        ) : (
+          <button
+            key={itemId}
+            type="button"
+            onClick={() => {
+              unarchiveTask(contextTask.id)
+              closeContextMenu()
+            }}
+          >
+            📤 取消归档
+          </button>
+        )
+      case 'color':
+        return (
+          <section key={itemId} className="menu-layer">
+            <button type="button" className="submenu-trigger" onClick={toggleColorSubmenu}>
+              🎨 任务配色 {colorSubmenuOpen ? '▾' : '▸'}
+            </button>
+
+            {colorSubmenuOpen ? (
+              <div className="submenu-panel color-submenu-panel">
+                <div className="color-preset-grid">
+                  {TASK_COLOR_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className="color-preset-btn"
+                      onClick={() => applyPresetColor(preset.value)}
+                      title={preset.label}
+                    >
+                      <span className="color-chip" style={{ backgroundImage: preset.value }} />
+                      <span>{preset.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="color-custom-panel">
+                  <div className="color-mode-row" role="group" aria-label="自定义配色模式">
+                    <button
+                      type="button"
+                      className={customColorMode === 'gradient' ? 'is-active' : ''}
+                      onClick={() => setCustomColorMode('gradient')}
+                    >
+                      渐变
+                    </button>
+                    <button
+                      type="button"
+                      className={customColorMode === 'solid' ? 'is-active' : ''}
+                      onClick={() => setCustomColorMode('solid')}
+                    >
+                      纯色
+                    </button>
+                  </div>
+
+                  <div className="color-input-grid">
+                    <label className="color-field">
+                      主色
+                      <input
+                        type="color"
+                        value={customColorA}
+                        onChange={(event) => setCustomColorA(event.target.value)}
+                      />
+                    </label>
+                    {customColorMode === 'gradient' ? (
+                      <label className="color-field">
+                        副色
+                        <input
+                          type="color"
+                          value={customColorB}
+                          onChange={(event) => setCustomColorB(event.target.value)}
+                        />
+                      </label>
+                    ) : null}
+                  </div>
+
+                  {customColorMode === 'gradient' ? (
+                    <label className="angle-slider-field">
+                      角度
+                      <div className="angle-slider-row">
+                        <input
+                          type="range"
+                          min={0}
+                          max={360}
+                          step={1}
+                          value={customColorAngle}
+                          onChange={(event) => setCustomColorAngle(Number(event.target.value))}
+                        />
+                        <span>{Math.round(customColorAngle)}°</span>
+                      </div>
+                    </label>
+                  ) : null}
+
+                  <div className="color-preview" style={{ background: customColorPreview }} />
+
+                  <div className="color-action-row">
+                    <button type="button" onClick={applyCustomColor}>
+                      🪄 应用自定义
+                    </button>
+                    <button type="button" onClick={resetTaskColor}>
+                      ♻️ 恢复自动配色
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </section>
+        )
+      case 'show-archived':
+        return (
+          <section key={itemId} className="menu-layer">
+            <button
+              type="button"
+              className="submenu-trigger"
+              onClick={toggleArchiveSubmenu}
+            >
+              🫥 显示隐藏任务 {archiveSubmenuOpen ? '▾' : '▸'}
+            </button>
+
+            {archiveSubmenuOpen ? (
+              <div className="submenu-panel">
+                <button type="button" onClick={applyArchivedAll}>
+                  📚 显示全部
+                </button>
+
+                <div className="submenu-note">按时间</div>
+
+                <label className="submenu-date-field">
+                  Start
+                  <input
+                    type="date"
+                    value={archiveStartInput}
+                    onChange={(event) => setArchiveStartInput(event.target.value)}
+                  />
+                </label>
+
+                <label className="submenu-date-field">
+                  End
+                  <input
+                    type="date"
+                    value={archiveEndInput}
+                    onChange={(event) => setArchiveEndInput(event.target.value)}
+                  />
+                </label>
+
+                <button type="button" onClick={applyArchivedRange}>
+                  🗓️ 按时间显示
+                </button>
+
+                {settings.showArchived ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateSettings({ showArchived: false })
+                      closeContextMenu()
+                    }}
+                  >
+                    🙈 关闭隐藏任务显示
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+        )
+      case 'hide-archived':
+        return (
+          <section key={itemId} className="menu-layer">
+            <button
+              type="button"
+              className="submenu-trigger"
+              onClick={toggleHideArchiveSubmenu}
+            >
+              🙈 隐藏归档任务 {hideArchiveSubmenuOpen ? '▾' : '▸'}
+            </button>
+
+            {hideArchiveSubmenuOpen ? (
+              <div className="submenu-panel">
+                <button type="button" onClick={applyHideArchivedAll}>
+                  🙈 隐藏全部归档任务
+                </button>
+
+                <div className="submenu-note">按时间</div>
+
+                <label className="submenu-date-field">
+                  Start
+                  <input
+                    type="date"
+                    value={hideArchiveStartInput}
+                    onChange={(event) => setHideArchiveStartInput(event.target.value)}
+                  />
+                </label>
+
+                <label className="submenu-date-field">
+                  End
+                  <input
+                    type="date"
+                    value={hideArchiveEndInput}
+                    onChange={(event) => setHideArchiveEndInput(event.target.value)}
+                  />
+                </label>
+
+                <button type="button" onClick={applyHideArchivedRange}>
+                  🗓️ 按时间隐藏
+                </button>
+              </div>
+            ) : null}
+          </section>
+        )
+      case 'delete':
+        return (
+          <button
+            key={itemId}
+            type="button"
+            className="danger"
+            onClick={() => {
+              deleteTask(contextTask.id)
+              closeContextMenu()
+            }}
+          >
+            🗑️ Delete（永久删除本地存储）
+          </button>
+        )
+      default:
+        return null
+    }
+  }
+
+  const orderedContextMenuItems = contextTask
+    ? contextMenuOrder.map((itemId) => (
+        <SortableContextMenuItem key={itemId} id={itemId} label={CONTEXT_MENU_ORDER_LABELS[itemId]}>
+          {renderContextMenuItemContent(itemId)}
+        </SortableContextMenuItem>
+      ))
+    : null
 
   const toggleEdgeCollapseClick = async () => {
     const result = await window.todoAPI?.toggleEdgeCollapse()
@@ -1011,336 +1439,15 @@ function App() {
             top: `${contextMenuPosition.top}px`,
           }}
         >
-          <button
-            type="button"
-            onClick={() => {
-              setStatsTaskId(contextTask.id)
-              closeContextMenu()
-            }}
+          <DndContext
+            sensors={contextMenuSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={onContextMenuDragEnd}
           >
-            📊 时间统计查看
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              toggleTaskDurationVisibility(contextTask.id)
-              setLayoutPulse((value) => value + 1)
-              closeContextMenu()
-            }}
-          >
-            {contextTask.showDuration === false ? '🕒 显示用时（当前隐藏）' : '🙈 隐藏用时（当前显示）'}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setAllTaskDurationVisibility(allTaskDurationsHidden)
-              setLayoutPulse((value) => value + 1)
-              closeContextMenu()
-            }}
-          >
-            {allTaskDurationsHidden ? '🕒 显示（全部）用时' : '🙈 隐藏（全部）用时'}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setTaskDurationLayoutMode(contextTask.id, contextTask.durationLayoutMode === 'inline' ? 'stacked' : 'inline')
-              setLayoutPulse((value) => value + 1)
-              closeContextMenu()
-            }}
-          >
-            {contextTask.durationLayoutMode === 'inline' ? '↕️ 切换为 2+1 用时布局' : '↔️ 切换为单行用时布局'}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setTasksDurationLayoutMode(visibleTaskIds, 'inline')
-              setLayoutPulse((value) => value + 1)
-              closeContextMenu()
-            }}
-          >
-            ↔️ 所有显示任务设为单行布局
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setTasksDurationLayoutMode(visibleTaskIds, 'stacked')
-              setLayoutPulse((value) => value + 1)
-              closeContextMenu()
-            }}
-          >
-            ↕️ 所有显示任务设为 2+1 布局
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              insertTaskAfter(contextTask.id)
-              closeContextMenu()
-            }}
-          >
-            ✨ 在下方插入任务
-          </button>
-
-          {contextTask.status === 'finished' ? (
-            <button
-              type="button"
-              onClick={() => {
-                unfinishTask(contextTask.id)
-                closeContextMenu()
-              }}
-            >
-              ↩️ 取消完成状态
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                finishTask(contextTask.id)
-                closeContextMenu()
-              }}
-            >
-              ✅ 设为完成状态
-            </button>
-          )}
-
-          {!contextTask.archived ? (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  archiveTask(contextTask.id)
-                  closeContextMenu()
-                }}
-              >
-                🗂️ 归档
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  archiveAndHideTask(contextTask.id)
-                  closeContextMenu()
-                }}
-              >
-                📥 归档 + 隐藏
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                unarchiveTask(contextTask.id)
-                closeContextMenu()
-              }}
-            >
-              📤 取消归档
-            </button>
-          )}
-
-          <section className="menu-layer">
-            <button type="button" className="submenu-trigger" onClick={toggleColorSubmenu}>
-              🎨 任务配色 {colorSubmenuOpen ? '▾' : '▸'}
-            </button>
-
-            {colorSubmenuOpen ? (
-              <div className="submenu-panel color-submenu-panel">
-                <div className="color-preset-grid">
-                  {TASK_COLOR_PRESETS.map((preset) => (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      className="color-preset-btn"
-                      onClick={() => applyPresetColor(preset.value)}
-                      title={preset.label}
-                    >
-                      <span className="color-chip" style={{ backgroundImage: preset.value }} />
-                      <span>{preset.label}</span>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="color-custom-panel">
-                  <div className="color-mode-row" role="group" aria-label="自定义配色模式">
-                    <button
-                      type="button"
-                      className={customColorMode === 'gradient' ? 'is-active' : ''}
-                      onClick={() => setCustomColorMode('gradient')}
-                    >
-                      渐变
-                    </button>
-                    <button
-                      type="button"
-                      className={customColorMode === 'solid' ? 'is-active' : ''}
-                      onClick={() => setCustomColorMode('solid')}
-                    >
-                      纯色
-                    </button>
-                  </div>
-
-                  <div className="color-input-grid">
-                    <label className="color-field">
-                      主色
-                      <input
-                        type="color"
-                        value={customColorA}
-                        onChange={(event) => setCustomColorA(event.target.value)}
-                      />
-                    </label>
-                    {customColorMode === 'gradient' ? (
-                      <label className="color-field">
-                        副色
-                        <input
-                          type="color"
-                          value={customColorB}
-                          onChange={(event) => setCustomColorB(event.target.value)}
-                        />
-                      </label>
-                    ) : null}
-                  </div>
-
-                  {customColorMode === 'gradient' ? (
-                    <label className="angle-slider-field">
-                      角度
-                      <div className="angle-slider-row">
-                        <input
-                          type="range"
-                          min={0}
-                          max={360}
-                          step={1}
-                          value={customColorAngle}
-                          onChange={(event) => setCustomColorAngle(Number(event.target.value))}
-                        />
-                        <span>{Math.round(customColorAngle)}°</span>
-                      </div>
-                    </label>
-                  ) : null}
-
-                  <div className="color-preview" style={{ background: customColorPreview }} />
-
-                  <div className="color-action-row">
-                    <button type="button" onClick={applyCustomColor}>
-                      🪄 应用自定义
-                    </button>
-                    <button type="button" onClick={resetTaskColor}>
-                      ♻️ 恢复自动配色
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </section>
-
-          <section className="menu-layer">
-            <button
-              type="button"
-              className="submenu-trigger"
-              onClick={toggleArchiveSubmenu}
-            >
-              🫥 显示隐藏任务 {archiveSubmenuOpen ? '▾' : '▸'}
-            </button>
-
-            {archiveSubmenuOpen ? (
-              <div className="submenu-panel">
-                <button type="button" onClick={applyArchivedAll}>
-                  📚 显示全部
-                </button>
-
-                <div className="submenu-note">按时间</div>
-
-                <label className="submenu-date-field">
-                  Start
-                  <input
-                    type="date"
-                    value={archiveStartInput}
-                    onChange={(event) => setArchiveStartInput(event.target.value)}
-                  />
-                </label>
-
-                <label className="submenu-date-field">
-                  End
-                  <input
-                    type="date"
-                    value={archiveEndInput}
-                    onChange={(event) => setArchiveEndInput(event.target.value)}
-                  />
-                </label>
-
-                <button type="button" onClick={applyArchivedRange}>
-                  🗓️ 按时间显示
-                </button>
-
-                {settings.showArchived ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateSettings({ showArchived: false })
-                      closeContextMenu()
-                    }}
-                  >
-                    🙈 关闭隐藏任务显示
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-          </section>
-
-          <section className="menu-layer">
-            <button
-              type="button"
-              className="submenu-trigger"
-              onClick={toggleHideArchiveSubmenu}
-            >
-              🙈 隐藏归档任务 {hideArchiveSubmenuOpen ? '▾' : '▸'}
-            </button>
-
-            {hideArchiveSubmenuOpen ? (
-              <div className="submenu-panel">
-                <button type="button" onClick={applyHideArchivedAll}>
-                  🙈 隐藏全部归档任务
-                </button>
-
-                <div className="submenu-note">按时间</div>
-
-                <label className="submenu-date-field">
-                  Start
-                  <input
-                    type="date"
-                    value={hideArchiveStartInput}
-                    onChange={(event) => setHideArchiveStartInput(event.target.value)}
-                  />
-                </label>
-
-                <label className="submenu-date-field">
-                  End
-                  <input
-                    type="date"
-                    value={hideArchiveEndInput}
-                    onChange={(event) => setHideArchiveEndInput(event.target.value)}
-                  />
-                </label>
-
-                <button type="button" onClick={applyHideArchivedRange}>
-                  🗓️ 按时间隐藏
-                </button>
-              </div>
-            ) : null}
-          </section>
-
-          <button
-            type="button"
-            className="danger"
-            onClick={() => {
-              deleteTask(contextTask.id)
-              closeContextMenu()
-            }}
-          >
-            🗑️ Delete（永久删除本地存储）
-          </button>
+            <SortableContext items={contextMenuOrder} strategy={verticalListSortingStrategy}>
+              {orderedContextMenuItems}
+            </SortableContext>
+          </DndContext>
         </div>
       ) : null}
 

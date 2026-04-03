@@ -1,4 +1,5 @@
 import type { AppSettings } from '../types/domain'
+import { DEFAULT_CONTEXT_MENU_ORDER } from './contextMenuOrder.ts'
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   opacity: 0.82,
@@ -15,4 +16,5 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   taskCardMode: 'expanded',
   taskContentDisplayMode: 'inner-scroll',
   taskPaletteMode: 'auto-vivid',
+  contextMenuOrder: [...DEFAULT_CONTEXT_MENU_ORDER],
 }

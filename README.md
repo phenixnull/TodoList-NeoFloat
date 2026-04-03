@@ -154,6 +154,9 @@ npm test
 - Improved archive and hidden-task behavior so plain archive state can stay visible, archive-and-hide remains available, and hidden archived task filtering supports date ranges.
 - Added backward-compatible duration normalization for desktop and mobile persisted state so older tasks can recover `totalDurationMs` and newer layout metadata safely.
 - Made the desktop context menu scrollable in small windows and fixed internal menu scrolling so wheel input does not immediately close the menu.
+- Added persistent right-click menu ordering with direct drag-and-drop reordering inside the menu instead of a separate reorder panel.
+- Refined context menu affordances with updated insert/unfinish emoji labels and aligned the left drag handle height to single-line action rows.
+- Added regression coverage for context menu labels, ordering helpers, and CSS row-height consistency.
 - Added Windows dev launch helpers (`start-dev.ps1`, `launch-dev-hidden.vbs`, updated `start-dev.bat`) for source-based startup and desktop shortcut workflows.
 
 ## Repository Goal
