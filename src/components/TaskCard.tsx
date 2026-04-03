@@ -262,6 +262,8 @@ export function TaskCard({
           ? Math.max(previewScrollHeight, previewBoundingHeight)
           : previewScrollHeight
         : previewBoundingHeight
+    const hasRichPreviewLayout =
+      previewEl.querySelector('.task-inline-image, .katex, pre, code, table, blockquote, ul, ol, h1, h2, h3, h4, h5, h6, hr') !== null
 
     // Keep auto-height anchored to rendered preview content so width changes
     // do not drift from textarea line-wrap differences.
@@ -272,6 +274,7 @@ export function TaskCard({
       previewHeight: preferredHeight,
       inputHeight: fallbackHeight,
       isEditing,
+      preferInputHeight: !hasRichPreviewLayout,
     })
     const contentHeight = Math.max(minHeight, measuredHeight + autoHeightBuffer)
     const nextHeight = Math.max(minHeight, Math.min(maxHeight, contentHeight))

@@ -235,3 +235,25 @@ test('resolveLiveEditorMeasuredHeight prefers the visible textarea height while 
     52,
   )
 })
+
+test('resolveLiveEditorMeasuredHeight can prefer textarea height for plain-text preview mode', () => {
+  assert.equal(
+    resolveLiveEditorMeasuredHeight({
+      previewHeight: 84,
+      inputHeight: 62,
+      isEditing: false,
+      preferInputHeight: true,
+    }),
+    62,
+  )
+
+  assert.equal(
+    resolveLiveEditorMeasuredHeight({
+      previewHeight: 84,
+      inputHeight: 62,
+      isEditing: false,
+      preferInputHeight: false,
+    }),
+    84,
+  )
+})

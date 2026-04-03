@@ -142,12 +142,17 @@ export function resolveLiveEditorMeasuredHeight(input: {
   previewHeight: number
   inputHeight: number
   isEditing: boolean
+  preferInputHeight?: boolean
 }): number {
   const previewHeight = Math.max(0, input.previewHeight)
   const inputHeight = Math.max(0, input.inputHeight)
 
   if (input.isEditing) {
     return inputHeight > 0 ? inputHeight : previewHeight
+  }
+
+  if (input.preferInputHeight && inputHeight > 0) {
+    return inputHeight
   }
 
   return previewHeight > 0 ? previewHeight : inputHeight
