@@ -5,7 +5,9 @@ import {
   Animated,
   Easing,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -21,6 +23,10 @@ import type { Task } from '../../../src/types/domain'
 import { summarizeTask, taskRuntimeFlag, taskStatusText, useNativeTodoBoard } from '../state/useNativeTodoBoard'
 
 const PRESET_COLORS = ['#5ea4ff', '#8b5cf6', '#34d399', '#f59e0b', '#f97316', '#ef4444', '#14b8a6']
+const DEFAULT_CHROME_ACCENT = '#94a3b8'
+const ACTIVE_SIGNAL_ACCENT = '#39d0ff'
+const TRACKED_SIGNAL_ACCENT = '#67d4ff'
+const FINISHED_SIGNAL_ACCENT = '#8fb1ff'
 
 function two(value: number): string {
   return String(value).padStart(2, '0')
@@ -44,46 +50,63 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`
 }
 
-function taskAccent(task: Task): string {
+function taskUserAccent(task: Task): string | null {
   if ((task.colorMode === 'custom' || task.colorMode === 'preset') && task.colorValue) return task.colorValue
-  if (task.archived) return '#9aa4b8'
-  if (task.status === 'finished') return '#7ea7ff'
-  if (task.status === 'doing') return '#22c55e'
-  if (task.status === 'paused') return '#f59e0b'
-  return '#64748b'
+  return null
 }
 
-function timerColors(task: Task, accent: string): [string, string] {
+function taskChromeAccent(task: Task): string {
+  return taskUserAccent(task) ?? DEFAULT_CHROME_ACCENT
+}
+
+function taskSignalAccent(task: Task, durationMs: number): string {
+  const userAccent = taskUserAccent(task)
+  if (userAccent) return userAccent
+  if (task.status === 'doing') return ACTIVE_SIGNAL_ACCENT
+  if (durationMs > 0) return task.status === 'finished' ? FINISHED_SIGNAL_ACCENT : TRACKED_SIGNAL_ACCENT
+  return task.archived ? '#8c98ab' : DEFAULT_CHROME_ACCENT
+}
+
+function timerColors(task: Task, signalAccent: string, durationMs: number): [string, string] {
   if (!task.showDuration) return ['rgba(31, 41, 55, 0.92)', 'rgba(17, 24, 39, 0.92)']
+  const userAccent = taskUserAccent(task)
+  const hasTrackedTime = durationMs > 0
+
+  if (userAccent) return [hexToRgba(signalAccent, 0.88), hexToRgba(signalAccent, 0.62)]
+  if (task.status === 'doing') return [hexToRgba('#44f0d0', 0.94), hexToRgba(signalAccent, 0.88)]
+  if (task.status === 'finished') return [hexToRgba(signalAccent, 0.88), 'rgba(71, 94, 140, 0.9)']
+  if (hasTrackedTime) return [hexToRgba(signalAccent, 0.76), 'rgba(67, 82, 104, 0.92)']
   if (task.archived) return ['rgba(71, 85, 105, 0.92)', 'rgba(51, 65, 85, 0.92)']
-  if (task.status === 'finished') return ['rgba(59, 130, 246, 0.92)', 'rgba(37, 99, 235, 0.92)']
-  if (task.status === 'doing') return ['rgba(13, 148, 136, 0.94)', 'rgba(8, 126, 164, 0.92)']
-  if (task.status === 'paused') return ['rgba(217, 119, 6, 0.94)', 'rgba(180, 83, 9, 0.92)']
-  return [hexToRgba(accent, 0.82), hexToRgba(accent, 0.54)]
+  return ['rgba(53, 63, 80, 0.94)', 'rgba(28, 36, 50, 0.94)']
 }
 
-function shellColors(task: Task, accent: string): [string, string] {
-  if (task.status === 'finished') return ['rgba(13, 18, 28, 0.98)', 'rgba(8, 12, 20, 0.98)']
-  if (task.archived) return ['rgba(23, 29, 40, 0.98)', 'rgba(17, 22, 32, 0.98)']
-  return ['rgba(39, 44, 58, 0.97)', 'rgba(23, 27, 38, 0.98)']
+function shellColors(task: Task, chromeAccent: string): [string, string] {
+  if (taskUserAccent(task)) return [hexToRgba(chromeAccent, 0.32), 'rgba(13, 18, 28, 0.98)']
+  if (task.status === 'finished') return ['rgba(36, 43, 58, 0.98)', 'rgba(16, 21, 31, 0.98)']
+  if (task.archived) return ['rgba(25, 31, 43, 0.98)', 'rgba(16, 21, 31, 0.98)']
+  return ['rgba(42, 48, 63, 0.98)', 'rgba(21, 26, 37, 0.98)']
 }
 
-function slotColors(task: Task, accent: string): [string, string] {
-  if (task.status === 'finished') return ['rgba(46, 55, 76, 0.88)', 'rgba(28, 36, 52, 0.88)']
-  if (task.archived) return ['rgba(55, 65, 81, 0.82)', 'rgba(30, 41, 59, 0.8)']
-  return [hexToRgba(accent, 0.56), hexToRgba(accent, 0.28)]
+function slotColors(task: Task, chromeAccent: string): [string, string] {
+  if (taskUserAccent(task)) return [hexToRgba(chromeAccent, 0.54), hexToRgba(chromeAccent, 0.24)]
+  if (task.status === 'finished') return ['rgba(71, 83, 106, 0.88)', 'rgba(45, 56, 77, 0.88)']
+  if (task.archived) return ['rgba(64, 74, 91, 0.84)', 'rgba(40, 49, 66, 0.84)']
+  if (task.status === 'doing') return ['rgba(71, 86, 109, 0.88)', 'rgba(45, 55, 75, 0.9)']
+  return ['rgba(68, 80, 101, 0.9)', 'rgba(42, 52, 70, 0.9)']
 }
 
-function actionRailColors(task: Task, accent: string): [string, string] {
-  if (task.status === 'finished') return ['rgba(70, 82, 104, 0.88)', 'rgba(42, 50, 66, 0.92)']
+function actionRailColors(task: Task, chromeAccent: string): [string, string] {
+  if (taskUserAccent(task)) return [hexToRgba(chromeAccent, 0.42), hexToRgba(chromeAccent, 0.18)]
+  if (task.status === 'finished') return ['rgba(76, 88, 111, 0.88)', 'rgba(48, 57, 74, 0.92)']
   if (task.archived) return ['rgba(73, 80, 92, 0.78)', 'rgba(45, 52, 62, 0.84)']
-  return [hexToRgba(accent, 0.42), hexToRgba(accent, 0.18)]
+  return ['rgba(62, 72, 90, 0.82)', 'rgba(38, 46, 62, 0.88)']
 }
 
-function numberColors(task: Task, accent: string): [string, string] {
-  if (task.status === 'finished') return ['rgba(17, 24, 39, 0.96)', 'rgba(31, 41, 55, 0.96)']
+function numberColors(task: Task, chromeAccent: string): [string, string] {
+  if (taskUserAccent(task)) return ['rgba(26, 32, 45, 0.96)', hexToRgba(chromeAccent, 0.34)]
+  if (task.status === 'finished') return ['rgba(28, 35, 48, 0.96)', 'rgba(49, 59, 77, 0.96)']
   if (task.archived) return ['rgba(31, 41, 55, 0.92)', 'rgba(17, 24, 39, 0.94)']
-  return ['rgba(26, 32, 45, 0.96)', hexToRgba(accent, 0.34)]
+  return ['rgba(26, 32, 45, 0.96)', 'rgba(45, 55, 72, 0.96)']
 }
 
 type FilterChipProps = {
@@ -131,26 +154,48 @@ function TaskStrip({
   formatDuration,
   calcTaskDuration,
 }: TaskStripProps) {
-  const accent = taskAccent(task)
+  const durationMs = calcTaskDuration(task, nowMs)
+  const chromeAccent = taskChromeAccent(task)
+  const signalAccent = taskSignalAccent(task, durationMs)
+  const hasUserAccent = Boolean(taskUserAccent(task))
+  const hasTrackedTime = durationMs > 0
   const runtimeText = taskRuntimeFlag(task)
   const previewText = task.contentRaw.trim() || '空任务'
-  const durationText = task.showDuration ? `[${formatDuration(calcTaskDuration(task, nowMs))}]` : '[--:--:--]'
+  const durationText = task.showDuration ? `[${formatDuration(durationMs)}]` : '[--:--:--]'
   const isRunning = task.status === 'doing'
   const isFinished = task.status === 'finished'
   const isArchived = task.archived
-  const shellBorder = isRunning ? accent : isFinished ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.78)'
-  const shellShadow = isRunning ? hexToRgba(accent, 0.42) : 'rgba(0,0,0,0.46)'
-  const energyWidth = isRunning ? '100%' : isFinished ? '68%' : isArchived ? '24%' : '42%'
+  const shellBorder = hasUserAccent
+    ? hexToRgba(chromeAccent, 0.82)
+    : isRunning
+      ? 'rgba(186, 232, 255, 0.78)'
+      : isFinished
+        ? 'rgba(226, 236, 250, 0.76)'
+        : 'rgba(255,255,255,0.68)'
+  const shellShadow = isRunning ? hexToRgba(signalAccent, 0.34) : hasUserAccent ? hexToRgba(chromeAccent, 0.24) : 'rgba(0,0,0,0.46)'
+  const energyWidth = isRunning ? '100%' : isFinished ? '70%' : isArchived ? '24%' : hasTrackedTime ? '58%' : '34%'
+  const primaryActionTone = hasUserAccent
+    ? { backgroundColor: hexToRgba(chromeAccent, 0.28), borderColor: hexToRgba(chromeAccent, 0.46) }
+    : isRunning
+      ? { backgroundColor: 'rgba(40, 60, 84, 0.74)', borderColor: 'rgba(161, 224, 255, 0.44)' }
+      : hasTrackedTime
+        ? { backgroundColor: 'rgba(50, 61, 79, 0.72)', borderColor: 'rgba(127, 166, 202, 0.38)' }
+        : null
+  const secondaryActionTone = hasUserAccent
+    ? { backgroundColor: hexToRgba(chromeAccent, 0.22), borderColor: hexToRgba(chromeAccent, 0.4) }
+    : isFinished
+      ? { backgroundColor: 'rgba(61, 72, 93, 0.74)', borderColor: 'rgba(204, 220, 240, 0.4)' }
+      : null
 
   const leftActionLabel = isArchived ? '↺' : isFinished ? '↺' : isRunning ? '||' : '▶'
   const rightActionLabel = isArchived ? '⋯' : isFinished ? '✓' : '■'
 
   return (
     <View style={[styles.stripShell, { borderColor: shellBorder, shadowColor: shellShadow }]}>
-      <LinearGradient colors={shellColors(task, accent)} style={StyleSheet.absoluteFillObject} />
+      <LinearGradient colors={shellColors(task, chromeAccent)} style={StyleSheet.absoluteFillObject} />
       {isRunning ? (
         <>
-          <Animated.View pointerEvents="none" style={[styles.runningGlow, { backgroundColor: hexToRgba(accent, 0.2), opacity: glowOpacity }]} />
+          <Animated.View pointerEvents="none" style={[styles.runningGlow, { backgroundColor: hexToRgba(signalAccent, 0.18), opacity: glowOpacity }]} />
           <Animated.View
             pointerEvents="none"
             style={[styles.runningSweep, { backgroundColor: hexToRgba('#ffffff', 0.12), opacity: glowOpacity, transform: [{ translateX: sweepX }, { rotate: '18deg' }] }]}
@@ -160,12 +205,12 @@ function TaskStrip({
 
       <Pressable delayLongPress={220} onLongPress={() => onOpenMenu(task)} style={styles.stripPressable}>
         <View style={styles.stripRow}>
-          <LinearGradient colors={numberColors(task, accent)} style={[styles.orderCapsule, isRunning ? { borderColor: hexToRgba(accent, 0.66) } : null]}>
+          <LinearGradient colors={numberColors(task, chromeAccent)} style={[styles.orderCapsule, isRunning ? { borderColor: hexToRgba(signalAccent, 0.5) } : null]}>
             <Text style={styles.orderText}>#{displayOrder}</Text>
           </LinearGradient>
 
           <Pressable onPress={() => onOpenEditor(task)} style={styles.contentPressable}>
-            <LinearGradient colors={slotColors(task, accent)} style={styles.contentCapsule}>
+            <LinearGradient colors={slotColors(task, chromeAccent)} style={styles.contentCapsule}>
               <View style={styles.contentTextWrap}>
                 <Text numberOfLines={2} style={styles.stripContentText}>{previewText}</Text>
               </View>
@@ -176,18 +221,18 @@ function TaskStrip({
             </LinearGradient>
           </Pressable>
 
-          <LinearGradient colors={actionRailColors(task, accent)} style={styles.actionRail}>
+          <LinearGradient colors={actionRailColors(task, chromeAccent)} style={styles.actionRail}>
             <View style={styles.actionButtonRow}>
-              <Pressable onPress={() => (isArchived ? onOpenMenu(task) : isFinished ? onToggleFinished(task) : onToggleTimer(task))} style={[styles.iconButton, isRunning ? styles.iconButtonRunning : null]}>
+              <Pressable onPress={() => (isArchived ? onOpenMenu(task) : isFinished ? onToggleFinished(task) : onToggleTimer(task))} style={[styles.iconButton, primaryActionTone]}>
                 <Text style={styles.iconGlyph}>{leftActionLabel}</Text>
               </Pressable>
-              <Pressable onPress={() => (isArchived ? onOpenMenu(task) : isFinished ? onOpenMenu(task) : onToggleFinished(task))} style={[styles.iconButton, !isArchived && !isFinished ? styles.iconButtonFinish : null]}>
+              <Pressable onPress={() => (isArchived ? onOpenMenu(task) : isFinished ? onOpenMenu(task) : onToggleFinished(task))} style={[styles.iconButton, secondaryActionTone]}>
                 <Text style={styles.iconGlyph}>{rightActionLabel}</Text>
               </Pressable>
             </View>
 
             <Animated.View style={[styles.timerAnimatedWrap, isRunning ? { transform: [{ scale: pulseScale }] } : null]}>
-              <LinearGradient colors={timerColors(task, accent)} style={[styles.timerChip, { borderColor: hexToRgba(accent, task.showDuration ? 0.36 : 0.18) }]}>
+              <LinearGradient colors={timerColors(task, signalAccent, durationMs)} style={[styles.timerChip, { borderColor: hexToRgba(signalAccent, task.showDuration ? 0.4 : 0.18) }]}>
                 <Text style={styles.timerChipText}>{durationText}</Text>
               </LinearGradient>
             </Animated.View>
@@ -195,7 +240,16 @@ function TaskStrip({
         </View>
 
         <View style={styles.energyTrack}>
-          <Animated.View style={[styles.energyFill, { width: energyWidth, backgroundColor: isRunning ? hexToRgba(accent, 0.95) : hexToRgba(accent, isFinished ? 0.48 : 0.24), opacity: isRunning ? glowOpacity : 1 }]} />
+          <Animated.View
+            style={[
+              styles.energyFill,
+              {
+                width: energyWidth,
+                backgroundColor: isRunning ? hexToRgba(signalAccent, 0.96) : hasTrackedTime ? hexToRgba(signalAccent, isFinished ? 0.58 : 0.42) : 'rgba(255,255,255,0.14)',
+                opacity: isRunning ? glowOpacity : 1,
+              },
+            ]}
+          />
         </View>
       </Pressable>
     </View>
@@ -353,10 +407,15 @@ export function NativeTodoApp() {
           <Text style={styles.addStripText}>追加任务条</Text>
         </Pressable>
 
-        <Modal visible={Boolean(editorTask)} animationType="slide" transparent onRequestClose={closeEditor}>
-          <View style={styles.overlay}>
+        <Modal visible={Boolean(editorTask)} animationType="fade" transparent onRequestClose={closeEditor}>
+          <KeyboardAvoidingView
+            style={styles.editorOverlay}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 18 : 0}
+          >
+            <Pressable style={styles.overlayBackdrop} onPress={closeEditor} />
             <View style={styles.editorSheet}>
-              <ScrollView showsVerticalScrollIndicator={false}>
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.editorScrollContent}>
                 {editorTask ? (
                   <>
                     <View style={styles.sheetHeader}>
@@ -368,8 +427,8 @@ export function NativeTodoApp() {
                         style={[
                           styles.sheetStatusPill,
                           {
-                            backgroundColor: hexToRgba(taskAccent(editorTask), 0.2),
-                            borderColor: hexToRgba(taskAccent(editorTask), 0.42),
+                            backgroundColor: hexToRgba(taskSignalAccent(editorTask, board.calcTaskDuration(editorTask, board.nowMs)), 0.2),
+                            borderColor: hexToRgba(taskSignalAccent(editorTask, board.calcTaskDuration(editorTask, board.nowMs)), 0.42),
                           },
                         ]}
                       >
@@ -429,7 +488,7 @@ export function NativeTodoApp() {
                 ) : null}
               </ScrollView>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
 
         <Modal visible={board.settingsOpen} animationType="slide" transparent onRequestClose={() => board.setSettingsOpen(false)}>
@@ -687,10 +746,10 @@ const styles = StyleSheet.create({
   filterChipCount: { color: '#9bd97a', fontSize: 12, fontWeight: '800' },
   taskList: { gap: 10 },
   stripShell: { position: 'relative', borderRadius: 16, borderWidth: 1.5, overflow: 'hidden', shadowOffset: { width: 0, height: 14 }, shadowRadius: 20, shadowOpacity: 0.22, elevation: 7 },
-  stripPressable: { position: 'relative' },
+  stripPressable: { position: 'relative', paddingBottom: 2 },
   runningGlow: { ...StyleSheet.absoluteFillObject },
   runningSweep: { position: 'absolute', top: -20, bottom: -20, left: -160, width: 110 },
-  stripRow: { flexDirection: 'row', alignItems: 'stretch', gap: 6, padding: 4 },
+  stripRow: { flexDirection: 'row', alignItems: 'stretch', gap: 6, paddingTop: 4, paddingHorizontal: 4, paddingBottom: 6 },
   orderCapsule: { width: 48, minHeight: 52, borderRadius: 11, borderWidth: 1, borderColor: 'rgba(255,255,255,0.62)', alignItems: 'center', justifyContent: 'center' },
   orderText: { color: '#ffffff', fontSize: 14, fontWeight: '900' },
   contentPressable: { flex: 1 },
@@ -703,14 +762,12 @@ const styles = StyleSheet.create({
   actionRail: { width: 94, borderRadius: 11, borderWidth: 1, borderColor: 'rgba(255,255,255,0.32)', padding: 5, gap: 5 },
   actionButtonRow: { flexDirection: 'row', gap: 6 },
   iconButton: { flex: 1, minHeight: 24, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.46)', backgroundColor: 'rgba(13, 18, 28, 0.56)', alignItems: 'center', justifyContent: 'center' },
-  iconButtonRunning: { backgroundColor: 'rgba(24, 145, 114, 0.5)' },
-  iconButtonFinish: { backgroundColor: 'rgba(141, 88, 22, 0.5)' },
   iconGlyph: { color: '#ffffff', fontSize: 14, fontWeight: '900' },
   timerAnimatedWrap: { minHeight: 22 },
   timerChip: { minHeight: 22, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   timerChipText: { color: '#fff7d6', fontSize: 11, fontWeight: '900', fontVariant: ['tabular-nums'] },
-  energyTrack: { height: 4, backgroundColor: 'rgba(255,255,255,0.08)' },
-  energyFill: { height: '100%', borderTopRightRadius: 4, borderBottomRightRadius: 4 },
+  energyTrack: { position: 'absolute', left: 4, right: 4, bottom: 3, height: 3, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+  energyFill: { height: '100%', borderRadius: 999 },
   emptyState: { borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(13, 18, 28, 0.82)', padding: 18, gap: 6 },
   emptyTitle: { color: '#ffffff', fontSize: 18, fontWeight: '800' },
   emptyText: { color: '#91a1bb', fontSize: 14, lineHeight: 20 },
@@ -718,14 +775,17 @@ const styles = StyleSheet.create({
   addStripPlus: { color: '#0a111b', fontSize: 24, fontWeight: '900', lineHeight: 24 },
   addStripText: { color: '#0a111b', fontSize: 15, fontWeight: '900' },
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(2, 5, 11, 0.74)' },
+  overlayBackdrop: { ...StyleSheet.absoluteFillObject },
+  editorOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 24, backgroundColor: 'rgba(2, 5, 11, 0.74)' },
   sheet: { maxHeight: '88%', borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: '#0d1625', paddingHorizontal: 18, paddingTop: 18, paddingBottom: 28 },
-  editorSheet: { maxHeight: '92%', borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: '#0d1625', paddingHorizontal: 18, paddingTop: 18, paddingBottom: 28 },
+  editorSheet: { width: '100%', maxWidth: 520, maxHeight: '78%', borderRadius: 28, backgroundColor: '#0d1625', paddingHorizontal: 18, paddingTop: 18, paddingBottom: 18 },
+  editorScrollContent: { paddingBottom: 6 },
   sheetHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 14 },
   sheetKicker: { color: '#8fb3ff', fontSize: 12, fontWeight: '800', letterSpacing: 0.6 },
   sheetTitle: { color: '#ffffff', fontSize: 22, fontWeight: '900', marginBottom: 14 },
   sheetStatusPill: { minHeight: 28, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   sheetStatusText: { color: '#ffffff', fontSize: 12, fontWeight: '800' },
-  editorInput: { minHeight: 220, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', backgroundColor: 'rgba(8, 12, 20, 0.82)', color: '#f8fbff', paddingHorizontal: 14, paddingVertical: 14, fontSize: 15, lineHeight: 22, marginBottom: 14 },
+  editorInput: { minHeight: 168, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)', backgroundColor: 'rgba(8, 12, 20, 0.82)', color: '#f8fbff', paddingHorizontal: 14, paddingVertical: 14, fontSize: 15, lineHeight: 22, marginBottom: 14 },
   attachmentRow: { gap: 10, paddingBottom: 4, marginBottom: 10 },
   attachmentImage: { width: 138, height: 104, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.08)' },
   editorActionRow: { flexDirection: 'row', gap: 10, marginTop: 8, marginBottom: 10 },
