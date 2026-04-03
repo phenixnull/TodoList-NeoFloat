@@ -16,7 +16,7 @@
     "preview": "vite preview",
     "start": "electron .",
     "server:sync": "node server/index.js",
-    "test": "node --test tests/contextMenuLabels.test.ts tests/contextMenuOrder.test.ts tests/contextMenuStyles.test.ts tests/mobileState.test.ts tests/mobileParityState.test.ts tests/mobileStorage.test.ts tests/mobileSyncApi.test.ts tests/nativeAppSource.test.ts tests/syncServerCore.test.ts tests/syncUtils.test.ts tests/taskCardEditorSource.test.ts tests/taskCardLayout.test.ts tests/taskDurationLayout.test.ts tests/taskVisibility.test.ts tests/useTaskStore.test.ts electron/runtimePaths.test.cjs electron/syncRuntime.test.cjs"
+    "test": "node --test tests/contextMenuLabels.test.ts tests/contextMenuOrder.test.ts tests/contextMenuStyles.test.ts tests/math.test.ts tests/mobileState.test.ts tests/mobileParityState.test.ts tests/mobileStorage.test.ts tests/mobileSyncApi.test.ts tests/nativeAppSource.test.ts tests/syncServerCore.test.ts tests/syncUtils.test.ts tests/taskCardEditorSource.test.ts tests/taskCardLayout.test.ts tests/taskDurationLayout.test.ts tests/taskVisibility.test.ts tests/useTaskStore.test.ts electron/runtimePaths.test.cjs electron/syncRuntime.test.cjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

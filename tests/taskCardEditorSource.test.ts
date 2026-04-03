@@ -15,3 +15,12 @@ test('live task editor shows the textarea text while editing so caret and glyphs
   assert.match(css, /\.live-editor\.is-editing \.live-input \{[\s\S]*color:\s*var\(--text-main\)/)
   assert.match(css, /\.live-editor\.is-editing \.live-preview \{[\s\S]*opacity:\s*0/)
 })
+
+test('plain text preview bypasses markdown rendering so preview and textarea share the same text flow', () => {
+  const taskCardPath = path.join(repoRoot, 'src', 'components', 'TaskCard.tsx')
+  const taskCard = readFileSync(taskCardPath, 'utf8')
+
+  assert.match(taskCard, /hasRichPreviewToken/)
+  assert.match(taskCard, /const useMarkdownPreview = hasRichPreviewToken\(task\.contentRaw\)/)
+  assert.match(taskCard, /<div className="live-preview-text">\{previewText\}<\/div>/)
+})

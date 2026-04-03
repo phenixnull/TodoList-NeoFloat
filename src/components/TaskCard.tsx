@@ -7,7 +7,7 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import type { Components } from 'react-markdown'
 import type { Task, TaskCardMode, TaskContentDisplayMode, TaskPaletteMode } from '../types/domain'
-import { markdownWithHardBreaks } from '../lib/math'
+import { hasRichPreviewToken, markdownWithHardBreaks } from '../lib/math'
 import { resolveLiveEditorMeasuredHeight, resolveTaskLayoutMetrics } from '../lib/taskCardLayout'
 import { parseTaskImageId, TASK_IMAGE_SRC_PREFIX } from '../lib/taskImages'
 import { calcTaskDuration, formatDuration } from '../lib/time'
@@ -95,6 +95,7 @@ export function TaskCard({
   const showDuration = task.showDuration !== false
   const inlineDuration = showDuration && task.durationLayoutMode === 'inline'
   const previewText = task.contentRaw.trim() ? task.contentRaw : LABEL_EMPTY_TASK
+  const useMarkdownPreview = hasRichPreviewToken(task.contentRaw)
   const startPauseIcon = isDoing ? '||' : '\u25b6'
   const taskDurationText = `[${formatDuration(calcTaskDuration(task, nowMs))}]`
   const layoutMetrics = useMemo(
@@ -262,8 +263,7 @@ export function TaskCard({
           ? Math.max(previewScrollHeight, previewBoundingHeight)
           : previewScrollHeight
         : previewBoundingHeight
-    const hasRichPreviewLayout =
-      previewEl.querySelector('.task-inline-image, .katex, pre, code, table, blockquote, ul, ol, h1, h2, h3, h4, h5, h6, hr') !== null
+    const hasRichPreviewLayout = useMarkdownPreview
 
     // Keep auto-height anchored to rendered preview content so width changes
     // do not drift from textarea line-wrap differences.
@@ -293,7 +293,7 @@ export function TaskCard({
     inputEl.style.minHeight = prevInputMinHeight
     previewEl.style.minHeight = prevPreviewMinHeight
     previewEl.style.height = prevPreviewHeight
-  }, [compactActionLayout, imageDataUrls, imageLoadTick, isCollapsed, isEditing, isInnerScrollMode, layoutMetrics.minHeight, layoutMetrics.rowHeight, layoutTick, task.attachments, task.contentRaw, task.fontSize, task.fontFamily])
+  }, [compactActionLayout, imageDataUrls, imageLoadTick, isCollapsed, isEditing, isInnerScrollMode, layoutMetrics.minHeight, layoutMetrics.rowHeight, layoutTick, task.attachments, task.contentRaw, task.fontSize, task.fontFamily, useMarkdownPreview])
 
   const markdownComponents = useMemo<Components>(
     () => ({
@@ -437,14 +437,18 @@ export function TaskCard({
               finished: isFinished,
             })}
           >
-            <ReactMarkdown
-              components={markdownComponents}
-              remarkPlugins={[remarkMath]}
-              rehypePlugins={[rehypeKatex]}
-              urlTransform={taskMarkdownUrlTransform}
-            >
-              {markdownWithHardBreaks(previewText)}
-            </ReactMarkdown>
+            {useMarkdownPreview ? (
+              <ReactMarkdown
+                components={markdownComponents}
+                remarkPlugins={[remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                urlTransform={taskMarkdownUrlTransform}
+              >
+                {markdownWithHardBreaks(previewText)}
+              </ReactMarkdown>
+            ) : (
+              <div className="live-preview-text">{previewText}</div>
+            )}
           </div>
 
           <textarea
