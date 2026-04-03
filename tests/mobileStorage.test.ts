@@ -119,3 +119,42 @@ test('saveStoredMobileState round-trips a persisted snapshot', () => {
 
   assert.deepEqual(loadStoredMobileState(storage), state)
 })
+
+test('loadStoredMobileState backfills missing task duration totals from closed segments', () => {
+  const storage = createMemoryStorage({
+    'neo-float-mobile-state': JSON.stringify({
+      ...createState(),
+      tasks: [
+        {
+          id: 'task-1',
+          order: 1,
+          contentRaw: 'Legacy task',
+          attachments: [],
+          colorMode: 'auto',
+          colorValue: null,
+          fontFamily: 'Segoe UI',
+          fontSize: 16,
+          status: 'paused',
+          archived: false,
+          archivedAt: null,
+          segments: [
+            {
+              startAt: '2026-03-12T10:00:00.000+08:00',
+              pauseAt: '2026-03-12T10:25:00.000+08:00',
+              durationMs: 25 * 60 * 1000,
+            },
+          ],
+          createdAt: '2026-03-12T10:00:00.000+08:00',
+          updatedAt: '2026-03-12T10:25:00.000+08:00',
+          finishedAt: null,
+        },
+      ],
+    }),
+  })
+
+  const loaded = loadStoredMobileState(storage)
+
+  assert.equal(loaded?.tasks[0].totalDurationMs, 25 * 60 * 1000)
+  assert.equal(loaded?.tasks[0].showDuration, true)
+  assert.equal(loaded?.tasks[0].durationLayoutMode, 'stacked')
+})

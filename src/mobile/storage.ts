@@ -1,6 +1,7 @@
 import type { PersistedState } from '../types/domain.ts'
 import type { SyncConfig } from '../types/sync.ts'
 import { normalizeSyncConfig } from '../lib/sync.ts'
+import { sumClosedDurations } from '../lib/time.ts'
 
 export const MOBILE_SYNC_CONFIG_STORAGE_KEY = 'neo-float-mobile-sync-config'
 export const MOBILE_STATE_STORAGE_KEY = 'neo-float-mobile-state'
@@ -39,6 +40,38 @@ function parseStoredJson<T>(storage: JsonStorage, key: string): T | null {
   }
 }
 
+function normalizePersistedState(state: PersistedState): PersistedState {
+  return {
+    ...state,
+    tasks: state.tasks.map((task, index) => {
+      const segments = Array.isArray(task.segments)
+        ? task.segments
+            .filter((segment) => Boolean(segment && typeof segment.startAt === 'string'))
+            .map((segment) => ({
+              startAt: segment.startAt,
+              pauseAt: typeof segment.pauseAt === 'string' ? segment.pauseAt : null,
+              durationMs: typeof segment.durationMs === 'number' && Number.isFinite(segment.durationMs) ? Math.max(0, segment.durationMs) : 0,
+            }))
+        : []
+
+      const totalDurationMs =
+        typeof task.totalDurationMs === 'number' && Number.isFinite(task.totalDurationMs)
+          ? Math.max(0, task.totalDurationMs)
+          : sumClosedDurations(segments)
+
+      return {
+        ...task,
+        hidden: Boolean(task.hidden),
+        showDuration: task.showDuration !== false,
+        durationLayoutMode: task.durationLayoutMode === 'inline' ? 'inline' : 'stacked',
+        segments,
+        totalDurationMs,
+        order: typeof task.order === 'number' ? task.order : index + 1,
+      }
+    }),
+  }
+}
+
 export function loadStoredSyncConfig(storage: JsonStorage): SyncConfig {
   const parsed = parseStoredJson<Partial<SyncConfig>>(storage, MOBILE_SYNC_CONFIG_STORAGE_KEY)
   return normalizeSyncConfig(parsed ?? EMPTY_SYNC_CONFIG)
@@ -52,7 +85,7 @@ export function saveStoredSyncConfig(storage: JsonStorage, config: SyncConfig): 
 
 export function loadStoredMobileState(storage: JsonStorage): PersistedState | null {
   const parsed = parseStoredJson<unknown>(storage, MOBILE_STATE_STORAGE_KEY)
-  return isPersistedState(parsed) ? parsed : null
+  return isPersistedState(parsed) ? normalizePersistedState(parsed) : null
 }
 
 export function saveStoredMobileState(storage: JsonStorage, state: PersistedState): void {

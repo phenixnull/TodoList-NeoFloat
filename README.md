@@ -145,6 +145,17 @@ npm run lint
 npm test
 ```
 
+## Update Log
+
+### 2026-04-03
+
+- Added per-task duration display controls with right-click actions for current-item show/hide, all-items show/hide, and explicit `single-line` vs `2+1` duration layouts.
+- Added batch layout actions that apply the chosen duration layout to all currently visible tasks without touching hidden task records.
+- Improved archive and hidden-task behavior so plain archive state can stay visible, archive-and-hide remains available, and hidden archived task filtering supports date ranges.
+- Added backward-compatible duration normalization for desktop and mobile persisted state so older tasks can recover `totalDurationMs` and newer layout metadata safely.
+- Made the desktop context menu scrollable in small windows and fixed internal menu scrolling so wheel input does not immediately close the menu.
+- Added Windows dev launch helpers (`start-dev.ps1`, `launch-dev-hidden.vbs`, updated `start-dev.bat`) for source-based startup and desktop shortcut workflows.
+
 ## Repository Goal
 
 This repository tracks the application itself only. Generated output, machine-local runtime files, and personal to-do data are not committed.

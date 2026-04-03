@@ -8,10 +8,13 @@ import rehypeKatex from 'rehype-katex'
 import type { Components } from 'react-markdown'
 import type { Task, TaskCardMode, TaskContentDisplayMode, TaskPaletteMode } from '../types/domain'
 import { markdownWithHardBreaks } from '../lib/math'
+import { resolveTaskLayoutMetrics } from '../lib/taskCardLayout'
 import { parseTaskImageId, TASK_IMAGE_SRC_PREFIX } from '../lib/taskImages'
+import { calcTaskDuration, formatDuration } from '../lib/time'
 
 type TaskCardProps = {
   task: Task
+  nowMs: number
   displayOrder: number
   cardMode: TaskCardMode
   contentDisplayMode: TaskContentDisplayMode
@@ -56,6 +59,7 @@ function taskMarkdownUrlTransform(url: string): string {
 
 export function TaskCard({
   task,
+  nowMs,
   displayOrder,
   cardMode,
   contentDisplayMode,
@@ -68,12 +72,12 @@ export function TaskCard({
   onOpenContextMenu,
 }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
+  const cardRef = useRef<HTMLElement | null>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const resizeRafRef = useRef<number | null>(null)
   const settleRafRef = useRef<number | null>(null)
-  const lastObservedWidthRef = useRef<number | null>(null)
   const [layoutTick, setLayoutTick] = useState(0)
   const [isEditing, setIsEditing] = useState(false)
   const [imageDataUrls, setImageDataUrls] = useState<Record<string, string>>({})
@@ -87,8 +91,23 @@ export function TaskCard({
   const isGrayPalette = paletteMode === 'gray-gradient' || paletteMode === 'default-gray'
   const completionLabel = isFinished ? LABEL_FINISHED : LABEL_UNFINISHED
   const completionClass = isFinished ? 'finished' : 'unfinished'
+  const durationStateClass = isArchived ? 'archived' : isFinished ? 'finished' : isDoing ? 'running' : task.status === 'paused' ? 'paused' : 'idle'
+  const showDuration = task.showDuration !== false
+  const inlineDuration = showDuration && task.durationLayoutMode === 'inline'
   const previewText = task.contentRaw.trim() ? task.contentRaw : LABEL_EMPTY_TASK
   const startPauseIcon = isDoing ? '||' : '\u25b6'
+  const taskDurationText = `[${formatDuration(calcTaskDuration(task, nowMs))}]`
+  const layoutMetrics = useMemo(
+    () =>
+      resolveTaskLayoutMetrics({
+        isCollapsed,
+        showDuration,
+        inlineDuration,
+      }),
+    [inlineDuration, isCollapsed, showDuration],
+  )
+  const compactActionLayout = layoutMetrics.compact
+
   const scheduleLayoutRecalc = useCallback(() => {
     if (resizeRafRef.current !== null) {
       cancelAnimationFrame(resizeRafRef.current)
@@ -177,14 +196,7 @@ export function TaskCard({
       return
     }
 
-    const observer = new ResizeObserver((entries) => {
-      const nextWidth = entries[0]?.contentRect.width ?? editorEl.clientWidth
-      const prevWidth = lastObservedWidthRef.current
-      if (prevWidth !== null && Math.abs(nextWidth - prevWidth) < 1) {
-        return
-      }
-      lastObservedWidthRef.current = nextWidth
-
+    const observer = new ResizeObserver(() => {
       scheduleLayoutRecalc()
     })
 
@@ -210,6 +222,10 @@ export function TaskCard({
     scheduleLayoutRecalc()
   }, [layoutPulse, scheduleLayoutRecalc])
 
+  useEffect(() => {
+    scheduleLayoutRecalc()
+  }, [compactActionLayout, inlineDuration, isCollapsed, scheduleLayoutRecalc, showDuration, task.attachments.length, task.contentRaw, task.durationLayoutMode, task.fontFamily, task.fontSize])
+
   useLayoutEffect(() => {
     const editorEl = editorRef.current
     const inputEl = inputRef.current
@@ -218,14 +234,16 @@ export function TaskCard({
       return
     }
 
-    const minHeight = isCollapsed ? 28 : 52
+    const minHeight = layoutMetrics.minHeight
     const maxHeight = isInnerScrollMode ? (isCollapsed ? 72 : 180) : Number.POSITIVE_INFINITY
 
+    const prevEditorHeight = editorEl.style.getPropertyValue('--live-editor-height')
     const prevInputMinHeight = inputEl.style.minHeight
     const prevPreviewMinHeight = previewEl.style.minHeight
     const prevPreviewHeight = previewEl.style.height
 
     // Measure intrinsic content height instead of current stretched height.
+    editorEl.style.setProperty('--live-editor-height', 'auto')
     inputEl.style.minHeight = '0px'
     previewEl.style.minHeight = '0px'
     previewEl.style.height = 'auto'
@@ -234,12 +252,16 @@ export function TaskCard({
     // 强制浏览器完成渲染（关键修复：避免测量时DOM未稳定）
     void previewEl.offsetHeight
 
-    // Use getBoundingClientRect for more accurate measurement with floated content
     const inputHeight = Math.ceil(inputEl.scrollHeight)
     const previewScrollHeight = Math.ceil(previewEl.scrollHeight)
     const previewBoundingHeight = Math.ceil(previewEl.getBoundingClientRect().height)
-    // Take the maximum to handle floated images and cleared content
-    const previewHeight = Math.max(previewScrollHeight, previewBoundingHeight)
+    const hasInlineImages = previewEl.querySelector('.task-inline-image') !== null
+    const previewHeight =
+      previewScrollHeight > 0
+        ? hasInlineImages
+          ? Math.max(previewScrollHeight, previewBoundingHeight)
+          : previewScrollHeight
+        : previewBoundingHeight
 
     // Keep auto-height anchored to rendered preview content so width changes
     // do not drift from textarea line-wrap differences.
@@ -250,15 +272,21 @@ export function TaskCard({
     const contentHeight = Math.max(minHeight, measuredHeight + autoHeightBuffer)
     const nextHeight = Math.max(minHeight, Math.min(maxHeight, contentHeight))
     const shouldScroll = isInnerScrollMode && contentHeight > maxHeight
+    const nextActionRowHeight = compactActionLayout ? Math.max(layoutMetrics.rowHeight, measuredHeight) : layoutMetrics.rowHeight
+    cardRef.current?.style.setProperty('--task-action-row-height', `${nextActionRowHeight}px`)
 
     editorEl.style.setProperty('--live-editor-height', `${nextHeight}px`)
     inputEl.style.height = `${nextHeight}px`
     inputEl.style.overflowY = shouldScroll ? 'auto' : 'hidden'
     previewEl.style.overflowY = shouldScroll ? 'auto' : 'hidden'
+    if (!prevEditorHeight) {
+      editorEl.style.removeProperty('--live-editor-height')
+      editorEl.style.setProperty('--live-editor-height', `${nextHeight}px`)
+    }
     inputEl.style.minHeight = prevInputMinHeight
     previewEl.style.minHeight = prevPreviewMinHeight
     previewEl.style.height = prevPreviewHeight
-  }, [imageDataUrls, imageLoadTick, isCollapsed, isEditing, isInnerScrollMode, layoutTick, task.attachments, task.contentRaw, task.fontSize, task.fontFamily])
+  }, [compactActionLayout, imageDataUrls, imageLoadTick, isCollapsed, isEditing, isInnerScrollMode, layoutMetrics.minHeight, layoutMetrics.rowHeight, layoutTick, task.attachments, task.contentRaw, task.fontSize, task.fontFamily])
 
   const markdownComponents = useMemo<Components>(
     () => ({
@@ -299,7 +327,18 @@ export function TaskCard({
     transition,
     '--task-gradient': colorFromOrder(task, displayOrder, paletteMode),
     '--task-doing-gradient': vividGradientFromOrder(displayOrder),
+    '--task-action-row-height': `${layoutMetrics.rowHeight}px`,
+    '--task-action-row-count': layoutMetrics.rowCount,
+    '--task-action-gap-count': layoutMetrics.gapCount,
   } as CSSProperties
+
+  const handleCardRef = useCallback(
+    (node: HTMLElement | null) => {
+      cardRef.current = node
+      setNodeRef(node)
+    },
+    [setNodeRef],
+  )
 
   const stopDragPropagation = (event: { stopPropagation: () => void }) => {
     event.stopPropagation()
@@ -333,7 +372,7 @@ export function TaskCard({
 
   return (
     <article
-      ref={setNodeRef}
+      ref={handleCardRef}
       style={style}
       {...attributes}
       {...listeners}
@@ -355,6 +394,9 @@ export function TaskCard({
         'content-auto-height': !isInnerScrollMode,
         'palette-gray': isGrayPalette,
         'palette-vivid': !isGrayPalette,
+        'show-duration': showDuration,
+        'hide-duration': !showDuration,
+        'compact-actions': compactActionLayout,
       })}
     >
       <section className="task-core-row">
@@ -401,6 +443,7 @@ export function TaskCard({
           <textarea
             ref={inputRef}
             className="live-input"
+            rows={1}
             value={task.contentRaw}
             onChange={(event) => onContentChange(task.id, event.target.value)}
             onPaste={(event) => void handlePaste(event)}
@@ -419,33 +462,41 @@ export function TaskCard({
           ) : null}
         </div>
 
-        <div className="action-stack" onPointerDown={stopDragPropagation}>
-          <button
-            type="button"
-            className={clsx('btn-mini btn-start', {
-              doing: isDoing,
-            })}
-            disabled={isFinished || isArchived}
-            onPointerDown={stopDragPropagation}
-            onClick={() => onToggleStartPause(task.id)}
-            aria-label={isDoing ? 'Pause' : 'Start'}
-            title={isDoing ? 'Pause' : 'Start'}
-          >
-            <span className={clsx('state-icon', isDoing ? 'pause' : 'play')}>{startPauseIcon}</span>
-            {!isCollapsed ? (isDoing ? 'Pause' : 'Start') : null}
-          </button>
+        <div className={clsx('action-stack', { 'inline-duration': inlineDuration })} onPointerDown={stopDragPropagation}>
+          <div className="action-buttons">
+            <button
+              type="button"
+              className={clsx('btn-mini btn-start', {
+                doing: isDoing,
+              })}
+              disabled={isFinished || isArchived}
+              onPointerDown={stopDragPropagation}
+              onClick={() => onToggleStartPause(task.id)}
+              aria-label={isDoing ? 'Pause' : 'Start'}
+              title={isDoing ? 'Pause' : 'Start'}
+            >
+              <span className={clsx('state-icon', isDoing ? 'pause' : 'play')}>{startPauseIcon}</span>
+              {!isCollapsed ? (isDoing ? 'Pause' : 'Start') : null}
+            </button>
 
-          <button
-            type="button"
-            className="btn-mini btn-finish"
-            disabled={isFinished || isArchived}
-            onPointerDown={stopDragPropagation}
-            onClick={() => onFinish(task.id)}
-            aria-label="Finished"
-            title="Finished"
-          >
-            {isCollapsed ? '\u25a0' : 'Finished'}
-          </button>
+            <button
+              type="button"
+              className="btn-mini btn-finish"
+              disabled={isFinished || isArchived}
+              onPointerDown={stopDragPropagation}
+              onClick={() => onFinish(task.id)}
+              aria-label="Finished"
+              title="Finished"
+            >
+              {isCollapsed ? '\u25a0' : 'Finished'}
+            </button>
+          </div>
+
+          {showDuration ? (
+            <div className={clsx('task-duration-chip', `state-${durationStateClass}`)} title={taskDurationText}>
+              {taskDurationText}
+            </div>
+          ) : null}
         </div>
       </section>
     </article>

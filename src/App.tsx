@@ -3,9 +3,9 @@ import { closestCenter, DndContext, PointerSensor, type DragEndEvent, useSensor,
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { SettingsPanel } from './components/SettingsPanel'
 import { TaskCard } from './components/TaskCard'
+import { resolveHiddenArchiveRangeDefaults, shouldShowTaskInList } from './lib/taskVisibility'
 import { useTaskStore } from './store/useTaskStore'
 import { calcTaskDuration, formatDuration, localDateTimeText } from './lib/time'
-import type { Task } from './types/domain'
 import type { SyncConfig, SyncStatus } from './types/sync'
 
 function toDateInputText(date: Date): string {
@@ -13,38 +13,6 @@ function toDateInputText(date: Date): string {
   const mm = String(date.getMonth() + 1).padStart(2, '0')
   const dd = String(date.getDate()).padStart(2, '0')
   return `${yyyy}-${mm}-${dd}`
-}
-
-function datePrefix(value: string | null | undefined): string | null {
-  if (!value) {
-    return null
-  }
-  const match = value.match(/^(\d{4}-\d{2}-\d{2})/)
-  return match ? match[1] : null
-}
-
-function earliestTaskDate(tasks: Task[]): string | null {
-  const allDates: string[] = []
-  tasks.forEach((task) => {
-    const taskDates = [
-      datePrefix(task.createdAt),
-      datePrefix(task.updatedAt),
-      datePrefix(task.finishedAt),
-      datePrefix(task.archivedAt),
-    ].filter((item): item is string => Boolean(item))
-    allDates.push(...taskDates)
-    task.segments.forEach((segment) => {
-      const segmentDates = [datePrefix(segment.startAt), datePrefix(segment.pauseAt)].filter(
-        (item): item is string => Boolean(item),
-      )
-      allDates.push(...segmentDates)
-    })
-  })
-  if (allDates.length === 0) {
-    return null
-  }
-  allDates.sort()
-  return allDates[0]
 }
 
 type ContextMenuState = {
@@ -169,6 +137,12 @@ function App() {
   const setTaskPresetColor = useTaskStore((state) => state.setTaskPresetColor)
   const setTaskCustomColor = useTaskStore((state) => state.setTaskCustomColor)
   const clearTaskColor = useTaskStore((state) => state.clearTaskColor)
+  const toggleTaskDurationVisibility = useTaskStore((state) => state.toggleTaskDurationVisibility)
+  const setAllTaskDurationVisibility = useTaskStore((state) => state.setAllTaskDurationVisibility)
+  const setTaskDurationLayoutMode = useTaskStore((state) => state.setTaskDurationLayoutMode)
+  const setTasksDurationLayoutMode = useTaskStore((state) => state.setTasksDurationLayoutMode)
+  const archiveAndHideTask = useTaskStore((state) => state.archiveAndHideTask)
+  const hideArchivedTasks = useTaskStore((state) => state.hideArchivedTasks)
   const toggleStartPause = useTaskStore((state) => state.toggleStartPause)
   const finishTask = useTaskStore((state) => state.finishTask)
   const unfinishTask = useTaskStore((state) => state.unfinishTask)
@@ -183,14 +157,13 @@ function App() {
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [statsTaskId, setStatsTaskId] = useState<string | null>(null)
-  const [eventDateRange, setEventDateRange] = useState<{ earliestDate: string | null; latestDate: string | null }>({
-    earliestDate: null,
-    latestDate: null,
-  })
   const [archiveSubmenuOpen, setArchiveSubmenuOpen] = useState(false)
+  const [hideArchiveSubmenuOpen, setHideArchiveSubmenuOpen] = useState(false)
   const [colorSubmenuOpen, setColorSubmenuOpen] = useState(false)
   const [archiveStartInput, setArchiveStartInput] = useState('')
   const [archiveEndInput, setArchiveEndInput] = useState('')
+  const [hideArchiveStartInput, setHideArchiveStartInput] = useState('')
+  const [hideArchiveEndInput, setHideArchiveEndInput] = useState('')
   const [customColorMode, setCustomColorMode] = useState<CustomColorMode>('gradient')
   const [customColorA, setCustomColorA] = useState('#22d3ee')
   const [customColorB, setCustomColorB] = useState('#8b5cf6')
@@ -216,41 +189,17 @@ function App() {
 
   const orderedTasks = useMemo(() => [...tasks].sort((a, b) => a.order - b.order), [tasks])
   const todayDate = useMemo(() => toDateInputText(new Date(nowMs)), [nowMs])
-  const earliestTaskLogDate = useMemo(() => earliestTaskDate(tasks), [tasks])
   const visibleTasks = useMemo(() => {
-    return orderedTasks.filter((task) => {
-      if (!task.archived) {
-        return true
-      }
-      if (!settings.showArchived) {
-        return false
-      }
-      if (settings.archivedDisplayMode !== 'range') {
-        return true
-      }
-
-      const taskDate = datePrefix(task.archivedAt) ?? datePrefix(task.updatedAt) ?? datePrefix(task.createdAt)
-      if (!taskDate) {
-        return false
-      }
-      if (settings.archivedRangeStart && taskDate < settings.archivedRangeStart) {
-        return false
-      }
-      if (settings.archivedRangeEnd && taskDate > settings.archivedRangeEnd) {
-        return false
-      }
-      return true
-    })
-  }, [
-    orderedTasks,
-    settings.showArchived,
-    settings.archivedDisplayMode,
-    settings.archivedRangeStart,
-    settings.archivedRangeEnd,
-  ])
+    return orderedTasks.filter((task) => shouldShowTaskInList(task, settings, todayDate))
+  }, [orderedTasks, settings, todayDate])
+  const visibleTaskIds = useMemo(() => visibleTasks.map((task) => task.id), [visibleTasks])
   const contextTask = useMemo(
     () => (contextMenu ? tasks.find((task) => task.id === contextMenu.taskId) ?? null : null),
     [contextMenu, tasks],
+  )
+  const allTaskDurationsHidden = useMemo(
+    () => tasks.length > 0 && tasks.every((task) => task.showDuration === false),
+    [tasks],
   )
   const statsTask = useMemo(() => tasks.find((task) => task.id === statsTaskId) ?? null, [tasks, statsTaskId])
   const titleNow = useMemo(() => {
@@ -268,32 +217,16 @@ function App() {
   }, [nowMs])
 
   const resolveArchiveRangeDefaults = () => {
-    const defaultStart = settings.archivedRangeStart || eventDateRange.earliestDate || earliestTaskLogDate || todayDate
-    const defaultEnd = settings.archivedRangeEnd || todayDate
-    if (defaultStart <= defaultEnd) {
-      return { start: defaultStart, end: defaultEnd }
-    }
-    return { start: defaultEnd, end: defaultStart }
+    return resolveHiddenArchiveRangeDefaults({
+      todayDate,
+      currentStart: archiveStartInput,
+      currentEnd: archiveEndInput,
+    })
   }
 
   useEffect(() => {
     void hydrate()
   }, [hydrate])
-
-  useEffect(() => {
-    if (!hydrated) {
-      return
-    }
-    let cancelled = false
-    void window.todoAPI?.getEventDateRange().then((range) => {
-      if (!cancelled && range) {
-        setEventDateRange(range)
-      }
-    }).catch(() => undefined)
-    return () => {
-      cancelled = true
-    }
-  }, [hydrated])
 
   useEffect(() => {
     let cancelled = false
@@ -329,19 +262,7 @@ function App() {
         return
       }
 
-      void hydrate()
-        .then(() => {
-          if (cancelled) {
-            return
-          }
-
-          return api.getEventDateRange().then((range) => {
-            if (!cancelled && range) {
-              setEventDateRange(range)
-            }
-          })
-        })
-        .catch(() => undefined)
+      void hydrate().catch(() => undefined)
     })
 
     return () => {
@@ -430,11 +351,20 @@ function App() {
     const close = () => {
       setContextMenu(null)
       setArchiveSubmenuOpen(false)
+      setHideArchiveSubmenuOpen(false)
       setColorSubmenuOpen(false)
     }
     const onPointerDown = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null
       if (target?.closest('.task-context-menu')) {
+        return
+      }
+      close()
+    }
+    const onScroll = (event: Event) => {
+      const menuEl = contextMenuRef.current
+      const target = event.target
+      if (menuEl && target instanceof Node && menuEl.contains(target)) {
         return
       }
       close()
@@ -446,12 +376,12 @@ function App() {
     }
 
     window.addEventListener('mousedown', onPointerDown)
-    window.addEventListener('scroll', close, true)
+    window.addEventListener('scroll', onScroll, true)
     window.addEventListener('keydown', onKeyDown)
 
     return () => {
       window.removeEventListener('mousedown', onPointerDown)
-      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('scroll', onScroll, true)
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [contextMenu])
@@ -479,7 +409,7 @@ function App() {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', applyPosition)
     }
-  }, [contextMenu, archiveSubmenuOpen, colorSubmenuOpen, customColorMode])
+  }, [contextMenu, archiveSubmenuOpen, hideArchiveSubmenuOpen, colorSubmenuOpen, customColorMode])
 
   // 持续调整直到稳定
   useEffect(() => {
@@ -726,6 +656,7 @@ function App() {
 
   const toggleArchiveSubmenu = () => {
     const nextOpen = !archiveSubmenuOpen
+    setHideArchiveSubmenuOpen(false)
     setColorSubmenuOpen(false)
     if (nextOpen) {
       const defaults = resolveArchiveRangeDefaults()
@@ -733,6 +664,22 @@ function App() {
       setArchiveEndInput(defaults.end)
     }
     setArchiveSubmenuOpen(nextOpen)
+  }
+
+  const toggleHideArchiveSubmenu = () => {
+    const nextOpen = !hideArchiveSubmenuOpen
+    setArchiveSubmenuOpen(false)
+    setColorSubmenuOpen(false)
+    if (nextOpen) {
+      const defaults = resolveHiddenArchiveRangeDefaults({
+        todayDate,
+        currentStart: hideArchiveStartInput,
+        currentEnd: hideArchiveEndInput,
+      })
+      setHideArchiveStartInput(defaults.start)
+      setHideArchiveEndInput(defaults.end)
+    }
+    setHideArchiveSubmenuOpen(nextOpen)
   }
 
   const toggleColorSubmenu = () => {
@@ -777,35 +724,48 @@ function App() {
   const closeContextMenu = () => {
     setContextMenu(null)
     setArchiveSubmenuOpen(false)
+    setHideArchiveSubmenuOpen(false)
     setColorSubmenuOpen(false)
+    setArchiveStartInput('')
+    setArchiveEndInput('')
+    setHideArchiveStartInput('')
+    setHideArchiveEndInput('')
   }
 
   const applyArchivedAll = () => {
-    const defaults = resolveArchiveRangeDefaults()
     updateSettings({
       showArchived: true,
       archivedDisplayMode: 'all',
-      archivedRangeStart: archiveStartInput || defaults.start,
-      archivedRangeEnd: archiveEndInput || defaults.end,
+      archivedRangeStart: '',
+      archivedRangeEnd: '',
     })
     closeContextMenu()
   }
 
   const applyArchivedRange = () => {
-    const defaults = resolveArchiveRangeDefaults()
-    let start = archiveStartInput || defaults.start
-    let end = archiveEndInput || defaults.end
-    if (start > end) {
-      const prevStart = start
-      start = end
-      end = prevStart
-    }
+    const { start, end } = resolveArchiveRangeDefaults()
     updateSettings({
       showArchived: true,
       archivedDisplayMode: 'range',
       archivedRangeStart: start,
       archivedRangeEnd: end,
     })
+    closeContextMenu()
+  }
+
+  const applyHideArchivedAll = () => {
+    hideArchivedTasks({ mode: 'all' })
+    closeContextMenu()
+  }
+
+  const applyHideArchivedRange = () => {
+    const { start, end } = resolveHiddenArchiveRangeDefaults({
+      todayDate,
+      currentStart: hideArchiveStartInput,
+      currentEnd: hideArchiveEndInput,
+    })
+
+    hideArchivedTasks({ mode: 'range', start, end })
     closeContextMenu()
   }
 
@@ -949,6 +909,7 @@ function App() {
         }
         event.preventDefault()
         setArchiveSubmenuOpen(false)
+        setHideArchiveSubmenuOpen(false)
         setColorSubmenuOpen(false)
         setContextMenu(null)
       }}
@@ -1014,6 +975,7 @@ function App() {
               <TaskCard
                 key={task.id}
                 task={task}
+                nowMs={nowMs}
                 displayOrder={index + 1}
                 cardMode={settings.taskCardMode}
                 contentDisplayMode={settings.taskContentDisplayMode}
@@ -1025,6 +987,7 @@ function App() {
                 onFinish={finishTask}
                 onOpenContextMenu={(taskId, position) => {
                   setArchiveSubmenuOpen(false)
+                  setHideArchiveSubmenuOpen(false)
                   setColorSubmenuOpen(false)
                   setContextMenuPosition({ left: position.x, top: position.y })
                   setContextMenu({ taskId, ...position })
@@ -1061,6 +1024,61 @@ function App() {
           <button
             type="button"
             onClick={() => {
+              toggleTaskDurationVisibility(contextTask.id)
+              setLayoutPulse((value) => value + 1)
+              closeContextMenu()
+            }}
+          >
+            {contextTask.showDuration === false ? '🕒 显示用时（当前隐藏）' : '🙈 隐藏用时（当前显示）'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAllTaskDurationVisibility(allTaskDurationsHidden)
+              setLayoutPulse((value) => value + 1)
+              closeContextMenu()
+            }}
+          >
+            {allTaskDurationsHidden ? '🕒 显示（全部）用时' : '🙈 隐藏（全部）用时'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setTaskDurationLayoutMode(contextTask.id, contextTask.durationLayoutMode === 'inline' ? 'stacked' : 'inline')
+              setLayoutPulse((value) => value + 1)
+              closeContextMenu()
+            }}
+          >
+            {contextTask.durationLayoutMode === 'inline' ? '↕️ 切换为 2+1 用时布局' : '↔️ 切换为单行用时布局'}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setTasksDurationLayoutMode(visibleTaskIds, 'inline')
+              setLayoutPulse((value) => value + 1)
+              closeContextMenu()
+            }}
+          >
+            ↔️ 所有显示任务设为单行布局
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setTasksDurationLayoutMode(visibleTaskIds, 'stacked')
+              setLayoutPulse((value) => value + 1)
+              closeContextMenu()
+            }}
+          >
+            ↕️ 所有显示任务设为 2+1 布局
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
               insertTaskAfter(contextTask.id)
               closeContextMenu()
             }}
@@ -1091,15 +1109,27 @@ function App() {
           )}
 
           {!contextTask.archived ? (
-            <button
-              type="button"
-              onClick={() => {
-                archiveTask(contextTask.id)
-                closeContextMenu()
-              }}
-            >
-              📥 归档（仅从界面隐藏）
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  archiveTask(contextTask.id)
+                  closeContextMenu()
+                }}
+              >
+                🗂️ 归档
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  archiveAndHideTask(contextTask.id)
+                  closeContextMenu()
+                }}
+              >
+                📥 归档 + 隐藏
+              </button>
+            </>
           ) : (
             <button
               type="button"
@@ -1211,7 +1241,7 @@ function App() {
               className="submenu-trigger"
               onClick={toggleArchiveSubmenu}
             >
-              🗂️ 显示归档任务 {archiveSubmenuOpen ? '▾' : '▸'}
+              🫥 显示隐藏任务 {archiveSubmenuOpen ? '▾' : '▸'}
             </button>
 
             {archiveSubmenuOpen ? (
@@ -1252,9 +1282,51 @@ function App() {
                       closeContextMenu()
                     }}
                   >
-                    🙈 隐藏归档任务
+                    🙈 关闭隐藏任务显示
                   </button>
                 ) : null}
+              </div>
+            ) : null}
+          </section>
+
+          <section className="menu-layer">
+            <button
+              type="button"
+              className="submenu-trigger"
+              onClick={toggleHideArchiveSubmenu}
+            >
+              🙈 隐藏归档任务 {hideArchiveSubmenuOpen ? '▾' : '▸'}
+            </button>
+
+            {hideArchiveSubmenuOpen ? (
+              <div className="submenu-panel">
+                <button type="button" onClick={applyHideArchivedAll}>
+                  🙈 隐藏全部归档任务
+                </button>
+
+                <div className="submenu-note">按时间</div>
+
+                <label className="submenu-date-field">
+                  Start
+                  <input
+                    type="date"
+                    value={hideArchiveStartInput}
+                    onChange={(event) => setHideArchiveStartInput(event.target.value)}
+                  />
+                </label>
+
+                <label className="submenu-date-field">
+                  End
+                  <input
+                    type="date"
+                    value={hideArchiveEndInput}
+                    onChange={(event) => setHideArchiveEndInput(event.target.value)}
+                  />
+                </label>
+
+                <button type="button" onClick={applyHideArchivedRange}>
+                  🗓️ 按时间隐藏
+                </button>
               </div>
             ) : null}
           </section>

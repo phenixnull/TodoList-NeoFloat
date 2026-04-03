@@ -3,6 +3,8 @@ import type { AppSettings, EventDraft, PersistedState, Task, TaskImageAttachment
 import { createContentPersistScheduler } from '../lib/contentPersistScheduler'
 import { DEFAULT_APP_SETTINGS } from '../lib/defaultSettings.ts'
 import { applyTaskOrder } from '../lib/taskOrder'
+import { applyTaskDurationLayoutMode } from '../lib/taskDurationLayout'
+import { shouldHideArchivedTask } from '../lib/taskVisibility'
 import { closeOpenSegment, sumClosedDurations, toLocalIso } from '../lib/time'
 import { buildTaskImageMarkdown, insertTextAtSelection, pruneTaskImageAttachments } from '../lib/taskImages'
 
@@ -27,6 +29,12 @@ type TaskStore = {
   setTaskPresetColor: (taskId: string, colorValue: string) => void
   setTaskCustomColor: (taskId: string, colorValue: string) => void
   clearTaskColor: (taskId: string) => void
+  toggleTaskDurationVisibility: (taskId: string) => void
+  setAllTaskDurationVisibility: (visible: boolean) => void
+  setTaskDurationLayoutMode: (taskId: string, layoutMode: Task['durationLayoutMode']) => void
+  setTasksDurationLayoutMode: (taskIds: string[], layoutMode: Task['durationLayoutMode']) => void
+  archiveAndHideTask: (taskId: string) => void
+  hideArchivedTasks: (filter: { mode: 'all' | 'range'; start?: string; end?: string }) => void
   toggleStartPause: (taskId: string) => void
   finishTask: (taskId: string) => void
   unfinishTask: (taskId: string) => void
@@ -53,6 +61,9 @@ function createTask(order: number, settings: AppSettings): Task {
     status: 'idle',
     archived: false,
     archivedAt: null,
+    hidden: false,
+    showDuration: true,
+    durationLayoutMode: 'stacked',
     segments: [],
     totalDurationMs: 0,
     createdAt: now,
@@ -64,15 +75,37 @@ function createTask(order: number, settings: AppSettings): Task {
 function sortAndReorder(tasks: Task[]): Task[] {
   return [...tasks]
     .sort((a, b) => a.order - b.order)
-    .map((task, index) => ({
-      ...task,
-      attachments: Array.isArray(task.attachments)
-        ? task.attachments.filter((attachment): attachment is TaskImageAttachment => Boolean(attachment && typeof attachment.id === 'string' && typeof attachment.storagePath === 'string' && typeof attachment.mimeType === 'string' && typeof attachment.createdAt === 'string'))
-        : [],
-      colorMode: task.colorMode === 'preset' || task.colorMode === 'custom' ? task.colorMode : 'auto',
-      colorValue: typeof task.colorValue === 'string' ? task.colorValue : null,
-      order: index + 1,
-    }))
+    .map((task, index) => {
+      const segments = Array.isArray(task.segments)
+        ? task.segments
+            .filter((segment) => Boolean(segment && typeof segment.startAt === 'string'))
+            .map((segment) => ({
+              startAt: segment.startAt,
+              pauseAt: typeof segment.pauseAt === 'string' ? segment.pauseAt : null,
+              durationMs: typeof segment.durationMs === 'number' && Number.isFinite(segment.durationMs) ? Math.max(0, segment.durationMs) : 0,
+            }))
+        : []
+
+      const totalDurationMs =
+        typeof task.totalDurationMs === 'number' && Number.isFinite(task.totalDurationMs)
+          ? Math.max(0, task.totalDurationMs)
+          : sumClosedDurations(segments)
+
+      return {
+        ...task,
+        attachments: Array.isArray(task.attachments)
+          ? task.attachments.filter((attachment): attachment is TaskImageAttachment => Boolean(attachment && typeof attachment.id === 'string' && typeof attachment.storagePath === 'string' && typeof attachment.mimeType === 'string' && typeof attachment.createdAt === 'string'))
+          : [],
+        colorMode: task.colorMode === 'preset' || task.colorMode === 'custom' ? task.colorMode : 'auto',
+        colorValue: typeof task.colorValue === 'string' ? task.colorValue : null,
+        hidden: Boolean(task.hidden),
+        showDuration: task.showDuration !== false,
+        durationLayoutMode: task.durationLayoutMode === 'inline' ? 'inline' : 'stacked',
+        segments,
+        totalDurationMs,
+        order: index + 1,
+      }
+    })
 }
 
 function toSnapshot(tasks: Task[], settings: AppSettings): PersistedState {
@@ -196,6 +229,150 @@ export const useTaskStore = create<TaskStore>((set, get) => {
     },
 
     clearPersistError: () => set({ persistError: null }),
+
+    toggleTaskDurationVisibility: (taskId) => {
+      const now = toLocalIso()
+
+      set((state) => ({
+        tasks: state.tasks.map((task) => {
+          if (task.id !== taskId) {
+            return task
+          }
+
+          return {
+            ...task,
+            showDuration: task.showDuration === false,
+            updatedAt: now,
+          }
+        }),
+      }))
+
+      enqueuePersist({
+        taskId,
+        type: 'TASK_UPDATE',
+        payload: { field: 'showDuration' },
+      })
+    },
+
+    setAllTaskDurationVisibility: (visible) => {
+      const now = toLocalIso()
+
+      set((state) => ({
+        tasks: state.tasks.map((task) => ({
+          ...task,
+          showDuration: visible,
+          updatedAt: now,
+        })),
+      }))
+
+      enqueuePersist({
+        taskId: null,
+        type: 'TASK_UPDATE',
+        payload: { field: 'showDurationAll', value: visible },
+      })
+    },
+
+    setTaskDurationLayoutMode: (taskId, layoutMode) => {
+      const normalizedLayoutMode = layoutMode === 'inline' ? 'inline' : 'stacked'
+      const now = toLocalIso()
+
+      set((state) => ({
+        tasks: applyTaskDurationLayoutMode(state.tasks, [taskId], normalizedLayoutMode, now),
+      }))
+
+      enqueuePersist({
+        taskId,
+        type: 'TASK_UPDATE',
+        payload: { field: 'durationLayoutMode', value: normalizedLayoutMode },
+      })
+    },
+
+    setTasksDurationLayoutMode: (taskIds, layoutMode) => {
+      const normalizedLayoutMode = layoutMode === 'inline' ? 'inline' : 'stacked'
+      const targetTaskIds = [...new Set(taskIds.filter((taskId): taskId is string => typeof taskId === 'string' && taskId.length > 0))]
+      if (targetTaskIds.length === 0) {
+        return
+      }
+
+      const now = toLocalIso()
+
+      set((state) => ({
+        tasks: applyTaskDurationLayoutMode(state.tasks, targetTaskIds, normalizedLayoutMode, now),
+      }))
+
+      enqueuePersist({
+        taskId: null,
+        type: 'TASK_UPDATE',
+        payload: {
+          field: 'durationLayoutModeMany',
+          taskIds: targetTaskIds,
+          value: normalizedLayoutMode,
+        },
+      })
+    },
+
+    archiveAndHideTask: (taskId) => {
+      const now = toLocalIso()
+
+      set((state) => ({
+        tasks: state.tasks.map((task) => {
+          if (task.id !== taskId) {
+            return task
+          }
+
+          const finalizedSegments = task.status === 'doing' ? closeOpenSegment(task.segments, now) : task.segments
+          return {
+            ...task,
+            status: task.status === 'doing' ? 'paused' : task.status,
+            archived: true,
+            archivedAt: now,
+            hidden: true,
+            segments: finalizedSegments,
+            totalDurationMs: sumClosedDurations(finalizedSegments),
+            updatedAt: now,
+          }
+        }),
+      }))
+
+      enqueuePersist({
+        taskId,
+        type: 'TASK_ARCHIVE',
+        payload: { at: now, hidden: true },
+      })
+    },
+
+    hideArchivedTasks: (filter) => {
+      const now = toLocalIso()
+      const todayDate = now.slice(0, 10)
+
+      set((state) => ({
+        tasks: state.tasks.map((task) =>
+          shouldHideArchivedTask(task, {
+            mode: filter.mode,
+            todayDate,
+            start: filter.start,
+            end: filter.end,
+          })
+            ? {
+                ...task,
+                hidden: true,
+                updatedAt: now,
+              }
+            : task,
+        ),
+      }))
+
+      enqueuePersist({
+        taskId: null,
+        type: 'TASK_UPDATE',
+        payload: {
+          field: 'hideArchivedTasks',
+          mode: filter.mode,
+          start: filter.start ?? '',
+          end: filter.end ?? '',
+        },
+      })
+    },
 
     addTask: () => {
       const now = toLocalIso()
@@ -493,6 +670,7 @@ export const useTaskStore = create<TaskStore>((set, get) => {
             status: task.status === 'doing' ? 'paused' : task.status,
             archived: true,
             archivedAt: now,
+            hidden: false,
             segments: finalizedSegments,
             totalDurationMs: sumClosedDurations(finalizedSegments),
             updatedAt: now,
@@ -520,6 +698,7 @@ export const useTaskStore = create<TaskStore>((set, get) => {
             ...task,
             archived: false,
             archivedAt: null,
+            hidden: false,
             updatedAt: now,
           }
         }),

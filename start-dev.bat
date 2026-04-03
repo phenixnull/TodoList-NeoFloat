@@ -3,18 +3,11 @@ setlocal
 
 cd /d "%~dp0"
 
-if not exist "package.json" (
-  echo [ERROR] package.json not found in: %cd%
+if not exist "start-dev.ps1" (
+  echo [ERROR] start-dev.ps1 not found in: %cd%
   exit /b 1
 )
 
-where npm >nul 2>nul
-if errorlevel 1 (
-  echo [ERROR] npm is not available in PATH.
-  exit /b 1
-)
-
-echo Starting Neo Float Todo in dev mode...
-call npm run dev
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%cd%\start-dev.ps1"
 
 endlocal

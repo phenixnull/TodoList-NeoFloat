@@ -33,6 +33,7 @@ const EDGE_RECOVERY_REFRESH_DELAY_MS = 220
 const EDGE_DOCK_CLEAR_DEBOUNCE_MS = 240
 const EDGE_DOCK_CLEAR_MIN_MISS_COUNT = 3
 const WINDOWS_NATIVE_SNAP_MODE = process.platform === 'win32'
+const WINDOWS_APP_USER_MODEL_ID = 'com.neofloat.todo'
 
 const DEFAULT_SETTINGS = {
   opacity: 0.82,
@@ -77,6 +78,22 @@ const edgeDebugLogFile = path.join(dataDir, 'edge-events.log')
 const cacheDir = runtimePaths.cacheDir
 const legacyPackagedDataDir =
   app.isPackaged && runtimePaths.isPortable ? path.join(defaultUserDataDir, 'data') : null
+const windowIconPath = (() => {
+  if (process.platform !== 'win32') {
+    return undefined
+  }
+
+  const candidates = [
+    path.join(process.cwd(), 'build', 'icons', 'neo-float.ico'),
+    path.join(__dirname, '..', 'build', 'icons', 'neo-float.ico'),
+  ]
+
+  return candidates.find((candidate) => fsSync.existsSync(candidate))
+})()
+
+if (process.platform === 'win32') {
+  app.setAppUserModelId(WINDOWS_APP_USER_MODEL_ID)
+}
 
 let mainWindow = null
 let manualBadgeWindow = null
@@ -179,6 +196,29 @@ async function maybeMigratePortableDataDir() {
 
   await fs.mkdir(dataDir, { recursive: true })
   await fs.cp(legacyPackagedDataDir, dataDir, { recursive: true, force: true })
+}
+
+function normalizeTaskSegments(segments) {
+  if (!Array.isArray(segments)) {
+    return []
+  }
+
+  return segments
+    .filter((segment) => Boolean(segment && typeof segment.startAt === 'string'))
+    .map((segment) => ({
+      startAt: segment.startAt,
+      pauseAt: typeof segment.pauseAt === 'string' ? segment.pauseAt : null,
+      durationMs: typeof segment.durationMs === 'number' && Number.isFinite(segment.durationMs) ? Math.max(0, segment.durationMs) : 0,
+    }))
+}
+
+function sumClosedTaskDurations(segments) {
+  return normalizeTaskSegments(segments).reduce((sum, segment) => {
+    if (!segment.pauseAt) {
+      return sum
+    }
+    return sum + Math.max(0, segment.durationMs)
+  }, 0)
 }
 
 
@@ -287,13 +327,23 @@ function mergeState(raw) {
   merged.settings.archivedRangeEnd = isDateText(merged.settings.archivedRangeEnd) ? merged.settings.archivedRangeEnd : ''
 
   merged.tasks = merged.tasks
-    .map((task, index) => ({
-      ...task,
-      order: typeof task.order === 'number' ? task.order : index + 1,
-      archived: Boolean(task.archived),
-      archivedAt: typeof task.archivedAt === 'string' ? task.archivedAt : null,
-      segments: Array.isArray(task.segments) ? task.segments : [],
-    }))
+    .map((task, index) => {
+      const segments = normalizeTaskSegments(task.segments)
+      return {
+        ...task,
+        order: typeof task.order === 'number' ? task.order : index + 1,
+        archived: Boolean(task.archived),
+        archivedAt: typeof task.archivedAt === 'string' ? task.archivedAt : null,
+        hidden: Boolean(task.hidden),
+        showDuration: task.showDuration !== false,
+        durationLayoutMode: task.durationLayoutMode === 'inline' ? 'inline' : 'stacked',
+        segments,
+        totalDurationMs:
+          typeof task.totalDurationMs === 'number' && Number.isFinite(task.totalDurationMs)
+            ? Math.max(0, task.totalDurationMs)
+            : sumClosedTaskDurations(segments),
+      }
+    })
     .sort((a, b) => a.order - b.order)
 
   return merged
@@ -1562,6 +1612,7 @@ async function createMainWindow() {
     hasShadow: true,
     alwaysOnTop,
     title: 'Floating Todo',
+    icon: windowIconPath,
     backgroundColor: WINDOWS_NATIVE_SNAP_MODE ? '#101521' : '#00000000',
     thickFrame: true,
     roundedCorners: true,

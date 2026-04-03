@@ -15,6 +15,9 @@ function sortAndReorder(tasks: Task[]): Task[] {
     .sort((a, b) => a.order - b.order)
     .map((task, index) => ({
       ...task,
+      hidden: Boolean(task.hidden),
+      showDuration: task.showDuration !== false,
+      durationLayoutMode: task.durationLayoutMode === 'inline' ? 'inline' : 'stacked',
       order: index + 1,
     }))
 }
@@ -40,6 +43,9 @@ function createMobileTask(order: number, now: string, settings = DEFAULT_APP_SET
     status: 'idle',
     archived: false,
     archivedAt: null,
+    hidden: false,
+    showDuration: true,
+    durationLayoutMode: 'stacked',
     segments: [],
     totalDurationMs: 0,
     createdAt: now,
@@ -172,6 +178,7 @@ export function archiveMobileTask(state: PersistedState, taskId: string, updated
       status: task.status === 'doing' ? 'paused' : task.status,
       archived: true,
       archivedAt: updatedAt,
+      hidden: false,
       segments: finalizedSegments,
       totalDurationMs: sumClosedDurations(finalizedSegments),
       updatedAt,
@@ -189,6 +196,7 @@ export function unarchiveMobileTask(state: PersistedState, taskId: string, updat
       ...task,
       archived: false,
       archivedAt: null,
+      hidden: false,
       updatedAt,
     }
   })

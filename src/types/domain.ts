@@ -5,6 +5,7 @@ export type TaskContentDisplayMode = 'inner-scroll' | 'auto-height'
 export type TaskPaletteMode = 'auto-vivid' | 'gray-gradient' | 'default-gray'
 export type TaskColorMode = 'auto' | 'preset' | 'custom'
 export type ArchivedDisplayMode = 'all' | 'range'
+export type TaskDurationLayoutMode = 'stacked' | 'inline'
 
 export interface TaskSegment {
   startAt: string
@@ -31,6 +32,9 @@ export interface Task {
   status: TaskStatus
   archived: boolean
   archivedAt: string | null
+  hidden: boolean
+  showDuration: boolean
+  durationLayoutMode?: TaskDurationLayoutMode
   segments: TaskSegment[]
   totalDurationMs: number
   createdAt: string
