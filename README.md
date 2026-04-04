@@ -153,6 +153,7 @@ npm test
 - Refined the Android task strips with stronger running-state spectrum borders, internal animated gradients, centered editing sheets, and swipe-left delete actions.
 - Stabilized the desktop live editor so the visible editing layer is the actual `textarea`, preventing caret drift after line wraps.
 - Updated desktop live-editor autosizing to use textarea-driven height while editing and preview-driven height while browsing, avoiding premature card growth before the cursor reaches the next line.
+- Aligned plain-text task preview flow with the textarea text flow so ordinary multiline notes no longer pick up extra preview spacing or premature height expansion from Markdown rendering.
 - Added regression coverage for native task-strip source expectations and desktop live-editor measurement behavior.
 
 ### 2026-04-03
