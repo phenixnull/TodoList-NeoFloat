@@ -1,6 +1,7 @@
 import type { PersistedState } from '../types/domain.ts'
 import type { SyncConfig } from '../types/sync.ts'
 import { normalizeSyncConfig } from '../lib/sync.ts'
+import { normalizeTaskMeta } from '../lib/taskMeta.ts'
 import { sumClosedDurations } from '../lib/time.ts'
 
 export const MOBILE_SYNC_CONFIG_STORAGE_KEY = 'neo-float-mobile-sync-config'
@@ -61,7 +62,22 @@ function normalizePersistedState(state: PersistedState): PersistedState {
 
       return {
         ...task,
+        meta: normalizeTaskMeta(task.meta),
         hidden: Boolean(task.hidden),
+        hiddenAt:
+          typeof task.hiddenAt === 'string'
+            ? task.hiddenAt
+            : task.hidden
+              ? typeof task.updatedAt === 'string'
+                ? task.updatedAt
+                : typeof task.archivedAt === 'string'
+                  ? task.archivedAt
+                  : typeof task.finishedAt === 'string'
+                    ? task.finishedAt
+                    : typeof task.createdAt === 'string'
+                      ? task.createdAt
+                      : null
+              : null,
         showDuration: task.showDuration !== false,
         durationLayoutMode: task.durationLayoutMode === 'inline' ? 'inline' : 'stacked',
         segments,

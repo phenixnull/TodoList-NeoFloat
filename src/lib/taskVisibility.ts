@@ -1,13 +1,8 @@
-import type { AppSettings, Task } from '../types/domain'
+import type { HiddenTaskDateBasis, Task } from '../types/domain'
 
-type TaskVisibilitySettings = Pick<
-  AppSettings,
-  | 'showArchived'
-  | 'archivedDisplayMode'
-  | 'archivedRangeStart'
-  | 'archivedRangeEnd'
->
-type TaskVisibilityTask = Pick<Task, 'hidden' | 'archived' | 'archivedAt' | 'updatedAt' | 'createdAt'>
+export type { HiddenTaskDateBasis } from '../types/domain'
+
+type TaskVisibilityTask = Pick<Task, 'hidden' | 'hiddenAt' | 'archived' | 'archivedAt' | 'createdAt' | 'finishedAt' | 'updatedAt'>
 
 function normalizeDateText(value: string | null | undefined): string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : ''
@@ -37,36 +32,52 @@ export function resolveHiddenArchiveRangeDefaults(input: {
   return { start: end, end: start }
 }
 
-export function resolveTaskVisibilityDate(task: TaskVisibilityTask): string | null {
-  return datePrefix(task.archivedAt) ?? datePrefix(task.updatedAt) ?? datePrefix(task.createdAt)
-}
-
-export function shouldShowTaskInList(task: TaskVisibilityTask, settings: TaskVisibilitySettings, todayDate: string): boolean {
-  const taskDate = resolveTaskVisibilityDate(task)
-
-  if (task.hidden) {
-    if (!settings.showArchived) {
-      return false
-    }
-
-    if (settings.archivedDisplayMode !== 'range') {
-      return true
-    }
-
-    if (!taskDate) {
-      return false
-    }
-
-    const { start, end } = resolveHiddenArchiveRangeDefaults({
-      todayDate,
-      currentStart: settings.archivedRangeStart,
-      currentEnd: settings.archivedRangeEnd,
-    })
-
-    return taskDate >= start && taskDate <= end
+export function resolveArchivedVisibilityDate(task: TaskVisibilityTask): string | null {
+  if (!task.archived) {
+    return null
   }
 
-  return true
+  return datePrefix(task.archivedAt)
+}
+
+function isArchivedDateInRange(
+  task: TaskVisibilityTask,
+  input: { todayDate: string; start?: string; end?: string },
+): boolean {
+  const taskDate = resolveArchivedVisibilityDate(task)
+  if (!taskDate) {
+    return false
+  }
+
+  const { start, end } = resolveHiddenArchiveRangeDefaults({
+    todayDate: input.todayDate,
+    currentStart: input.start,
+    currentEnd: input.end,
+  })
+
+  return taskDate >= start && taskDate <= end
+}
+
+function resolveHiddenTaskDate(task: TaskVisibilityTask): string | null {
+  return datePrefix(task.hiddenAt) ?? (task.hidden ? datePrefix(task.updatedAt) : null)
+}
+
+function resolveTaskDateByBasis(task: TaskVisibilityTask, basis: HiddenTaskDateBasis): string | null {
+  switch (basis) {
+    case 'created':
+      return datePrefix(task.createdAt)
+    case 'finished':
+      return datePrefix(task.finishedAt)
+    case 'hidden':
+      return resolveHiddenTaskDate(task)
+    case 'archived':
+    default:
+      return resolveArchivedVisibilityDate(task)
+  }
+}
+
+export function shouldShowTaskInList(task: Pick<TaskVisibilityTask, 'hidden'>): boolean {
+  return !task.hidden
 }
 
 export function shouldHideArchivedTask(
@@ -81,7 +92,22 @@ export function shouldHideArchivedTask(
     return true
   }
 
-  const taskDate = resolveTaskVisibilityDate(task)
+  return isArchivedDateInRange(task, input)
+}
+
+export function shouldUnhideTask(
+  task: TaskVisibilityTask,
+  input: { mode: 'all' | 'range'; basis?: HiddenTaskDateBasis; todayDate: string; start?: string; end?: string },
+): boolean {
+  if (!task.hidden) {
+    return false
+  }
+
+  if (input.mode !== 'range') {
+    return true
+  }
+
+  const taskDate = resolveTaskDateByBasis(task, input.basis ?? 'archived')
   if (!taskDate) {
     return false
   }

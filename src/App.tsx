@@ -10,7 +10,9 @@ import {
   CONTEXT_MENU_INSERT_AFTER_TEXT,
   CONTEXT_MENU_UNFINISH_TEXT,
 } from './lib/contextMenuLabels'
-import { resolveHiddenArchiveRangeDefaults, shouldShowTaskInList } from './lib/taskVisibility'
+import { DEFAULT_TASK_TAG, DEFAULT_TASK_TEXT_COLOR, TASK_TAG_PRESETS, normalizeTaskMeta } from './lib/taskMeta'
+import { DEFAULT_TASK_TAG_BACKGROUND_COLOR } from './lib/taskMeta'
+import { resolveHiddenArchiveRangeDefaults, shouldShowTaskInList, type HiddenTaskDateBasis } from './lib/taskVisibility'
 import { useTaskStore } from './store/useTaskStore'
 import { calcTaskDuration, formatDuration, localDateTimeText } from './lib/time'
 import type { SyncConfig, SyncStatus } from './types/sync'
@@ -80,6 +82,7 @@ const CONTEXT_MENU_ORDER_LABELS: Record<ContextMenuItemId, string> = {
   'insert-after': '在下方插入任务',
   'toggle-finish': '完成状态切换',
   'toggle-archive': '归档操作',
+  meta: '标签/进度/文字色',
   color: '任务配色',
   'show-archived': '显示隐藏任务',
   'hide-archived': '隐藏归档任务',
@@ -157,6 +160,7 @@ function App() {
   const insertTaskAfter = useTaskStore((state) => state.insertTaskAfter)
   const insertTaskImage = useTaskStore((state) => state.insertTaskImage)
   const updateTaskContent = useTaskStore((state) => state.updateTaskContent)
+  const updateTaskMeta = useTaskStore((state) => state.updateTaskMeta)
   const setTaskPresetColor = useTaskStore((state) => state.setTaskPresetColor)
   const setTaskCustomColor = useTaskStore((state) => state.setTaskCustomColor)
   const clearTaskColor = useTaskStore((state) => state.clearTaskColor)
@@ -165,6 +169,7 @@ function App() {
   const setTaskDurationLayoutMode = useTaskStore((state) => state.setTaskDurationLayoutMode)
   const setTasksDurationLayoutMode = useTaskStore((state) => state.setTasksDurationLayoutMode)
   const archiveAndHideTask = useTaskStore((state) => state.archiveAndHideTask)
+  const showHiddenTasks = useTaskStore((state) => state.showHiddenTasks)
   const hideArchivedTasks = useTaskStore((state) => state.hideArchivedTasks)
   const toggleStartPause = useTaskStore((state) => state.toggleStartPause)
   const finishTask = useTaskStore((state) => state.finishTask)
@@ -182,11 +187,20 @@ function App() {
   const [statsTaskId, setStatsTaskId] = useState<string | null>(null)
   const [archiveSubmenuOpen, setArchiveSubmenuOpen] = useState(false)
   const [hideArchiveSubmenuOpen, setHideArchiveSubmenuOpen] = useState(false)
+  const [metaSubmenuOpen, setMetaSubmenuOpen] = useState(false)
   const [colorSubmenuOpen, setColorSubmenuOpen] = useState(false)
   const [archiveStartInput, setArchiveStartInput] = useState('')
   const [archiveEndInput, setArchiveEndInput] = useState('')
+  const [archiveDateBasis, setArchiveDateBasis] = useState<HiddenTaskDateBasis>('archived')
   const [hideArchiveStartInput, setHideArchiveStartInput] = useState('')
   const [hideArchiveEndInput, setHideArchiveEndInput] = useState('')
+  const [metaTagInput, setMetaTagInput] = useState(DEFAULT_TASK_TAG)
+  const [metaCustomTagEditing, setMetaCustomTagEditing] = useState(false)
+  const [metaCustomTagDraft, setMetaCustomTagDraft] = useState('')
+  const [metaProgressCurrentInput, setMetaProgressCurrentInput] = useState('')
+  const [metaProgressTotalInput, setMetaProgressTotalInput] = useState('')
+  const [metaTagBackgroundColorInput, setMetaTagBackgroundColorInput] = useState(DEFAULT_TASK_TAG_BACKGROUND_COLOR)
+  const [metaTextColorInput, setMetaTextColorInput] = useState(DEFAULT_TASK_TEXT_COLOR)
   const [customColorMode, setCustomColorMode] = useState<CustomColorMode>('gradient')
   const [customColorA, setCustomColorA] = useState('#22d3ee')
   const [customColorB, setCustomColorB] = useState('#8b5cf6')
@@ -198,6 +212,7 @@ function App() {
   const [syncActionBusy, setSyncActionBusy] = useState(false)
   const [layoutPulse, setLayoutPulse] = useState(0)
   const contextMenuRef = useRef<HTMLDivElement | null>(null)
+  const metaCustomTagInputRef = useRef<HTMLInputElement | null>(null)
   const manualBadgeDragRef = useRef({
     active: false,
     moved: false,
@@ -214,8 +229,8 @@ function App() {
   const orderedTasks = useMemo(() => [...tasks].sort((a, b) => a.order - b.order), [tasks])
   const todayDate = useMemo(() => toDateInputText(new Date(nowMs)), [nowMs])
   const visibleTasks = useMemo(() => {
-    return orderedTasks.filter((task) => shouldShowTaskInList(task, settings, todayDate))
-  }, [orderedTasks, settings, todayDate])
+    return orderedTasks.filter((task) => shouldShowTaskInList(task))
+  }, [orderedTasks])
   const visibleTaskIds = useMemo(() => visibleTasks.map((task) => task.id), [visibleTasks])
   const contextMenuOrder = useMemo(() => normalizeContextMenuOrder(settings.contextMenuOrder), [settings.contextMenuOrder])
   const contextTask = useMemo(
@@ -373,18 +388,13 @@ function App() {
       return
     }
 
-    const close = () => {
-      setContextMenu(null)
-      setArchiveSubmenuOpen(false)
-      setHideArchiveSubmenuOpen(false)
-      setColorSubmenuOpen(false)
-    }
-    const onPointerDown = (event: MouseEvent) => {
-      const target = event.target as HTMLElement | null
-      if (target?.closest('.task-context-menu')) {
+    const onPointerDown = (event: PointerEvent) => {
+      const menuEl = contextMenuRef.current
+      const target = event.target
+      if (menuEl && target instanceof Node && menuEl.contains(target)) {
         return
       }
-      close()
+      closeContextMenu()
     }
     const onScroll = (event: Event) => {
       const menuEl = contextMenuRef.current
@@ -392,20 +402,20 @@ function App() {
       if (menuEl && target instanceof Node && menuEl.contains(target)) {
         return
       }
-      close()
+      closeContextMenu()
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        close()
+        closeContextMenu()
       }
     }
 
-    window.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('pointerdown', onPointerDown, true)
     window.addEventListener('scroll', onScroll, true)
     window.addEventListener('keydown', onKeyDown)
 
     return () => {
-      window.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('pointerdown', onPointerDown, true)
       window.removeEventListener('scroll', onScroll, true)
       window.removeEventListener('keydown', onKeyDown)
     }
@@ -434,7 +444,7 @@ function App() {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', applyPosition)
     }
-  }, [contextMenu, archiveSubmenuOpen, hideArchiveSubmenuOpen, colorSubmenuOpen, customColorMode])
+  }, [contextMenu, archiveSubmenuOpen, hideArchiveSubmenuOpen, metaSubmenuOpen, colorSubmenuOpen, customColorMode])
 
   // 持续调整直到稳定
   useEffect(() => {
@@ -697,15 +707,54 @@ function App() {
     () => buildTaskColorValue(customColorMode, customColorA, customColorB, customColorAngle),
     [customColorMode, customColorA, customColorB, customColorAngle],
   )
+  const metaHasPresetTag = useMemo(() => TASK_TAG_PRESETS.some((preset) => preset === metaTagInput), [metaTagInput])
+  const metaCustomTagPreset = useMemo(() => (metaTagInput.trim() && !metaHasPresetTag ? metaTagInput : null), [metaHasPresetTag, metaTagInput])
+
+  useEffect(() => {
+    if (!contextTask) {
+      setMetaTagInput(DEFAULT_TASK_TAG)
+      setMetaCustomTagEditing(false)
+      setMetaCustomTagDraft('')
+      setMetaProgressCurrentInput('')
+      setMetaProgressTotalInput('')
+      setMetaTagBackgroundColorInput(DEFAULT_TASK_TAG_BACKGROUND_COLOR)
+      setMetaTextColorInput(DEFAULT_TASK_TEXT_COLOR)
+      return
+    }
+
+    const normalizedMeta = normalizeTaskMeta(contextTask.meta)
+    setMetaTagInput(normalizedMeta.tagText)
+    setMetaCustomTagEditing(false)
+    setMetaCustomTagDraft('')
+    setMetaProgressCurrentInput(normalizedMeta.progressCurrent === null ? '' : String(normalizedMeta.progressCurrent))
+    setMetaProgressTotalInput(normalizedMeta.progressTotal === null ? '' : String(normalizedMeta.progressTotal))
+    setMetaTagBackgroundColorInput(normalizedMeta.tagBackgroundColor ?? DEFAULT_TASK_TAG_BACKGROUND_COLOR)
+    setMetaTextColorInput(normalizedMeta.textColor ?? DEFAULT_TASK_TEXT_COLOR)
+  }, [contextTask])
+
+  useEffect(() => {
+    if (!metaCustomTagEditing) {
+      return
+    }
+
+    const raf = requestAnimationFrame(() => {
+      metaCustomTagInputRef.current?.focus()
+      metaCustomTagInputRef.current?.select()
+    })
+
+    return () => cancelAnimationFrame(raf)
+  }, [metaCustomTagEditing])
 
   const toggleArchiveSubmenu = () => {
     const nextOpen = !archiveSubmenuOpen
     setHideArchiveSubmenuOpen(false)
+    setMetaSubmenuOpen(false)
     setColorSubmenuOpen(false)
     if (nextOpen) {
       const defaults = resolveArchiveRangeDefaults()
       setArchiveStartInput(defaults.start)
       setArchiveEndInput(defaults.end)
+      setArchiveDateBasis('archived')
     }
     setArchiveSubmenuOpen(nextOpen)
   }
@@ -713,6 +762,7 @@ function App() {
   const toggleHideArchiveSubmenu = () => {
     const nextOpen = !hideArchiveSubmenuOpen
     setArchiveSubmenuOpen(false)
+    setMetaSubmenuOpen(false)
     setColorSubmenuOpen(false)
     if (nextOpen) {
       const defaults = resolveHiddenArchiveRangeDefaults({
@@ -726,10 +776,25 @@ function App() {
     setHideArchiveSubmenuOpen(nextOpen)
   }
 
+  const toggleMetaSubmenu = () => {
+    const nextOpen = !metaSubmenuOpen
+    setArchiveSubmenuOpen(false)
+    setHideArchiveSubmenuOpen(false)
+    setColorSubmenuOpen(false)
+    if (!nextOpen) {
+      setMetaCustomTagEditing(false)
+      setMetaCustomTagDraft('')
+    }
+    setMetaSubmenuOpen(nextOpen)
+  }
+
   const toggleColorSubmenu = () => {
     const nextOpen = !colorSubmenuOpen
     setArchiveSubmenuOpen(false)
     setHideArchiveSubmenuOpen(false)
+    setMetaSubmenuOpen(false)
+    setMetaCustomTagEditing(false)
+    setMetaCustomTagDraft('')
     if (nextOpen && contextTask) {
       const parsed = parseTaskColorValue(contextTask.colorValue)
       if (parsed) {
@@ -740,6 +805,34 @@ function App() {
       }
     }
     setColorSubmenuOpen(nextOpen)
+  }
+
+  const commitCustomTagDraft = () => {
+    const normalizedTag = Array.from(metaCustomTagDraft.trim()).slice(0, 2).join('')
+    setMetaCustomTagEditing(false)
+
+    if (!normalizedTag) {
+      setMetaCustomTagDraft('')
+      return
+    }
+
+    setMetaTagInput(normalizedTag)
+    setMetaCustomTagDraft('')
+  }
+
+  const applyTaskMeta = () => {
+    if (!contextTask) {
+      return
+    }
+
+    updateTaskMeta(contextTask.id, {
+      tagText: metaTagInput,
+      progressCurrent: metaProgressCurrentInput === '' ? null : Number(metaProgressCurrentInput),
+      progressTotal: metaProgressTotalInput === '' ? null : Number(metaProgressTotalInput),
+      tagBackgroundColor: metaTagBackgroundColorInput,
+      textColor: metaTextColorInput,
+    })
+    closeContextMenu()
   }
 
   const applyPresetColor = (colorValue: string) => {
@@ -766,35 +859,34 @@ function App() {
     closeContextMenu()
   }
 
-  const closeContextMenu = () => {
+  function closeContextMenu() {
     setContextMenu(null)
     setArchiveSubmenuOpen(false)
     setHideArchiveSubmenuOpen(false)
+    setMetaSubmenuOpen(false)
     setColorSubmenuOpen(false)
     setArchiveStartInput('')
     setArchiveEndInput('')
+    setArchiveDateBasis('archived')
     setHideArchiveStartInput('')
     setHideArchiveEndInput('')
+    setMetaTagInput(DEFAULT_TASK_TAG)
+    setMetaCustomTagEditing(false)
+    setMetaCustomTagDraft('')
+    setMetaProgressCurrentInput('')
+    setMetaProgressTotalInput('')
+    setMetaTagBackgroundColorInput(DEFAULT_TASK_TAG_BACKGROUND_COLOR)
+    setMetaTextColorInput(DEFAULT_TASK_TEXT_COLOR)
   }
 
   const applyArchivedAll = () => {
-    updateSettings({
-      showArchived: true,
-      archivedDisplayMode: 'all',
-      archivedRangeStart: '',
-      archivedRangeEnd: '',
-    })
+    showHiddenTasks({ mode: 'all' })
     closeContextMenu()
   }
 
   const applyArchivedRange = () => {
     const { start, end } = resolveArchiveRangeDefaults()
-    updateSettings({
-      showArchived: true,
-      archivedDisplayMode: 'range',
-      archivedRangeStart: start,
-      archivedRangeEnd: end,
-    })
+    showHiddenTasks({ mode: 'range', start, end, basis: archiveDateBasis })
     closeContextMenu()
   }
 
@@ -941,16 +1033,20 @@ function App() {
           </button>
         )
       case 'toggle-archive':
-        return !contextTask.archived ? (
+        return (
           <section key={itemId} className="menu-layer">
             <button
               type="button"
               onClick={() => {
-                archiveTask(contextTask.id)
+                if (contextTask.archived) {
+                  unarchiveTask(contextTask.id)
+                } else {
+                  archiveTask(contextTask.id)
+                }
                 closeContextMenu()
               }}
             >
-              🗂️ 归档
+              {contextTask.archived ? '📤 取消归档' : '🗂️ 归档'}
             </button>
 
             <button
@@ -960,20 +1056,176 @@ function App() {
                 closeContextMenu()
               }}
             >
-              📥 归档 + 隐藏
+              {contextTask.archived ? '🙈 隐藏（已归档）' : '📥 归档 + 隐藏'}
             </button>
           </section>
-        ) : (
-          <button
-            key={itemId}
-            type="button"
-            onClick={() => {
-              unarchiveTask(contextTask.id)
-              closeContextMenu()
-            }}
-          >
-            📤 取消归档
-          </button>
+        )
+      case 'meta':
+        return (
+          <section key={itemId} className="menu-layer">
+            <button type="button" className="submenu-trigger" onClick={toggleMetaSubmenu}>
+              🧩 标签/进度/文字色 {metaSubmenuOpen ? '▾' : '▸'}
+            </button>
+
+            {metaSubmenuOpen ? (
+              <div className="submenu-panel meta-submenu-panel">
+                <div className="submenu-note">左侧标签默认两字，可直接选默认项或手填。</div>
+
+                <div className="meta-preset-grid">
+                  {TASK_TAG_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      className={metaTagInput === preset ? 'is-active' : ''}
+                      onClick={() => setMetaTagInput(preset)}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+
+                  {metaCustomTagPreset ? (
+                    <button
+                      type="button"
+                      className={`meta-preset-custom${metaTagInput === metaCustomTagPreset ? ' is-active' : ''}`}
+                      onClick={() => setMetaTagInput(metaCustomTagPreset)}
+                    >
+                      {metaCustomTagPreset}
+                    </button>
+                  ) : null}
+
+                  {metaCustomTagEditing ? (
+                    <input
+                      ref={metaCustomTagInputRef}
+                      type="text"
+                      className="meta-preset-input"
+                      value={metaCustomTagDraft}
+                      maxLength={4}
+                      onChange={(event) => setMetaCustomTagDraft(Array.from(event.target.value.trimStart()).slice(0, 2).join(''))}
+                      onBlur={commitCustomTagDraft}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          commitCustomTagDraft()
+                          return
+                        }
+
+                        if (event.key === 'Escape') {
+                          setMetaCustomTagEditing(false)
+                          setMetaCustomTagDraft('')
+                        }
+                      }}
+                      placeholder="新标签"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="meta-preset-add-btn"
+                      aria-label="新增标签"
+                      onClick={() => {
+                        setMetaCustomTagDraft('')
+                        setMetaCustomTagEditing(true)
+                      }}
+                    >
+                      +
+                    </button>
+                  )}
+                </div>
+
+                <label className="meta-field">
+                  标签
+                  <input
+                    type="text"
+                    value={metaTagInput}
+                    maxLength={4}
+                    onChange={(event) => setMetaTagInput(Array.from(event.target.value.trimStart()).slice(0, 2).join(''))}
+                    placeholder="两字标签"
+                  />
+                </label>
+
+                <div className="meta-field-grid">
+                  <label className="meta-field">
+                    进度分子
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={metaProgressCurrentInput}
+                      onChange={(event) => setMetaProgressCurrentInput(event.target.value)}
+                      placeholder="例如 16"
+                    />
+                  </label>
+
+                  <label className="meta-field">
+                    进度分母
+                    <input
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={metaProgressTotalInput}
+                      onChange={(event) => setMetaProgressTotalInput(event.target.value)}
+                      placeholder="例如 130"
+                    />
+                  </label>
+                </div>
+
+                <div className="meta-color-grid">
+                  <div className="meta-color-field">
+                    <span className="meta-color-title">标签底色</span>
+                    <div className="meta-color-control">
+                      <label className="meta-color-swatch-trigger" title="选择标签底色">
+                        <span className="meta-color-swatch" style={{ backgroundColor: metaTagBackgroundColorInput }} aria-hidden />
+                        <input
+                          type="color"
+                          value={metaTagBackgroundColorInput}
+                          onChange={(event) => setMetaTagBackgroundColorInput(event.target.value)}
+                          aria-label="标签底色"
+                        />
+                      </label>
+                      <span className="meta-color-code">{metaTagBackgroundColorInput.toUpperCase()}</span>
+                    </div>
+                  </div>
+
+                  <div className="meta-color-field">
+                    <span className="meta-color-title">文字颜色</span>
+                    <div className="meta-color-control">
+                      <label className="meta-color-swatch-trigger" title="选择文字颜色">
+                        <span className="meta-color-swatch" style={{ backgroundColor: metaTextColorInput }} aria-hidden />
+                        <input
+                          type="color"
+                          value={metaTextColorInput}
+                          onChange={(event) => setMetaTextColorInput(event.target.value)}
+                          aria-label="文字颜色"
+                        />
+                      </label>
+                      <span className="meta-color-code">{metaTextColorInput.toUpperCase()}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="submenu-note">标签底色只作用于左侧小标签，任务配色仍控制整张任务条。</div>
+
+                <div className="color-action-row">
+                  <button type="button" onClick={applyTaskMeta}>
+                    💾 应用任务条设置
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMetaTagInput(DEFAULT_TASK_TAG)
+                      setMetaCustomTagEditing(false)
+                      setMetaCustomTagDraft('')
+                      setMetaProgressCurrentInput('')
+                      setMetaProgressTotalInput('')
+                      setMetaTagBackgroundColorInput(DEFAULT_TASK_TAG_BACKGROUND_COLOR)
+                      setMetaTextColorInput(DEFAULT_TASK_TEXT_COLOR)
+                    }}
+                  >
+                    ↺ 重置编辑项
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </section>
         )
       case 'color':
         return (
@@ -1084,10 +1336,32 @@ function App() {
             {archiveSubmenuOpen ? (
               <div className="submenu-panel">
                 <button type="button" onClick={applyArchivedAll}>
-                  📚 显示全部
+                  👁️ 全部显示
                 </button>
 
                 <div className="submenu-note">按时间</div>
+
+                <label className="submenu-date-field">
+                  时间基准
+                  <select
+                    value={archiveDateBasis}
+                    onChange={(event) =>
+                      setArchiveDateBasis(
+                        event.target.value === 'created' ||
+                          event.target.value === 'finished' ||
+                          event.target.value === 'hidden' ||
+                          event.target.value === 'archived'
+                          ? event.target.value
+                          : 'archived',
+                      )
+                    }
+                  >
+                    <option value="created">创建时间</option>
+                    <option value="finished">完成时间</option>
+                    <option value="hidden">隐藏时间</option>
+                    <option value="archived">归档时间</option>
+                  </select>
+                </label>
 
                 <label className="submenu-date-field">
                   Start
@@ -1110,18 +1384,6 @@ function App() {
                 <button type="button" onClick={applyArchivedRange}>
                   🗓️ 按时间显示
                 </button>
-
-                {settings.showArchived ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      updateSettings({ showArchived: false })
-                      closeContextMenu()
-                    }}
-                  >
-                    🙈 关闭隐藏任务显示
-                  </button>
-                ) : null}
               </div>
             ) : null}
           </section>
@@ -1410,6 +1672,7 @@ function App() {
                 paletteMode={settings.taskPaletteMode}
                 layoutPulse={layoutPulse}
                 onContentChange={updateTaskContent}
+                onUpdateMeta={updateTaskMeta}
                 onPasteImage={insertTaskImage}
                 onToggleStartPause={toggleStartPause}
                 onFinish={finishTask}

@@ -1,11 +1,13 @@
 ﻿import { create } from 'zustand'
-import type { AppSettings, EventDraft, PersistedState, Task, TaskImageAttachment } from '../types/domain'
+import type { AppSettings, EventDraft, HiddenTaskDateBasis, PersistedState, Task, TaskImageAttachment, TaskMeta } from '../types/domain'
 import { createContentPersistScheduler } from '../lib/contentPersistScheduler'
+import { archiveAndHideTaskState, archiveTaskState, unarchiveTaskState } from '../lib/taskArchive.ts'
 import { DEFAULT_APP_SETTINGS } from '../lib/defaultSettings.ts'
 import { normalizeContextMenuOrder } from '../lib/contextMenuOrder.ts'
+import { normalizeTaskMeta } from '../lib/taskMeta'
 import { applyTaskOrder } from '../lib/taskOrder'
 import { applyTaskDurationLayoutMode } from '../lib/taskDurationLayout'
-import { shouldHideArchivedTask } from '../lib/taskVisibility'
+import { shouldHideArchivedTask, shouldUnhideTask } from '../lib/taskVisibility'
 import { closeOpenSegment, sumClosedDurations, toLocalIso } from '../lib/time'
 import { buildTaskImageMarkdown, insertTextAtSelection, pruneTaskImageAttachments } from '../lib/taskImages'
 
@@ -26,6 +28,7 @@ type TaskStore = {
   insertTaskAfter: (taskId: string) => void
   insertTaskImage: (taskId: string, file: File, selectionStart: number, selectionEnd: number) => Promise<void>
   updateTaskContent: (taskId: string, contentRaw: string) => void
+  updateTaskMeta: (taskId: string, patch: Partial<TaskMeta>) => void
   flushPendingContent: () => Promise<void>
   setTaskPresetColor: (taskId: string, colorValue: string) => void
   setTaskCustomColor: (taskId: string, colorValue: string) => void
@@ -35,6 +38,7 @@ type TaskStore = {
   setTaskDurationLayoutMode: (taskId: string, layoutMode: Task['durationLayoutMode']) => void
   setTasksDurationLayoutMode: (taskIds: string[], layoutMode: Task['durationLayoutMode']) => void
   archiveAndHideTask: (taskId: string) => void
+  showHiddenTasks: (filter: { mode: 'all' | 'range'; start?: string; end?: string; basis?: HiddenTaskDateBasis }) => void
   hideArchivedTasks: (filter: { mode: 'all' | 'range'; start?: string; end?: string }) => void
   toggleStartPause: (taskId: string) => void
   finishTask: (taskId: string) => void
@@ -55,6 +59,7 @@ function createTask(order: number, settings: AppSettings): Task {
     order,
     contentRaw: '',
     attachments: [],
+    meta: normalizeTaskMeta(undefined),
     colorMode: 'auto',
     colorValue: null,
     fontFamily: settings.defaultFontFamily,
@@ -63,6 +68,7 @@ function createTask(order: number, settings: AppSettings): Task {
     archived: false,
     archivedAt: null,
     hidden: false,
+    hiddenAt: null,
     showDuration: true,
     durationLayoutMode: 'stacked',
     segments: [],
@@ -97,9 +103,24 @@ function sortAndReorder(tasks: Task[]): Task[] {
         attachments: Array.isArray(task.attachments)
           ? task.attachments.filter((attachment): attachment is TaskImageAttachment => Boolean(attachment && typeof attachment.id === 'string' && typeof attachment.storagePath === 'string' && typeof attachment.mimeType === 'string' && typeof attachment.createdAt === 'string'))
           : [],
+        meta: normalizeTaskMeta(task.meta),
         colorMode: task.colorMode === 'preset' || task.colorMode === 'custom' ? task.colorMode : 'auto',
         colorValue: typeof task.colorValue === 'string' ? task.colorValue : null,
         hidden: Boolean(task.hidden),
+        hiddenAt:
+          typeof task.hiddenAt === 'string'
+            ? task.hiddenAt
+            : task.hidden
+              ? typeof task.updatedAt === 'string'
+                ? task.updatedAt
+                : typeof task.archivedAt === 'string'
+                  ? task.archivedAt
+                  : typeof task.finishedAt === 'string'
+                    ? task.finishedAt
+                    : typeof task.createdAt === 'string'
+                      ? task.createdAt
+                      : null
+              : null,
         showDuration: task.showDuration !== false,
         durationLayoutMode: task.durationLayoutMode === 'inline' ? 'inline' : 'stacked',
         segments,
@@ -322,17 +343,7 @@ export const useTaskStore = create<TaskStore>((set, get) => {
             return task
           }
 
-          const finalizedSegments = task.status === 'doing' ? closeOpenSegment(task.segments, now) : task.segments
-          return {
-            ...task,
-            status: task.status === 'doing' ? 'paused' : task.status,
-            archived: true,
-            archivedAt: now,
-            hidden: true,
-            segments: finalizedSegments,
-            totalDurationMs: sumClosedDurations(finalizedSegments),
-            updatedAt: now,
-          }
+          return archiveAndHideTaskState(task, now)
         }),
       }))
 
@@ -340,6 +351,42 @@ export const useTaskStore = create<TaskStore>((set, get) => {
         taskId,
         type: 'TASK_ARCHIVE',
         payload: { at: now, hidden: true },
+      })
+    },
+
+    showHiddenTasks: (filter) => {
+      const now = toLocalIso()
+      const todayDate = now.slice(0, 10)
+
+      set((state) => ({
+        tasks: state.tasks.map((task) =>
+          shouldUnhideTask(task, {
+            mode: filter.mode,
+            basis: filter.basis,
+            todayDate,
+            start: filter.start,
+            end: filter.end,
+          })
+            ? {
+                ...task,
+                hidden: false,
+                hiddenAt: null,
+                updatedAt: now,
+              }
+            : task,
+        ),
+      }))
+
+      enqueuePersist({
+        taskId: null,
+        type: 'TASK_UPDATE',
+        payload: {
+          field: 'showHiddenTasks',
+          mode: filter.mode,
+          basis: filter.basis ?? 'archived',
+          start: filter.start ?? '',
+          end: filter.end ?? '',
+        },
       })
     },
 
@@ -358,6 +405,7 @@ export const useTaskStore = create<TaskStore>((set, get) => {
             ? {
                 ...task,
                 hidden: true,
+                hiddenAt: now,
                 updatedAt: now,
               }
             : task,
@@ -485,6 +533,39 @@ export const useTaskStore = create<TaskStore>((set, get) => {
         ),
       }))
       contentPersistScheduler.schedule(taskId)
+    },
+
+    updateTaskMeta: (taskId, patch) => {
+      const now = toLocalIso()
+      let persistedMeta: TaskMeta | null = null
+
+      set((state) => ({
+        tasks: state.tasks.map((task) => {
+          if (task.id !== taskId) {
+            return task
+          }
+
+          persistedMeta = normalizeTaskMeta({
+            ...(task.meta ?? {}),
+            ...patch,
+          })
+
+          return {
+            ...task,
+            meta: persistedMeta,
+            updatedAt: now,
+          }
+        }),
+      }))
+
+      enqueuePersist({
+        taskId,
+        type: 'TASK_UPDATE',
+        payload: {
+          field: 'taskMeta',
+          patch: persistedMeta ?? normalizeTaskMeta(patch),
+        },
+      })
     },
 
     flushPendingContent: async () => {
@@ -661,22 +742,11 @@ export const useTaskStore = create<TaskStore>((set, get) => {
 
       set((state) => ({
         tasks: state.tasks.map((task) => {
-          if (task.id !== taskId || task.archived) {
+          if (task.id !== taskId) {
             return task
           }
 
-          const finalizedSegments = task.status === 'doing' ? closeOpenSegment(task.segments, now) : task.segments
-
-          return {
-            ...task,
-            status: task.status === 'doing' ? 'paused' : task.status,
-            archived: true,
-            archivedAt: now,
-            hidden: false,
-            segments: finalizedSegments,
-            totalDurationMs: sumClosedDurations(finalizedSegments),
-            updatedAt: now,
-          }
+          return archiveTaskState(task, now)
         }),
       }))
 
@@ -692,17 +762,11 @@ export const useTaskStore = create<TaskStore>((set, get) => {
 
       set((state) => ({
         tasks: state.tasks.map((task) => {
-          if (task.id !== taskId || !task.archived) {
+          if (task.id !== taskId) {
             return task
           }
 
-          return {
-            ...task,
-            archived: false,
-            archivedAt: null,
-            hidden: false,
-            updatedAt: now,
-          }
+          return unarchiveTaskState(task, now)
         }),
       }))
 

@@ -6,6 +6,7 @@ export type TaskPaletteMode = 'auto-vivid' | 'gray-gradient' | 'default-gray'
 export type TaskColorMode = 'auto' | 'preset' | 'custom'
 export type ArchivedDisplayMode = 'all' | 'range'
 export type TaskDurationLayoutMode = 'stacked' | 'inline'
+export type HiddenTaskDateBasis = 'created' | 'finished' | 'hidden' | 'archived'
 
 export interface TaskSegment {
   startAt: string
@@ -20,11 +21,20 @@ export interface TaskImageAttachment {
   createdAt: string
 }
 
+export interface TaskMeta {
+  tagText: string
+  progressCurrent: number | null
+  progressTotal: number | null
+  tagBackgroundColor: string | null
+  textColor: string | null
+}
+
 export interface Task {
   id: string
   order: number
   contentRaw: string
   attachments: TaskImageAttachment[]
+  meta?: TaskMeta
   colorMode: TaskColorMode
   colorValue: string | null
   fontFamily: string
@@ -33,6 +43,7 @@ export interface Task {
   archived: boolean
   archivedAt: string | null
   hidden: boolean
+  hiddenAt: string | null
   showDuration: boolean
   durationLayoutMode?: TaskDurationLayoutMode
   segments: TaskSegment[]

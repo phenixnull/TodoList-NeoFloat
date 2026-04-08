@@ -8,6 +8,7 @@ export const DEFAULT_CONTEXT_MENU_ORDER = [
   'insert-after',
   'toggle-finish',
   'toggle-archive',
+  'meta',
   'color',
   'show-archived',
   'hide-archived',

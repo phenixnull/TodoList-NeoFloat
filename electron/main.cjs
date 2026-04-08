@@ -329,13 +329,27 @@ function mergeState(raw) {
   merged.tasks = merged.tasks
     .map((task, index) => {
       const segments = normalizeTaskSegments(task.segments)
-      return {
-        ...task,
-        order: typeof task.order === 'number' ? task.order : index + 1,
-        archived: Boolean(task.archived),
-        archivedAt: typeof task.archivedAt === 'string' ? task.archivedAt : null,
-        hidden: Boolean(task.hidden),
-        showDuration: task.showDuration !== false,
+        return {
+          ...task,
+          order: typeof task.order === 'number' ? task.order : index + 1,
+          archived: Boolean(task.archived),
+          archivedAt: typeof task.archivedAt === 'string' ? task.archivedAt : null,
+          hidden: Boolean(task.hidden),
+          hiddenAt:
+            typeof task.hiddenAt === 'string'
+              ? task.hiddenAt
+              : Boolean(task.hidden)
+                ? typeof task.updatedAt === 'string'
+                  ? task.updatedAt
+                  : typeof task.archivedAt === 'string'
+                    ? task.archivedAt
+                    : typeof task.finishedAt === 'string'
+                      ? task.finishedAt
+                      : typeof task.createdAt === 'string'
+                        ? task.createdAt
+                        : null
+                : null,
+          showDuration: task.showDuration !== false,
         durationLayoutMode: task.durationLayoutMode === 'inline' ? 'inline' : 'stacked',
         segments,
         totalDurationMs:

@@ -6,8 +6,19 @@ import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import type { Components } from 'react-markdown'
-import type { Task, TaskCardMode, TaskContentDisplayMode, TaskPaletteMode } from '../types/domain'
+import type { Task, TaskCardMode, TaskContentDisplayMode, TaskPaletteMode, TaskMeta } from '../types/domain'
 import { hasRichPreviewToken, markdownWithHardBreaks } from '../lib/math'
+import {
+  DEFAULT_TASK_TEXT_COLOR,
+  formatTaskProgressText,
+  normalizeTaskMeta,
+  progressValueToDraftText,
+  resolveTaskProgressCurrentFromRatio,
+  resolveTaskProgressDraft,
+  resolveTaskProgressPercent,
+  resolveTaskTagBackgroundCss,
+  resolveTaskTagBorderCss,
+} from '../lib/taskMeta'
 import { resolveLiveEditorMeasuredHeight, resolveTaskLayoutMetrics } from '../lib/taskCardLayout'
 import { parseTaskImageId, TASK_IMAGE_SRC_PREFIX } from '../lib/taskImages'
 import { calcTaskDuration, formatDuration } from '../lib/time'
@@ -21,6 +32,7 @@ type TaskCardProps = {
   paletteMode: TaskPaletteMode
   layoutPulse?: number
   onContentChange: (taskId: string, value: string) => void
+  onUpdateMeta: (taskId: string, patch: Partial<TaskMeta>) => void
   onPasteImage: (taskId: string, file: File, selectionStart: number, selectionEnd: number) => Promise<void>
   onToggleStartPause: (taskId: string) => void
   onFinish: (taskId: string) => void
@@ -66,6 +78,7 @@ export function TaskCard({
   paletteMode,
   layoutPulse = 0,
   onContentChange,
+  onUpdateMeta,
   onPasteImage,
   onToggleStartPause,
   onFinish,
@@ -75,13 +88,19 @@ export function TaskCard({
   const cardRef = useRef<HTMLElement | null>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const progressCurrentInputRef = useRef<HTMLInputElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
+  const draggingProgressPointerIdRef = useRef<number | null>(null)
   const resizeRafRef = useRef<number | null>(null)
   const settleRafRef = useRef<number | null>(null)
   const [layoutTick, setLayoutTick] = useState(0)
   const [isEditing, setIsEditing] = useState(false)
+  const [isEditingProgress, setIsEditingProgress] = useState(false)
+  const [isDraggingProgress, setIsDraggingProgress] = useState(false)
   const [imageDataUrls, setImageDataUrls] = useState<Record<string, string>>({})
   const [imageLoadTick, setImageLoadTick] = useState(0)
+  const [progressCurrentDraft, setProgressCurrentDraft] = useState(() => progressValueToDraftText(normalizeTaskMeta(task.meta).progressCurrent))
+  const [progressTotalDraft, setProgressTotalDraft] = useState(() => progressValueToDraftText(normalizeTaskMeta(task.meta).progressTotal))
 
   const isCollapsed = cardMode === 'collapsed'
   const isInnerScrollMode = contentDisplayMode === 'inner-scroll'
@@ -89,6 +108,7 @@ export function TaskCard({
   const isFinished = task.status === 'finished'
   const isArchived = task.archived
   const isGrayPalette = paletteMode === 'gray-gradient' || paletteMode === 'default-gray'
+  const taskMeta = useMemo(() => normalizeTaskMeta(task.meta), [task.meta])
   const completionLabel = isFinished ? LABEL_FINISHED : LABEL_UNFINISHED
   const completionClass = isFinished ? 'finished' : 'unfinished'
   const durationStateClass = isArchived ? 'archived' : isFinished ? 'finished' : isDoing ? 'running' : task.status === 'paused' ? 'paused' : 'idle'
@@ -97,7 +117,22 @@ export function TaskCard({
   const previewText = task.contentRaw.trim() ? task.contentRaw : LABEL_EMPTY_TASK
   const useMarkdownPreview = hasRichPreviewToken(task.contentRaw)
   const startPauseIcon = isDoing ? '||' : '\u25b6'
-  const taskDurationText = `[${formatDuration(calcTaskDuration(task, nowMs))}]`
+  const taskDurationText = formatDuration(calcTaskDuration(task, nowMs))
+  const progressDraft = useMemo(
+    () => resolveTaskProgressDraft(progressCurrentDraft, progressTotalDraft),
+    [progressCurrentDraft, progressTotalDraft],
+  )
+  const hasPendingProgressDraftChange =
+    progressDraft.progressCurrent !== taskMeta.progressCurrent || progressDraft.progressTotal !== taskMeta.progressTotal
+  const shouldShowProgressDraft = isEditingProgress || isDraggingProgress || progressDraft.isInvalid || hasPendingProgressDraftChange
+  const taskProgressText = formatTaskProgressText({
+    ...taskMeta,
+    progressCurrent: shouldShowProgressDraft ? progressDraft.progressCurrent : taskMeta.progressCurrent,
+    progressTotal: shouldShowProgressDraft ? progressDraft.progressTotal : taskMeta.progressTotal,
+  })
+  const taskProgressPercent = shouldShowProgressDraft ? progressDraft.progressPercent : resolveTaskProgressPercent(taskMeta)
+  const taskProgressThumbLeft = `${Math.max(0, Math.min(100, taskProgressPercent))}%`
+  const canDragProgress = !isEditingProgress && !progressDraft.isInvalid && taskMeta.progressTotal !== null && taskMeta.progressTotal > 0
   const layoutMetrics = useMemo(
     () =>
       resolveTaskLayoutMetrics({
@@ -334,6 +369,9 @@ export function TaskCard({
     transition,
     '--task-gradient': colorFromOrder(task, displayOrder, paletteMode),
     '--task-doing-gradient': vividGradientFromOrder(displayOrder),
+    '--task-text-color': taskMeta.textColor ?? DEFAULT_TASK_TEXT_COLOR,
+    '--task-tag-background': resolveTaskTagBackgroundCss(taskMeta.tagBackgroundColor),
+    '--task-tag-border-color': resolveTaskTagBorderCss(taskMeta.tagBackgroundColor),
     '--task-action-row-height': `${layoutMetrics.rowHeight}px`,
     '--task-action-row-count': layoutMetrics.rowCount,
     '--task-action-gap-count': layoutMetrics.gapCount,
@@ -377,6 +415,121 @@ export function TaskCard({
     await onPasteImage(task.id, file, inputEl.selectionStart, inputEl.selectionEnd)
   }
 
+  const commitProgressDraft = () => {
+    if (progressDraft.isInvalid) {
+      return
+    }
+
+    if (progressDraft.progressCurrent === taskMeta.progressCurrent && progressDraft.progressTotal === taskMeta.progressTotal) {
+      return
+    }
+
+    onUpdateMeta(task.id, {
+      progressCurrent: progressDraft.progressCurrent,
+      progressTotal: progressDraft.progressTotal,
+    })
+  }
+
+  const activateProgressEditing = () => {
+    setProgressCurrentDraft(progressValueToDraftText(taskMeta.progressCurrent))
+    setProgressTotalDraft(progressValueToDraftText(taskMeta.progressTotal))
+    setIsEditingProgress(true)
+    requestAnimationFrame(() => {
+      progressCurrentInputRef.current?.focus()
+      progressCurrentInputRef.current?.select()
+    })
+  }
+
+  const resolveDraggedProgressCurrent = useCallback(
+    (clientX: number, element: HTMLDivElement) => {
+      if (taskMeta.progressTotal === null || taskMeta.progressTotal <= 0) {
+        return null
+      }
+
+      const rect = element.getBoundingClientRect()
+      const ratio = rect.width <= 0 ? 0 : (clientX - rect.left) / rect.width
+      return resolveTaskProgressCurrentFromRatio(taskMeta.progressTotal, ratio)
+    },
+    [taskMeta.progressTotal],
+  )
+
+  const updateDraggedProgressDraft = useCallback(
+    (clientX: number, element: HTMLDivElement) => {
+      const nextCurrent = resolveDraggedProgressCurrent(clientX, element)
+      if (nextCurrent === null || taskMeta.progressTotal === null) {
+        return null
+      }
+
+      setProgressCurrentDraft(String(nextCurrent))
+      setProgressTotalDraft(String(taskMeta.progressTotal))
+      return nextCurrent
+    },
+    [resolveDraggedProgressCurrent, taskMeta.progressTotal],
+  )
+
+  const handleProgressTrackPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!canDragProgress || event.button !== 0) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    draggingProgressPointerIdRef.current = event.pointerId
+    setIsDraggingProgress(true)
+    updateDraggedProgressDraft(event.clientX, event.currentTarget)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  const handleProgressTrackPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (draggingProgressPointerIdRef.current !== event.pointerId) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    updateDraggedProgressDraft(event.clientX, event.currentTarget)
+  }
+
+  const finishProgressTrackDrag = (event: React.PointerEvent<HTMLDivElement>, commit: boolean) => {
+    if (draggingProgressPointerIdRef.current !== event.pointerId) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    draggingProgressPointerIdRef.current = null
+    const nextCurrent = updateDraggedProgressDraft(event.clientX, event.currentTarget)
+    event.currentTarget.releasePointerCapture?.(event.pointerId)
+    setIsDraggingProgress(false)
+
+    if (!commit) {
+      setProgressCurrentDraft(progressValueToDraftText(taskMeta.progressCurrent))
+      setProgressTotalDraft(progressValueToDraftText(taskMeta.progressTotal))
+      return
+    }
+
+    if (nextCurrent === null || taskMeta.progressTotal === null) {
+      return
+    }
+
+    if (nextCurrent === taskMeta.progressCurrent) {
+      return
+    }
+
+    onUpdateMeta(task.id, {
+      progressCurrent: nextCurrent,
+      progressTotal: taskMeta.progressTotal,
+    })
+  }
+
+  const handleProgressTrackPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    finishProgressTrackDrag(event, true)
+  }
+
+  const handleProgressTrackPointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
+    finishProgressTrackDrag(event, false)
+  }
+
   return (
     <article
       ref={handleCardRef}
@@ -407,71 +560,91 @@ export function TaskCard({
       })}
     >
       <section className="task-core-row">
-        <div className="seq-handle" aria-hidden>
-          #{displayOrder}
+        <div className="task-side-rail">
+          <div className="seq-handle" aria-hidden>
+            #{displayOrder}
+          </div>
+          <div className="task-tag-pill" title={`标签：${taskMeta.tagText}`}>
+            {taskMeta.tagText}
+          </div>
         </div>
 
-        <div
-          ref={editorRef}
-          className={clsx('live-editor', {
-            finished: isFinished,
-            'is-editing': isEditing,
-          })}
-          style={{
-            fontFamily: task.fontFamily,
-            fontSize: `${task.fontSize}px`,
-          }}
-          onPointerDown={stopDragPropagation}
-          onClick={(event) => {
-            const target = event.target as HTMLElement
-            if (target.closest('.task-inline-image')) {
-              return
-            }
-            activateEditing()
-          }}
-        >
+        <div className="task-main-column">
           <div
-            ref={previewRef}
-            className={clsx('live-preview', {
-              empty: !task.contentRaw.trim(),
+            ref={editorRef}
+            className={clsx('live-editor', {
               finished: isFinished,
+              'is-editing': isEditing,
             })}
+            style={{
+              fontFamily: task.fontFamily,
+              fontSize: `${task.fontSize}px`,
+            }}
+            onPointerDown={stopDragPropagation}
+            onClick={(event) => {
+              const target = event.target as HTMLElement
+              if (target.closest('.task-inline-image')) {
+                return
+              }
+              activateEditing()
+            }}
           >
-            {useMarkdownPreview ? (
-              <ReactMarkdown
-                components={markdownComponents}
-                remarkPlugins={[remarkMath]}
-                rehypePlugins={[rehypeKatex]}
-                urlTransform={taskMarkdownUrlTransform}
-              >
-                {markdownWithHardBreaks(previewText)}
-              </ReactMarkdown>
-            ) : (
-              <div className="live-preview-text">{previewText}</div>
-            )}
+            <div
+              ref={previewRef}
+              className={clsx('live-preview', {
+                empty: !task.contentRaw.trim(),
+                finished: isFinished,
+              })}
+            >
+              {useMarkdownPreview ? (
+                <ReactMarkdown
+                  components={markdownComponents}
+                  remarkPlugins={[remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
+                  urlTransform={taskMarkdownUrlTransform}
+                >
+                  {markdownWithHardBreaks(previewText)}
+                </ReactMarkdown>
+              ) : (
+                <div className="live-preview-text">{previewText}</div>
+              )}
+            </div>
+
+            <textarea
+              ref={inputRef}
+              className="live-input"
+              rows={1}
+              value={task.contentRaw}
+              placeholder={LABEL_EMPTY_TASK}
+              onChange={(event) => onContentChange(task.id, event.target.value)}
+              onPaste={(event) => void handlePaste(event)}
+              onPointerDown={stopDragPropagation}
+              onFocus={() => setIsEditing(true)}
+              onBlur={() => setIsEditing(false)}
+              aria-label={`Task ${displayOrder}`}
+              readOnly={isFinished || isArchived}
+            />
+
+            {isFinished || isArchived ? (
+              <div className="status-stack" aria-hidden>
+                <span className={clsx('status-flag', 'leading', completionClass)}>{completionLabel}</span>
+                {isArchived ? <span className="status-flag archived">{LABEL_ARCHIVED}</span> : null}
+              </div>
+            ) : null}
           </div>
 
-          <textarea
-            ref={inputRef}
-            className="live-input"
-            rows={1}
-            value={task.contentRaw}
-            placeholder={LABEL_EMPTY_TASK}
-            onChange={(event) => onContentChange(task.id, event.target.value)}
-            onPaste={(event) => void handlePaste(event)}
-            onPointerDown={stopDragPropagation}
-            onFocus={() => setIsEditing(true)}
-            onBlur={() => setIsEditing(false)}
-            aria-label={`Task ${displayOrder}`}
-            readOnly={isFinished || isArchived}
-          />
-
-          {isFinished || isArchived ? (
-            <div className="status-stack" aria-hidden>
-              <span className={clsx('status-flag', 'leading', completionClass)}>{completionLabel}</span>
-              {isArchived ? <span className="status-flag archived">{LABEL_ARCHIVED}</span> : null}
+          <div className="task-progress-row" aria-label={`任务进度 ${taskProgressText}`} onPointerDown={stopDragPropagation}>
+            <div
+              className={clsx('task-progress-track', { invalid: progressDraft.isInvalid, draggable: canDragProgress, dragging: isDraggingProgress })}
+              onPointerDown={handleProgressTrackPointerDown}
+              onPointerMove={handleProgressTrackPointerMove}
+              onPointerUp={handleProgressTrackPointerUp}
+              onPointerCancel={handleProgressTrackPointerCancel}
+            >
+              <span className="task-progress-fill" style={{ width: `${taskProgressPercent}%` }} />
+              <span className="task-progress-thumb" style={{ left: taskProgressThumbLeft }} aria-hidden />
             </div>
-          ) : null}
+          </div>
         </div>
 
         <div className={clsx('action-stack', { 'inline-duration': inlineDuration })} onPointerDown={stopDragPropagation}>
@@ -509,6 +682,51 @@ export function TaskCard({
               {taskDurationText}
             </div>
           ) : null}
+
+          <div
+            className={clsx('task-progress-counter', { invalid: progressDraft.isInvalid })}
+            title={taskProgressText}
+            onPointerDown={stopDragPropagation}
+            onClick={() => {
+              if (!isEditingProgress) {
+                activateProgressEditing()
+              }
+            }}
+            onBlurCapture={(event) => {
+              const nextFocusTarget = event.relatedTarget
+              if (nextFocusTarget instanceof Node && event.currentTarget.contains(nextFocusTarget)) {
+                return
+              }
+
+              setIsEditingProgress(false)
+              commitProgressDraft()
+            }}
+          >
+            {isEditingProgress ? (
+              <>
+                <input
+                  ref={progressCurrentInputRef}
+                  type="text"
+                  inputMode="numeric"
+                  className="task-progress-counter-input"
+                  value={progressCurrentDraft}
+                  onChange={(event) => setProgressCurrentDraft(event.target.value)}
+                  aria-label={`Task ${displayOrder} progress current`}
+                />
+                <span className="task-progress-counter-separator">/</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className="task-progress-counter-input"
+                  value={progressTotalDraft}
+                  onChange={(event) => setProgressTotalDraft(event.target.value)}
+                  aria-label={`Task ${displayOrder} progress total`}
+                />
+              </>
+            ) : (
+              <span className="task-progress-counter-text">{taskProgressText}</span>
+            )}
+          </div>
         </div>
       </section>
     </article>

@@ -54,7 +54,7 @@ test('archiveMobileTask closes a running segment without forcing the task hidden
   assert.equal(task.totalDurationMs, 6 * 60 * 1000)
 })
 
-test('unarchiveMobileTask clears hidden state from synced hidden archives', () => {
+test('unarchiveMobileTask preserves hidden state so archive and hidden remain independent', () => {
   const seeded = addMobileTask(createState(), '2026-03-12T10:01:00.000+08:00')
   const taskId = seeded.tasks[0].id
   const hiddenArchived = {
@@ -72,7 +72,7 @@ test('unarchiveMobileTask clears hidden state from synced hidden archives', () =
   const nextState = unarchiveMobileTask(hiddenArchived, taskId, '2026-03-12T10:09:00.000+08:00')
 
   assert.equal(nextState.tasks[0].archived, false)
-  assert.equal(nextState.tasks[0].hidden, false)
+  assert.equal(nextState.tasks[0].hidden, true)
 })
 
 test('updateMobileTaskContent and deleteMobileTask keep task order stable after edits', () => {

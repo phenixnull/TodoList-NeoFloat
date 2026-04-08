@@ -137,6 +137,8 @@ test('loadStoredMobileState backfills missing task duration totals from closed s
           status: 'paused',
           archived: false,
           archivedAt: null,
+          hidden: true,
+          hiddenAt: null,
           segments: [
             {
               startAt: '2026-03-12T10:00:00.000+08:00',
@@ -157,4 +159,5 @@ test('loadStoredMobileState backfills missing task duration totals from closed s
   assert.equal(loaded?.tasks[0].totalDurationMs, 25 * 60 * 1000)
   assert.equal(loaded?.tasks[0].showDuration, true)
   assert.equal(loaded?.tasks[0].durationLayoutMode, 'stacked')
+  assert.equal(loaded?.tasks[0].hiddenAt, '2026-03-12T10:25:00.000+08:00')
 })

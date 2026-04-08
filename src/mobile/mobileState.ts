@@ -3,6 +3,7 @@ import { normalizeContextMenuOrder } from '../lib/contextMenuOrder.ts'
 import { DEFAULT_APP_SETTINGS } from '../lib/defaultSettings.ts'
 import { applyTaskDurationLayoutMode } from '../lib/taskDurationLayout.ts'
 import { pruneTaskImageAttachments } from '../lib/taskImages.ts'
+import { normalizeTaskMeta } from '../lib/taskMeta.ts'
 import { applyTaskOrder } from '../lib/taskOrder.ts'
 import { closeOpenSegment, sumClosedDurations } from '../lib/time.ts'
 import { shouldHideArchivedTask } from '../lib/taskVisibility.ts'
@@ -19,7 +20,22 @@ function sortAndReorder(tasks: Task[]): Task[] {
     .sort((a, b) => a.order - b.order)
     .map((task, index) => ({
       ...task,
+      meta: normalizeTaskMeta(task.meta),
       hidden: Boolean(task.hidden),
+      hiddenAt:
+        typeof task.hiddenAt === 'string'
+          ? task.hiddenAt
+          : task.hidden
+            ? typeof task.updatedAt === 'string'
+              ? task.updatedAt
+              : typeof task.archivedAt === 'string'
+                ? task.archivedAt
+                : typeof task.finishedAt === 'string'
+                  ? task.finishedAt
+                  : typeof task.createdAt === 'string'
+                    ? task.createdAt
+                    : null
+            : null,
       showDuration: task.showDuration !== false,
       durationLayoutMode: task.durationLayoutMode === 'inline' ? 'inline' : 'stacked',
       order: index + 1,
@@ -40,6 +56,7 @@ function createMobileTask(order: number, now: string, settings = DEFAULT_APP_SET
     order,
     contentRaw: '',
     attachments: [],
+    meta: normalizeTaskMeta(undefined),
     colorMode: 'auto',
     colorValue: null,
     fontFamily: settings.defaultFontFamily,
@@ -48,6 +65,7 @@ function createMobileTask(order: number, now: string, settings = DEFAULT_APP_SET
     archived: false,
     archivedAt: null,
     hidden: false,
+    hiddenAt: null,
     showDuration: true,
     durationLayoutMode: 'stacked',
     segments: [],
@@ -312,7 +330,8 @@ export function archiveMobileTask(state: PersistedState, taskId: string, updated
       status: task.status === 'doing' ? 'paused' : task.status,
       archived: true,
       archivedAt: updatedAt,
-      hidden: false,
+      hidden: task.hidden,
+      hiddenAt: task.hidden ? task.hiddenAt ?? updatedAt : null,
       segments: finalizedSegments,
       totalDurationMs: sumClosedDurations(finalizedSegments),
       updatedAt,
@@ -322,17 +341,14 @@ export function archiveMobileTask(state: PersistedState, taskId: string, updated
 
 export function archiveAndHideMobileTask(state: PersistedState, taskId: string, updatedAt: string): PersistedState {
   return updateTask(state, taskId, updatedAt, (task) => {
-    if (task.archived) {
-      return task
-    }
-
     const finalizedSegments = task.status === 'doing' ? closeOpenSegment(task.segments, updatedAt) : task.segments
     return {
       ...task,
       status: task.status === 'doing' ? 'paused' : task.status,
       archived: true,
-      archivedAt: updatedAt,
+      archivedAt: task.archivedAt ?? updatedAt,
       hidden: true,
+      hiddenAt: task.hidden ? task.hiddenAt ?? updatedAt : updatedAt,
       segments: finalizedSegments,
       totalDurationMs: sumClosedDurations(finalizedSegments),
       updatedAt,
@@ -350,7 +366,8 @@ export function unarchiveMobileTask(state: PersistedState, taskId: string, updat
       ...task,
       archived: false,
       archivedAt: null,
-      hidden: false,
+      hidden: task.hidden,
+      hiddenAt: task.hidden ? task.hiddenAt ?? updatedAt : null,
       updatedAt,
     }
   })
@@ -383,6 +400,7 @@ export function hideArchivedMobileTasks(
         ? {
             ...task,
             hidden: true,
+            hiddenAt: updatedAt,
             updatedAt,
           }
         : task,
