@@ -37,6 +37,9 @@ type TaskStore = {
   setAllTaskDurationVisibility: (visible: boolean) => void
   setTaskDurationLayoutMode: (taskId: string, layoutMode: Task['durationLayoutMode']) => void
   setTasksDurationLayoutMode: (taskIds: string[], layoutMode: Task['durationLayoutMode']) => void
+  setTaskCountdown: (taskId: string, durationMs: number) => void
+  clearTaskCountdown: (taskId: string) => void
+  endTaskCountdown: (taskId: string) => void
   archiveAndHideTask: (taskId: string) => void
   showHiddenTasks: (filter: { mode: 'all' | 'range'; start?: string; end?: string; basis?: HiddenTaskDateBasis }) => void
   hideArchivedTasks: (filter: { mode: 'all' | 'range'; start?: string; end?: string }) => void
@@ -71,6 +74,7 @@ function createTask(order: number, settings: AppSettings): Task {
     hiddenAt: null,
     showDuration: true,
     durationLayoutMode: 'stacked',
+    countdownTargetMs: null,
     segments: [],
     totalDurationMs: 0,
     createdAt: now,
@@ -123,6 +127,7 @@ function sortAndReorder(tasks: Task[]): Task[] {
               : null,
         showDuration: task.showDuration !== false,
         durationLayoutMode: task.durationLayoutMode === 'inline' ? 'inline' : 'stacked',
+        countdownTargetMs: typeof task.countdownTargetMs === 'number' && Number.isFinite(task.countdownTargetMs) && task.countdownTargetMs > 0 ? task.countdownTargetMs : null,
         segments,
         totalDurationMs,
         order: index + 1,
@@ -331,6 +336,95 @@ export const useTaskStore = create<TaskStore>((set, get) => {
           taskIds: targetTaskIds,
           value: normalizedLayoutMode,
         },
+      })
+    },
+
+    setTaskCountdown: (taskId, durationMs) => {
+      const now = toLocalIso()
+      const nowTimestamp = Date.now()
+
+      set((state) => ({
+        tasks: state.tasks.map((task) => {
+          if (task.id !== taskId) {
+            return task
+          }
+
+          // Calculate current total duration and set absolute target
+          const currentDuration = task.status === 'doing'
+            ? (() => {
+                const active = task.segments[task.segments.length - 1]
+                if (active && !active.pauseAt) {
+                  return task.totalDurationMs + Math.max(0, nowTimestamp - new Date(active.startAt).getTime())
+                }
+                return task.totalDurationMs
+              })()
+            : task.totalDurationMs
+
+          return {
+            ...task,
+            countdownTargetMs: currentDuration + durationMs,
+            updatedAt: now,
+          }
+        }),
+      }))
+
+      enqueuePersist({
+        taskId,
+        type: 'TASK_SET_COUNTDOWN',
+        payload: { at: now, durationMs },
+      })
+    },
+
+    clearTaskCountdown: (taskId) => {
+      const now = toLocalIso()
+
+      set((state) => ({
+        tasks: state.tasks.map((task) => {
+          if (task.id !== taskId) {
+            return task
+          }
+
+          return {
+            ...task,
+            countdownTargetMs: null,
+            status: task.status === 'countdown-ended' ? (task.segments.length > 0 ? 'paused' : 'idle') : task.status,
+            updatedAt: now,
+          }
+        }),
+      }))
+
+      enqueuePersist({
+        taskId,
+        type: 'TASK_UPDATE',
+        payload: { field: 'clearCountdown', at: now },
+      })
+    },
+
+    endTaskCountdown: (taskId) => {
+      const now = toLocalIso()
+
+      set((state) => ({
+        tasks: state.tasks.map((task) => {
+          if (task.id !== taskId || task.status === 'finished' || task.status === 'countdown-ended') {
+            return task
+          }
+
+          const finalizedSegments = task.status === 'doing' ? closeOpenSegment(task.segments, now) : task.segments
+
+          return {
+            ...task,
+            status: 'countdown-ended',
+            segments: finalizedSegments,
+            totalDurationMs: sumClosedDurations(finalizedSegments),
+            updatedAt: now,
+          }
+        }),
+      }))
+
+      enqueuePersist({
+        taskId,
+        type: 'TASK_COUNTDOWN_END',
+        payload: { at: now },
       })
     },
 
@@ -649,7 +743,7 @@ export const useTaskStore = create<TaskStore>((set, get) => {
 
       set((state) => ({
         tasks: state.tasks.map((task) => {
-          if (task.id !== taskId || task.status === 'finished' || task.archived) {
+          if (task.id !== taskId || task.status === 'finished' || task.status === 'countdown-ended' || task.archived) {
             return task
           }
 

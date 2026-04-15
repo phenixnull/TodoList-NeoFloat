@@ -228,6 +228,11 @@ export function useNativeTodoBoard() {
     applyLocalState((current, updatedAt) => reorderMobileTasks(current, orderedIds, updatedAt))
   }, [applyLocalState, visibleTasks])
 
+  const reorderVisibleTasks = useCallback((orderedIds: string[]) => {
+    if (orderedIds.length <= 1) return
+    applyLocalState((current, updatedAt) => reorderMobileTasks(current, orderedIds, updatedAt))
+  }, [applyLocalState])
+
   return {
     hydrated,
     config,
@@ -267,6 +272,7 @@ export function useNativeTodoBoard() {
     hideArchivedTasks: (filterInput: { mode: 'all' | 'range'; start?: string; end?: string }) => applyLocalState((current, updatedAt) => hideArchivedMobileTasks(current, filterInput, updatedAt)),
     updateSettings: (patch: Partial<PersistedState['settings']>) => applyLocalState((current, updatedAt) => updateMobileSettings(current, patch, updatedAt)),
     moveTask,
+    reorderVisibleTasks,
     runSync: () => runSync('manual'),
     saveConfig: async () => {
       const nextConfig: SyncConfig = {

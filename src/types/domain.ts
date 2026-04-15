@@ -1,4 +1,4 @@
-﻿export type TaskStatus = 'idle' | 'doing' | 'paused' | 'finished'
+﻿export type TaskStatus = 'idle' | 'doing' | 'paused' | 'finished' | 'countdown-ended'
 
 export type TaskCardMode = 'expanded' | 'collapsed'
 export type TaskContentDisplayMode = 'inner-scroll' | 'auto-height'
@@ -46,6 +46,7 @@ export interface Task {
   hiddenAt: string | null
   showDuration: boolean
   durationLayoutMode?: TaskDurationLayoutMode
+  countdownTargetMs: number | null
   segments: TaskSegment[]
   totalDurationMs: number
   createdAt: string
@@ -88,6 +89,8 @@ export interface EventDraft {
     | 'TASK_PAUSE'
     | 'TASK_FINISH'
     | 'TASK_UNFINISH'
+    | 'TASK_SET_COUNTDOWN'
+    | 'TASK_COUNTDOWN_END'
     | 'TASK_ARCHIVE'
     | 'TASK_UNARCHIVE'
     | 'TASK_REORDER'

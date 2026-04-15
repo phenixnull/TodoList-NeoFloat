@@ -51,3 +51,15 @@ test('native task strip supports swipe-to-delete and vivid running spectrum chro
   assert.match(appEntry, /runningBorderTop/)
   assert.match(appEntry, /runningContentSweep/)
 })
+test('happy apk task strip wires long-press drag reorder through the app shell', () => {
+  const appEntryPath = path.join(nativeAppRoot, 'src', 'app', 'HappyApkTodoApp.tsx')
+  const cardsEntryPath = path.join(nativeAppRoot, 'src', 'app', 'apkCards.tsx')
+  const appEntry = readFileSync(appEntryPath, 'utf8')
+  const cardsEntry = readFileSync(cardsEntryPath, 'utf8')
+
+  assert.match(appEntry, /activeDrag/)
+  assert.match(appEntry, /reorderVisibleTasks/)
+  assert.match(cardsEntry, /onStartDrag/)
+  assert.match(cardsEntry, /onTouchStart/)
+  assert.match(cardsEntry, /dragOffsetY/)
+})

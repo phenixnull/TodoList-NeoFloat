@@ -923,6 +923,13 @@ textarea {
   z-index: 1;
 }
 
+.status-flag.countdown-ended {
+  transform: rotate(-14deg);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.96), rgba(29, 78, 216, 0.92));
+  color: #ffffff;
+  z-index: 2;
+}
+
 .task-card.mode-collapsed .status-stack {
   top: 5px;
   right: 7px;
@@ -1276,6 +1283,17 @@ textarea {
 
 .task-card.finished .task-duration-chip {
   border-color: rgba(255, 255, 255, 0.82);
+}
+
+.task-duration-chip.state-countdown-ended {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.36), rgba(29, 78, 216, 0.28));
+  border-color: rgba(96, 165, 250, 0.82);
+  color: rgba(191, 219, 254, 0.96);
+}
+
+.countdown-icon {
+  margin-right: 2px;
+  font-size: 0.85em;
 }
 
 .state-icon {
@@ -1669,6 +1687,36 @@ textarea {
 }
 
 .task-context-menu .color-action-row button {
+  text-align: center;
+}
+
+.task-context-menu .countdown-submenu-panel {
+  padding-top: 4px;
+}
+
+.task-context-menu .countdown-input-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.task-context-menu .countdown-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.56);
+}
+
+.task-context-menu .countdown-field input {
+  width: 100%;
+  font-size: 12px;
+  padding: 3px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  color: inherit;
   text-align: center;
 }
 

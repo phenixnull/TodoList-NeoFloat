@@ -21,7 +21,7 @@ import {
 } from '../lib/taskMeta'
 import { resolveLiveEditorMeasuredHeight, resolveTaskLayoutMetrics } from '../lib/taskCardLayout'
 import { parseTaskImageId, TASK_IMAGE_SRC_PREFIX } from '../lib/taskImages'
-import { calcTaskDuration, formatDuration } from '../lib/time'
+import { calcTaskDuration, calcCountdownRemaining, formatDuration } from '../lib/time'
 
 type TaskCardProps = {
   task: Task
@@ -42,6 +42,7 @@ type TaskCardProps = {
 const LABEL_FINISHED = '\u5df2\u5b8c\u6210'
 const LABEL_UNFINISHED = '\u672a\u5b8c\u6210'
 const LABEL_ARCHIVED = '\u5df2\u5f52\u6863'
+const LABEL_COUNTDOWN_ENDED = '\u8ba1\u65f6\u7ed3\u675f'
 const LABEL_EMPTY_TASK = '\u8f93\u5165\u4efb\u52a1\uff08\u652f\u6301 $x$\u3001$$x^2$$\u3001\u7c98\u8d34\u56fe\u7247\uff09'
 const LABEL_IMAGE_LOADING = '\u56fe\u7247\u52a0\u8f7d\u4e2d'
 const LABEL_OPEN_IMAGE = '\u70b9\u51fb\u6253\u5f00\u56fe\u7247'
@@ -106,18 +107,21 @@ export function TaskCard({
   const isInnerScrollMode = contentDisplayMode === 'inner-scroll'
   const isDoing = task.status === 'doing'
   const isFinished = task.status === 'finished'
+  const isCountdownEnded = task.status === 'countdown-ended'
   const isArchived = task.archived
   const isGrayPalette = paletteMode === 'gray-gradient' || paletteMode === 'default-gray'
   const taskMeta = useMemo(() => normalizeTaskMeta(task.meta), [task.meta])
-  const completionLabel = isFinished ? LABEL_FINISHED : LABEL_UNFINISHED
-  const completionClass = isFinished ? 'finished' : 'unfinished'
-  const durationStateClass = isArchived ? 'archived' : isFinished ? 'finished' : isDoing ? 'running' : task.status === 'paused' ? 'paused' : 'idle'
+  const completionLabel = isCountdownEnded ? LABEL_COUNTDOWN_ENDED : isFinished ? LABEL_FINISHED : LABEL_UNFINISHED
+  const completionClass = isCountdownEnded ? 'countdown-ended' : isFinished ? 'finished' : 'unfinished'
+  const durationStateClass = isArchived ? 'archived' : isFinished ? 'finished' : isCountdownEnded ? 'countdown-ended' : isDoing ? 'running' : task.status === 'paused' ? 'paused' : 'idle'
   const showDuration = task.showDuration !== false
   const inlineDuration = showDuration && task.durationLayoutMode === 'inline'
   const previewText = task.contentRaw.trim() ? task.contentRaw : LABEL_EMPTY_TASK
   const useMarkdownPreview = hasRichPreviewToken(task.contentRaw)
   const startPauseIcon = isDoing ? '||' : '\u25b6'
   const taskDurationText = formatDuration(calcTaskDuration(task, nowMs))
+  const countdownRemaining = calcCountdownRemaining(task, nowMs)
+  const countdownText = countdownRemaining !== null ? formatDuration(countdownRemaining) : null
   const progressDraft = useMemo(
     () => resolveTaskProgressDraft(progressCurrentDraft, progressTotalDraft),
     [progressCurrentDraft, progressTotalDraft],
@@ -390,7 +394,7 @@ export function TaskCard({
   }
 
   const activateEditing = () => {
-    if (isArchived || isFinished) {
+    if (isArchived || isFinished || isCountdownEnded) {
       return
     }
     setIsEditing(true)
@@ -622,10 +626,10 @@ export function TaskCard({
               onFocus={() => setIsEditing(true)}
               onBlur={() => setIsEditing(false)}
               aria-label={`Task ${displayOrder}`}
-              readOnly={isFinished || isArchived}
+              readOnly={isFinished || isArchived || isCountdownEnded}
             />
 
-            {isFinished || isArchived ? (
+            {isFinished || isArchived || isCountdownEnded ? (
               <div className="status-stack" aria-hidden>
                 <span className={clsx('status-flag', 'leading', completionClass)}>{completionLabel}</span>
                 {isArchived ? <span className="status-flag archived">{LABEL_ARCHIVED}</span> : null}
@@ -654,7 +658,7 @@ export function TaskCard({
               className={clsx('btn-mini btn-start', {
                 doing: isDoing,
               })}
-              disabled={isFinished || isArchived}
+              disabled={isFinished || isArchived || isCountdownEnded}
               onPointerDown={stopDragPropagation}
               onClick={() => onToggleStartPause(task.id)}
               aria-label={isDoing ? 'Pause' : 'Start'}
@@ -667,7 +671,7 @@ export function TaskCard({
             <button
               type="button"
               className="btn-mini btn-finish"
-              disabled={isFinished || isArchived}
+              disabled={isFinished || isArchived || isCountdownEnded}
               onPointerDown={stopDragPropagation}
               onClick={() => onFinish(task.id)}
               aria-label="Finished"
@@ -678,8 +682,12 @@ export function TaskCard({
           </div>
 
           {showDuration ? (
-            <div className={clsx('task-duration-chip', `state-${durationStateClass}`)} title={taskDurationText}>
-              {taskDurationText}
+            <div className={clsx('task-duration-chip', `state-${durationStateClass}`)} title={countdownText ? `倒计时: ${countdownText} / 累计: ${taskDurationText}` : taskDurationText}>
+              {countdownText !== null && !isCountdownEnded ? (
+                <><span className="countdown-icon">⏳</span>{countdownText}</>
+              ) : (
+                taskDurationText
+              )}
             </div>
           ) : null}
 

@@ -1,5 +1,5 @@
-import { NativeTodoApp } from './src/app/NativeTodoApp'
+import { HappyApkTodoApp } from './src/app/HappyApkTodoApp'
 
 export default function App() {
-  return <NativeTodoApp />
+  return <HappyApkTodoApp />
 }

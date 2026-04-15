@@ -7,6 +7,7 @@ export const DEFAULT_CONTEXT_MENU_ORDER = [
   'set-stacked-layout',
   'insert-after',
   'toggle-finish',
+  'set-countdown',
   'toggle-archive',
   'meta',
   'color',

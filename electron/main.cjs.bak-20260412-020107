@@ -1600,8 +1600,7 @@ function applyWindowSettings(settings) {
 }
 
 function applyAutoLaunch(enabled) {
-  // Source/dev launches should never register a Windows login item again.
-  const openAtLogin = app.isPackaged ? Boolean(enabled) : false
+  const openAtLogin = Boolean(enabled)
   const options = {
     openAtLogin,
     path: process.execPath,

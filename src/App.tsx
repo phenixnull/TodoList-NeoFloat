@@ -14,7 +14,7 @@ import { DEFAULT_TASK_TAG, DEFAULT_TASK_TEXT_COLOR, TASK_TAG_PRESETS, normalizeT
 import { DEFAULT_TASK_TAG_BACKGROUND_COLOR } from './lib/taskMeta'
 import { resolveHiddenArchiveRangeDefaults, shouldShowTaskInList, type HiddenTaskDateBasis } from './lib/taskVisibility'
 import { useTaskStore } from './store/useTaskStore'
-import { calcTaskDuration, formatDuration, localDateTimeText } from './lib/time'
+import { calcTaskDuration, calcCountdownRemaining, formatDuration, localDateTimeText } from './lib/time'
 import type { SyncConfig, SyncStatus } from './types/sync'
 
 function toDateInputText(date: Date): string {
@@ -81,6 +81,7 @@ const CONTEXT_MENU_ORDER_LABELS: Record<ContextMenuItemId, string> = {
   'set-stacked-layout': '所有显示任务设为 2+1 布局',
   'insert-after': '在下方插入任务',
   'toggle-finish': '完成状态切换',
+  'set-countdown': '倒计时设置',
   'toggle-archive': '归档操作',
   meta: '标签/进度/文字色',
   color: '任务配色',
@@ -174,6 +175,9 @@ function App() {
   const toggleStartPause = useTaskStore((state) => state.toggleStartPause)
   const finishTask = useTaskStore((state) => state.finishTask)
   const unfinishTask = useTaskStore((state) => state.unfinishTask)
+  const setTaskCountdown = useTaskStore((state) => state.setTaskCountdown)
+  const clearTaskCountdown = useTaskStore((state) => state.clearTaskCountdown)
+  const endTaskCountdown = useTaskStore((state) => state.endTaskCountdown)
   const archiveTask = useTaskStore((state) => state.archiveTask)
   const unarchiveTask = useTaskStore((state) => state.unarchiveTask)
   const deleteTask = useTaskStore((state) => state.deleteTask)
@@ -189,6 +193,10 @@ function App() {
   const [hideArchiveSubmenuOpen, setHideArchiveSubmenuOpen] = useState(false)
   const [metaSubmenuOpen, setMetaSubmenuOpen] = useState(false)
   const [colorSubmenuOpen, setColorSubmenuOpen] = useState(false)
+  const [countdownSubmenuOpen, setCountdownSubmenuOpen] = useState(false)
+  const [countdownHoursInput, setCountdownHoursInput] = useState('0')
+  const [countdownMinutesInput, setCountdownMinutesInput] = useState('30')
+  const [countdownSecondsInput, setCountdownSecondsInput] = useState('0')
   const [archiveStartInput, setArchiveStartInput] = useState('')
   const [archiveEndInput, setArchiveEndInput] = useState('')
   const [archiveDateBasis, setArchiveDateBasis] = useState<HiddenTaskDateBasis>('archived')
@@ -318,11 +326,23 @@ function App() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setNowMs(Date.now())
+      const now = Date.now()
+      setNowMs(now)
+
+      // Check for countdown expiration on active tasks
+      const currentTasks = useTaskStore.getState().tasks
+      for (const task of currentTasks) {
+        if (task.status === 'doing' && task.countdownTargetMs !== null && task.countdownTargetMs > 0) {
+          const remaining = calcCountdownRemaining(task, now)
+          if (remaining !== null && remaining <= 0) {
+            endTaskCountdown(task.id)
+          }
+        }
+      }
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [])
+  }, [endTaskCountdown])
 
   useEffect(() => {
     const blurActiveElement = () => {
@@ -444,7 +464,7 @@ function App() {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', applyPosition)
     }
-  }, [contextMenu, archiveSubmenuOpen, hideArchiveSubmenuOpen, metaSubmenuOpen, colorSubmenuOpen, customColorMode])
+  }, [contextMenu, archiveSubmenuOpen, hideArchiveSubmenuOpen, metaSubmenuOpen, colorSubmenuOpen, countdownSubmenuOpen, customColorMode])
 
   // 持续调整直到稳定
   useEffect(() => {
@@ -750,6 +770,7 @@ function App() {
     setHideArchiveSubmenuOpen(false)
     setMetaSubmenuOpen(false)
     setColorSubmenuOpen(false)
+    setCountdownSubmenuOpen(false)
     if (nextOpen) {
       const defaults = resolveArchiveRangeDefaults()
       setArchiveStartInput(defaults.start)
@@ -764,6 +785,7 @@ function App() {
     setArchiveSubmenuOpen(false)
     setMetaSubmenuOpen(false)
     setColorSubmenuOpen(false)
+    setCountdownSubmenuOpen(false)
     if (nextOpen) {
       const defaults = resolveHiddenArchiveRangeDefaults({
         todayDate,
@@ -781,6 +803,7 @@ function App() {
     setArchiveSubmenuOpen(false)
     setHideArchiveSubmenuOpen(false)
     setColorSubmenuOpen(false)
+    setCountdownSubmenuOpen(false)
     if (!nextOpen) {
       setMetaCustomTagEditing(false)
       setMetaCustomTagDraft('')
@@ -795,6 +818,7 @@ function App() {
     setMetaSubmenuOpen(false)
     setMetaCustomTagEditing(false)
     setMetaCustomTagDraft('')
+    setCountdownSubmenuOpen(false)
     if (nextOpen && contextTask) {
       const parsed = parseTaskColorValue(contextTask.colorValue)
       if (parsed) {
@@ -805,6 +829,22 @@ function App() {
       }
     }
     setColorSubmenuOpen(nextOpen)
+  }
+
+  const toggleCountdownSubmenu = () => {
+    const nextOpen = !countdownSubmenuOpen
+    setArchiveSubmenuOpen(false)
+    setHideArchiveSubmenuOpen(false)
+    setMetaSubmenuOpen(false)
+    setColorSubmenuOpen(false)
+    setMetaCustomTagEditing(false)
+    setMetaCustomTagDraft('')
+    if (nextOpen) {
+      setCountdownHoursInput('0')
+      setCountdownMinutesInput('30')
+      setCountdownSecondsInput('0')
+    }
+    setCountdownSubmenuOpen(nextOpen)
   }
 
   const commitCustomTagDraft = () => {
@@ -865,6 +905,7 @@ function App() {
     setHideArchiveSubmenuOpen(false)
     setMetaSubmenuOpen(false)
     setColorSubmenuOpen(false)
+    setCountdownSubmenuOpen(false)
     setArchiveStartInput('')
     setArchiveEndInput('')
     setArchiveDateBasis('archived')
@@ -1032,6 +1073,99 @@ function App() {
             {CONTEXT_MENU_FINISH_TEXT}
           </button>
         )
+      case 'set-countdown': {
+        const hasCountdown = contextTask.countdownTargetMs !== null
+        const isCountdownEnded = contextTask.status === 'countdown-ended'
+        const remaining = calcCountdownRemaining(contextTask, nowMs)
+        const remainingText = remaining !== null ? formatDuration(remaining) : null
+
+        return (
+          <section key={itemId} className="menu-layer">
+            <button type="button" className="submenu-trigger" onClick={toggleCountdownSubmenu}>
+              ⏳ 倒计时 {hasCountdown ? `(${isCountdownEnded ? '已结束' : remainingText})` : ''} {countdownSubmenuOpen ? '▾' : '▸'}
+            </button>
+
+            {countdownSubmenuOpen ? (
+              <div className="submenu-panel countdown-submenu-panel">
+                {hasCountdown ? (
+                  <>
+                    <div className="submenu-note">
+                      {isCountdownEnded
+                        ? '倒计时已结束'
+                        : `剩余: ${remainingText}`}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearTaskCountdown(contextTask.id)
+                        closeContextMenu()
+                      }}
+                    >
+                      ❌ 取消倒计时
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="submenu-note">设置倒计时时长（从当前累计时间开始）</div>
+                    <div className="countdown-input-grid">
+                      <label className="countdown-field">
+                        时
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={countdownHoursInput}
+                          onChange={(event) => setCountdownHoursInput(event.target.value)}
+                        />
+                      </label>
+                      <label className="countdown-field">
+                        分
+                        <input
+                          type="number"
+                          min={0}
+                          max={59}
+                          step={1}
+                          value={countdownMinutesInput}
+                          onChange={(event) => setCountdownMinutesInput(event.target.value)}
+                        />
+                      </label>
+                      <label className="countdown-field">
+                        秒
+                        <input
+                          type="number"
+                          min={0}
+                          max={59}
+                          step={1}
+                          value={countdownSecondsInput}
+                          onChange={(event) => setCountdownSecondsInput(event.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <div className="color-action-row">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const hours = Math.max(0, parseInt(countdownHoursInput, 10) || 0)
+                          const minutes = Math.max(0, parseInt(countdownMinutesInput, 10) || 0)
+                          const seconds = Math.max(0, parseInt(countdownSecondsInput, 10) || 0)
+                          const totalMs = (hours * 3600 + minutes * 60 + seconds) * 1000
+                          if (totalMs <= 0) {
+                            return
+                          }
+                          setTaskCountdown(contextTask.id, totalMs)
+                          closeContextMenu()
+                        }}
+                      >
+                        ⏳ 开始倒计时
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : null}
+          </section>
+        )
+      }
       case 'toggle-archive':
         return (
           <section key={itemId} className="menu-layer">

@@ -79,3 +79,17 @@ export function sumClosedDurations(segments: TaskSegment[]): number {
     return sum + Math.max(0, segment.durationMs)
   }, 0)
 }
+
+/**
+ * Calculate the remaining countdown time in ms.
+ * Returns null if no countdown is active.
+ * Returns 0 if countdown has expired.
+ */
+export function calcCountdownRemaining(task: Task, nowMs: number): number | null {
+  if (task.countdownTargetMs === null || task.countdownTargetMs <= 0) {
+    return null
+  }
+
+  const currentDuration = calcTaskDuration(task, nowMs)
+  return Math.max(0, task.countdownTargetMs - currentDuration)
+}

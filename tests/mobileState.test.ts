@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { moveDraggedTaskIds, resolveDraggedTaskIndex } from '../native-app/src/app/apkTaskDrag.ts'
 import type { PersistedState } from '../src/types/domain.ts'
 import {
   addMobileTask,
@@ -88,4 +89,28 @@ test('updateMobileTaskContent and deleteMobileTask keep task order stable after 
     deleted.tasks.map((task) => task.order),
     [1],
   )
+})
+
+test('moveDraggedTaskIds reorders visible ids for a dragged apk strip', () => {
+  assert.deepEqual(
+    moveDraggedTaskIds(['task-a', 'task-b', 'task-c'], 'task-a', 2),
+    ['task-b', 'task-c', 'task-a'],
+  )
+
+  assert.deepEqual(
+    moveDraggedTaskIds(['task-a', 'task-b', 'task-c'], 'task-c', 0),
+    ['task-c', 'task-a', 'task-b'],
+  )
+})
+
+test('resolveDraggedTaskIndex uses crossed card midpoints as the drop target', () => {
+  const layouts = [
+    { id: 'task-a', y: 0, height: 100 },
+    { id: 'task-b', y: 100, height: 100 },
+    { id: 'task-c', y: 200, height: 100 },
+  ]
+
+  assert.equal(resolveDraggedTaskIndex(layouts, 'task-a', 80), 0)
+  assert.equal(resolveDraggedTaskIndex(layouts, 'task-a', 160), 1)
+  assert.equal(resolveDraggedTaskIndex(layouts, 'task-a', 280), 2)
 })

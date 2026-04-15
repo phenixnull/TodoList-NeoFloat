@@ -76,7 +76,11 @@ function resolveTaskDateByBasis(task: TaskVisibilityTask, basis: HiddenTaskDateB
   }
 }
 
-export function shouldShowTaskInList(task: Pick<TaskVisibilityTask, 'hidden'>): boolean {
+export function shouldShowTaskInList(
+  task: Pick<TaskVisibilityTask, 'hidden'>,
+  _settings?: unknown,
+  _todayDate?: string,
+): boolean {
   return !task.hidden
 }
 

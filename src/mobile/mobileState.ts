@@ -68,6 +68,7 @@ function createMobileTask(order: number, now: string, settings = DEFAULT_APP_SET
     hiddenAt: null,
     showDuration: true,
     durationLayoutMode: 'stacked',
+    countdownTargetMs: null,
     segments: [],
     totalDurationMs: 0,
     createdAt: now,
