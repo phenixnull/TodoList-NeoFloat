@@ -19,7 +19,7 @@ function pad2(value: number): string {
 }
 
 export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
-  const { tasks, checkIns, now, updateTask } = useStore();
+  const { tasks, checkIns, now, updateTask, deleteTask } = useStore();
   const today = getTodayKey(now);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
@@ -217,8 +217,15 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
             className="fixed z-50 min-w-[160px] rounded-xl border border-white/10 bg-slate-900/95 py-1 shadow-2xl backdrop-blur-sm"
             style={{ left: ctxMenu.x, top: ctxMenu.y }}
           >
-            <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              移动到分组 · {ctxTask.name}
+            <button
+              className="w-full px-3 py-1.5 text-left text-xs font-semibold text-slate-200 hover:bg-white/[0.06]"
+              onClick={() => { onEditTask(ctxTask); setCtxMenu(null); }}
+            >
+              ✏️ 编辑
+            </button>
+            <div className="my-1 border-t border-white/[0.06]" />
+            <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              分组
             </p>
             <button
               className="w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-white/[0.06]"
@@ -235,6 +242,13 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
                 {(ctxTask.customGroups ?? []).includes(g) ? '✓ ' : ''}{g}
               </button>
             ))}
+            <div className="my-1 border-t border-white/[0.06]" />
+            <button
+              className="w-full px-3 py-1.5 text-left text-xs text-rose-400 hover:bg-rose-500/10"
+              onClick={() => { void deleteTask(ctxTask.id); setCtxMenu(null); }}
+            >
+              🗑 删除
+            </button>
           </div>
         </>
       )}

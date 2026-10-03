@@ -18,13 +18,11 @@ import StatsPage from './pages/StatsPage';
 import TasksPage from './pages/TasksPage';
 import TodayPage from './pages/TodayPage';
 
-export type PageKey = 'today' | 'tasks' | 'stats' | 'history' | 'settings';
+export type PageKey = 'today' | 'stats' | 'settings';
 
 const PAGE_TITLES: Record<PageKey, string> = {
   today: '今日打卡',
-  tasks: '任务管理',
   stats: '数据统计',
-  history: '历史记录',
   settings: '设置',
 };
 
@@ -153,9 +151,7 @@ function Shell() {
         <Sidebar current={page} online={store.online} onNavigate={setPage} onOpenFeedback={() => setFeedbackOpen(true)} />
         <main className="flex-1 overflow-y-auto px-7 py-6">
           {page === 'today' && <TodayPage onEditTask={openEditor} onOpenRecord={openRecord} />}
-          {page === 'tasks' && <TasksPage onEditTask={openEditor} />}
           {page === 'stats' && <StatsPage />}
-          {page === 'history' && <HistoryPage onOpenRecord={openRecord} />}
           {page === 'settings' && <SettingsPage />}
         </main>
       </div>
