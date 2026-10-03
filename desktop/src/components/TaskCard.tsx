@@ -108,20 +108,22 @@ export default function TaskCard({
               : '未打卡'}
           </div>
         )}
-        {!compact && (task.customGroups?.length ?? 0) > 0 && (
-          <div className="mt-1 flex items-center gap-1 overflow-hidden" style={{ maxHeight: 22 }}>
-            {(task.customGroups ?? []).map((g) => (
-              <span
-                key={g}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] px-1.5 py-0 text-[10px] font-semibold text-slate-400"
-              >
-                <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: getGroupColor(g) }} />
-                {g}
-              </span>
-            ))}
-          </div>
-        )}
+
       </div>
+
+      {!compact && (task.customGroups?.length ?? 0) > 0 && (
+        <div className="flex shrink-0 flex-col items-end justify-center gap-0.5 overflow-hidden" style={{ maxHeight: 40 }}>
+          {(task.customGroups ?? []).map((g) => (
+            <span
+              key={g}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] px-1.5 py-0 text-[10px] font-semibold text-slate-400"
+            >
+              <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: getGroupColor(g) }} />
+              {g}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="flex shrink-0 items-center gap-1.5">
         <button
