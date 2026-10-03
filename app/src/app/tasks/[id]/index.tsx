@@ -266,9 +266,9 @@ export default function TaskDetailScreen() {
           submitLabel="保存任务"
           initialTask={task}
           navigateBackOnSubmit={false}
-          onSubmit={({ manualDurationMs, ...input }) => updateTask(task.id, {
+          onSubmit={(input) => updateTask(task.id, {
             ...input,
-            manualDurationMs,
+            manualDurationMs: 0,
           })}
           footer={(
             <>

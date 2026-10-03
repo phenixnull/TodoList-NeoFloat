@@ -10,14 +10,7 @@ import GlassCard from './GlassCard';
 import PressableScale from './PressableScale';
 import { taskColors, taskIcons } from '../domain/taskAppearance';
 import { Task } from '../domain/types';
-import {
-  calculateTaskDurationMs,
-  calculateTaskSegmentDurationMs,
-  formatDuration,
-  formatManualDuration,
-  isTimerRunning,
-  parseDurationInput,
-} from '../domain/timeTracking';
+import { isTimerRunning } from '../domain/timeTracking';
 import { useHabitStore } from '../store/useHabitStore';
 import { useTheme } from '../theme/theme';
 
@@ -36,7 +29,6 @@ type Props = {
     icon: string;
     color: string;
     iconImage: string | null;
-    manualDurationMs: number;
   }) => void;
 };
 
@@ -63,27 +55,14 @@ export default function TaskForm({
   );
   const [error, setError] = useState('');
   const [processingImage, setProcessingImage] = useState(false);
-  const [durationInput, setDurationInput] = useState(
-    initialTask ? formatManualDuration(initialTask.manualDurationMs) : '',
-  );
-
   const save = () => {
     if (!name.trim()) {
       setError('请输入任务名称');
       return;
     }
 
-    const manualDurationMs = durationInput.trim()
-      ? parseDurationInput(durationInput)
-      : 0;
-
-    if (manualDurationMs === null) {
-      setError('手动时长格式不正确；负向校准可用 -30、-1.5、-20m 或 -01:02:03');
-      return;
-    }
-
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onSubmit({ name, description, icon, color, iconImage, manualDurationMs });
+    onSubmit({ name, description, icon, color, iconImage });
     if (navigateBackOnSubmit) {
       router.back();
     }
@@ -177,40 +156,6 @@ export default function TaskForm({
           multiline
           style={[styles.input, styles.textArea, { borderColor: theme.inputBorder, backgroundColor: theme.inputBackground, color: theme.text }]}
         />
-
-        <Text style={[styles.label, { color: theme.mutedText }]}>手动时长 / 校准</Text>
-        <View style={styles.durationRow}>
-          <TextInput
-            value={durationInput}
-            onChangeText={setDurationInput}
-            placeholder="如 30、1.5、20m、1h30m；-20m 为扣除"
-            placeholderTextColor={theme.isLight ? 'rgba(71,85,105,0.55)' : 'rgba(148,163,184,0.45)'}
-            autoCorrect={false}
-            style={[styles.input, styles.durationInput, { borderColor: theme.inputBorder, backgroundColor: theme.inputBackground, color: theme.text }]}
-          />
-          <PressableScale
-            style={[styles.durationReset, {
-              borderColor: theme.surfaceBorder,
-              backgroundColor: theme.inputBackground,
-            }]}
-            accessibilityLabel="重置手动时长为00:00:00"
-            onPress={() => {
-              setDurationInput('00:00:00');
-              setError('');
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }}
-          >
-            <MaterialCommunityIcons
-              name="autorenew"
-              size={21}
-              color={theme.mutedText}
-            />
-          </PressableScale>
-        </View>
-
-        <Text style={styles.durationHint}>
-          手动值独立保存，不会删除时间段。总耗时 = 时间段 {initialTask ? formatDuration(calculateTaskSegmentDurationMs(initialTask)) : '00:00:00'} + 手动值。
-        </Text>
 
         {initialTask && isTimerRunning(initialTask) ? (
           <Text style={styles.durationHint}>
@@ -342,26 +287,10 @@ const styles = StyleSheet.create({
     minHeight: 90,
     textAlignVertical: 'top',
   },
-  durationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  durationInput: {
-    flex: 1,
-  },
   durationHint: {
     marginTop: 7,
     color: '#94a3b8',
     fontSize: 12,
-  },
-  durationReset: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   customIconRow: {
     flexDirection: 'row',

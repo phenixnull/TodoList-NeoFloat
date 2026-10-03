@@ -1,13 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { RotateCcw, Trash2, X } from 'lucide-react';
+import { Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import {
-  calculateTaskDurationMs,
-  formatDuration,
-  formatManualDuration,
-  isTimerRunning,
-  parseDurationInput,
-} from '../../../app/src/domain/timeTracking';
+import { isTimerRunning } from '../../../app/src/domain/timeTracking';
 import type { Task } from '../../../app/src/domain/types';
 import { useStore } from '../data/store';
 
@@ -34,7 +28,6 @@ export default function TaskEditorModal({ task, onClose }: Props) {
   const [description, setDescription] = useState('');
   const [color, setColor] = useState(PRESET_COLORS[0]);
   const [icon, setIcon] = useState('flag-variant-outline');
-  const [durationText, setDurationText] = useState('00:00:00');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -42,7 +35,6 @@ export default function TaskEditorModal({ task, onClose }: Props) {
     setDescription(task?.description ?? '');
     setColor(task?.color ?? PRESET_COLORS[0]);
     setIcon(task?.icon ?? 'flag-variant-outline');
-    setDurationText(task ? formatManualDuration(task.manualDurationMs) : '00:00:00');
     setError('');
   }, [task]);
 
@@ -52,22 +44,16 @@ export default function TaskEditorModal({ task, onClose }: Props) {
       return;
     }
 
-    const manualMs = parseDurationInput(durationText);
-    if (manualMs === null) {
-      setError('手动时长格式不正确；负向校准示例：-00:30:00 或 -25m');
-      return;
-    }
-
     if (task) {
       await updateTask(task.id, {
         name: name.trim(),
         description,
         color,
         icon,
-        manualDurationMs: manualMs,
+        manualDurationMs: 0,
       });
     } else {
-      await createTask({ name, description, color, icon, manualDurationMs: manualMs });
+      await createTask({ name, description, color, icon, manualDurationMs: 0 });
     }
 
     onClose();
@@ -145,34 +131,6 @@ export default function TaskEditorModal({ task, onClose }: Props) {
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="任务说明、目标或备注"
                 />
-              </div>
-
-              <div>
-                <label className="label">手动时长 / 校准</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    className="input font-mono"
-                    value={durationText}
-                    onChange={(e) => setDurationText(e.target.value)}
-                    placeholder="00:00:00；-00:20:00 为扣除"
-                  />
-                  <button
-                    type="button"
-                    title="重置手动时长为 00:00:00"
-                    onClick={() => setDurationText('00:00:00')}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.05] text-slate-300 transition-all hover:rotate-[-40deg] hover:border-cyan-400/50 hover:text-cyan-300"
-                  >
-                    <RotateCcw size={16} />
-                  </button>
-                </div>
-                <p className="mt-2 text-xs text-slate-400">
-                  手动值独立保存，不会删除时间段。当前总耗时 {task ? formatDuration(calculateTaskDurationMs(task)) : '00:00:00'}。
-                </p>
-                {task && isTimerRunning(task) ? (
-                  <p className="mt-2 text-xs text-slate-400">
-                    计时中：时间段合计持续增加，总耗时实时相加。
-                  </p>
-                ) : null}
               </div>
 
               {error && <p className="text-sm font-medium text-rose-400">{error}</p>}

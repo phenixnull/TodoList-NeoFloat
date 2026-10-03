@@ -312,6 +312,26 @@ export function calculateTaskSegmentDurationMs(task: Task, nowMs: number = Date.
   }, nowMs);
 }
 
+export function calculateSegmentDurationMs(startAt: string, stopAt: string): number {
+  const start = new Date(startAt).getTime();
+  const stop = new Date(stopAt).getTime();
+  return Number.isNaN(start) || Number.isNaN(stop) ? 0 : Math.max(0, stop - start);
+}
+
+export function segmentDurationToEndTime(startDate: string, startTime: string, durationMs: number): { endDate: string; endTime: string } | null {
+  const start = parseDateTime(startDate, startTime);
+  if (!start || durationMs <= 0) return null;
+
+  const stop = new Date(start.getTime() + durationMs);
+  const year = stop.getFullYear().toString().padStart(4, '0');
+  const month = (stop.getMonth() + 1).toString().padStart(2, '0');
+  const day = stop.getDate().toString().padStart(2, '0');
+  const hours = stop.getHours().toString().padStart(2, '0');
+  const minutes = stop.getMinutes().toString().padStart(2, '0');
+
+  return { endDate: `${year}-${month}-${day}`, endTime: `${hours}:${minutes}` };
+}
+
 export function formatDuration(durationMs: number): string {
   const totalSeconds = Math.max(0, Math.floor(durationMs / 1000));
   const hours = Math.floor(totalSeconds / 3600);

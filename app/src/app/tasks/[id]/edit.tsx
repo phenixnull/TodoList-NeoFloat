@@ -24,9 +24,9 @@ export default function EditTaskScreen() {
           title="编辑任务"
           submitLabel="保存修改"
           initialTask={task}
-          onSubmit={({ manualDurationMs, ...input }) => updateTask(task.id, {
+          onSubmit={(input) => updateTask(task.id, {
             ...input,
-            manualDurationMs,
+            manualDurationMs: 0,
           })}
           footer={(
             <DayRecordEditor

@@ -8,13 +8,16 @@ import { useHabitStore } from '../store/useHabitStore';
 import { useTheme } from '../theme/theme';
 import {
   calculateTaskDurationMs,
+  calculateSegmentDurationMs,
   calculateTimeSegmentsDurationForDate,
   clearTimeSegmentsForDate,
   createTimeSegment,
   formatDuration,
   getTaskTimeSegmentsForDate,
   isTimerRunning,
+  parseDurationInput,
   removeTimeSegments,
+  segmentDurationToEndTime,
   resetTaskDuration,
 } from '../domain/timeTracking';
 
@@ -35,6 +38,7 @@ type Draft = {
   startTime: string;
   endDate: string;
   endTime: string;
+  duration: string;
 };
 
 function toDateInput(value: string): string {
@@ -63,12 +67,17 @@ function toShortTime(value: string): string {
 }
 
 function draftFromSegment(segment: TimeSegment): Draft {
+  const durationMs = segment.stopAt
+    ? calculateSegmentDurationMs(segment.startAt, segment.stopAt)
+    : 0;
+
   return {
     id: segment.id,
     startDate: toDateInput(segment.startAt),
     startTime: toTimeInput(segment.startAt),
     endDate: segment.stopAt ? toDateInput(segment.stopAt) : toDateInput(new Date().toISOString()),
     endTime: segment.stopAt ? toTimeInput(segment.stopAt) : toTimeInput(new Date().toISOString()),
+    duration: durationMs > 0 ? formatDuration(durationMs) : '',
   };
 }
 
@@ -78,6 +87,7 @@ function emptyDraft(date: string): Draft {
     startTime: '09:00',
     endDate: date,
     endTime: '10:00',
+    duration: '01:00:00',
   };
 }
 
@@ -90,6 +100,11 @@ function draftToSegment(draft: Draft): TimeSegment | null {
   );
 
   return segment && draft.id ? { ...segment, id: draft.id } : segment;
+}
+
+function draftDurationMs(draft: Draft): number | null {
+  if (!draft.duration.trim()) return null;
+  return parseDurationInput(draft.duration);
 }
 
 function SegmentEditor({
@@ -150,6 +165,7 @@ function SegmentEditor({
         <View style={styles.segmentCopy}>
           <Text style={[styles.segmentTitle, { color: theme.text }]}>
             {toShortTime(segment.startAt)} – {toShortTime(segment.stopAt!)}
+            {`  ${formatDuration(calculateSegmentDurationMs(segment.startAt, segment.stopAt!))}`}
           </Text>
           <Text style={[styles.segmentMeta, { color: theme.subtleText }]}>
             {toDateInput(segment.startAt)}{toDateInput(segment.startAt) === toDateInput(segment.stopAt!)
@@ -179,7 +195,17 @@ function SegmentEditor({
               <Text style={[styles.draftLabel, { color: theme.mutedText }]}>开始日期</Text>
               <TextInput
                 value={draft.startDate}
-                onChangeText={(value) => setDraft({ ...draft, startDate: value })}
+                onChangeText={(value) => {
+                  const durMs = draftDurationMs(draft);
+                  if (durMs !== null && durMs > 0) {
+                    const end = segmentDurationToEndTime(value, draft.startTime, durMs);
+                    if (end) {
+                      setDraft({ ...draft, startDate: value, endDate: end.endDate, endTime: end.endTime });
+                      return;
+                    }
+                  }
+                  setDraft({ ...draft, startDate: value });
+                }}
                 placeholder="YYYY-MM-DD"
                 placeholderTextColor={theme.isLight ? 'rgba(71,85,105,0.55)' : 'rgba(148,163,184,0.45)'}
                 style={[styles.draftInput, {
@@ -193,7 +219,17 @@ function SegmentEditor({
               <Text style={[styles.draftLabel, { color: theme.mutedText }]}>开始时间</Text>
               <TextInput
                 value={draft.startTime}
-                onChangeText={(value) => setDraft({ ...draft, startTime: value })}
+                onChangeText={(value) => {
+                  const durMs = draftDurationMs(draft);
+                  if (durMs !== null && durMs > 0) {
+                    const end = segmentDurationToEndTime(draft.startDate, value, durMs);
+                    if (end) {
+                      setDraft({ ...draft, startTime: value, endDate: end.endDate, endTime: end.endTime });
+                      return;
+                    }
+                  }
+                  setDraft({ ...draft, startTime: value });
+                }}
                 placeholder="HH:mm"
                 placeholderTextColor={theme.isLight ? 'rgba(71,85,105,0.55)' : 'rgba(148,163,184,0.45)'}
                 style={[styles.draftInput, {
@@ -221,13 +257,45 @@ function SegmentEditor({
               <Text style={[styles.draftLabel, { color: theme.mutedText }]}>结束时间</Text>
               <TextInput
                 value={draft.endTime}
-                onChangeText={(value) => setDraft({ ...draft, endTime: value })}
+                onChangeText={(value) => {
+                  const next = { ...draft, endTime: value };
+                  const seg = draftToSegment(next);
+                  if (seg?.stopAt) {
+                    next.duration = formatDuration(calculateSegmentDurationMs(seg.startAt, seg.stopAt));
+                  }
+                  setDraft(next);
+                }}
                 placeholder="HH:mm"
                 placeholderTextColor={theme.isLight ? 'rgba(71,85,105,0.55)' : 'rgba(148,163,184,0.45)'}
                 style={[styles.draftInput, {
                   borderColor: theme.inputBorder,
                   backgroundColor: theme.surface,
                   color: theme.text,
+                }]}
+              />
+            </View>
+            <View style={styles.draftField}>
+              <Text style={[styles.draftLabel, { color: accentColor }]}>时长 ⏱</Text>
+              <TextInput
+                value={draft.duration}
+                onChangeText={(value) => {
+                  const durMs = parseDurationInput(value);
+                  if (durMs !== null && durMs > 0) {
+                    const end = segmentDurationToEndTime(draft.startDate, draft.startTime, durMs);
+                    if (end) {
+                      setDraft({ ...draft, duration: value, endDate: end.endDate, endTime: end.endTime });
+                      return;
+                    }
+                  }
+                  setDraft({ ...draft, duration: value });
+                }}
+                placeholder="如 1h 30m 或 01:30:00"
+                placeholderTextColor={theme.isLight ? 'rgba(71,85,105,0.55)' : 'rgba(148,163,184,0.45)'}
+                autoCorrect={false}
+                style={[styles.draftInput, {
+                  borderColor: `${accentColor}44`,
+                  backgroundColor: theme.surface,
+                  color: accentColor,
                 }]}
               />
             </View>
@@ -422,13 +490,45 @@ export default function TimeSegmentsEditor({
               <Text style={[styles.draftLabel, { color: theme.mutedText }]}>结束时间</Text>
               <TextInput
                 value={draft.endTime}
-                onChangeText={(value) => setDraft({ ...draft, endTime: value })}
+                onChangeText={(value) => {
+                  const next = { ...draft, endTime: value };
+                  const seg = draftToSegment(next);
+                  if (seg?.stopAt) {
+                    next.duration = formatDuration(calculateSegmentDurationMs(seg.startAt, seg.stopAt));
+                  }
+                  setDraft(next);
+                }}
                 placeholder="HH:mm"
                 placeholderTextColor={theme.isLight ? 'rgba(71,85,105,0.55)' : 'rgba(148,163,184,0.45)'}
                 style={[styles.draftInput, {
                   borderColor: theme.inputBorder,
                   backgroundColor: theme.surface,
                   color: theme.text,
+                }]}
+              />
+            </View>
+            <View style={styles.draftField}>
+              <Text style={[styles.draftLabel, { color: accentColor }]}>时长 ⏱</Text>
+              <TextInput
+                value={draft.duration}
+                onChangeText={(value) => {
+                  const durMs = parseDurationInput(value);
+                  if (durMs !== null && durMs > 0) {
+                    const end = segmentDurationToEndTime(draft.startDate, draft.startTime, durMs);
+                    if (end) {
+                      setDraft({ ...draft, duration: value, endDate: end.endDate, endTime: end.endTime });
+                      return;
+                    }
+                  }
+                  setDraft({ ...draft, duration: value });
+                }}
+                placeholder="如 1h 30m"
+                placeholderTextColor={theme.isLight ? 'rgba(71,85,105,0.55)' : 'rgba(148,163,184,0.45)'}
+                autoCorrect={false}
+                style={[styles.draftInput, {
+                  borderColor: `${accentColor}44`,
+                  backgroundColor: theme.surface,
+                  color: accentColor,
                 }]}
               />
             </View>
