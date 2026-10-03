@@ -260,7 +260,7 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
       </motion.div>
 
       {/* Group tabs — full-width horizontal drawer */}
-      <div className="glass flex items-stretch overflow-hidden rounded-2xl">
+      <div className="glass flex items-stretch overflow-x-auto overflow-y-hidden rounded-2xl scroll-smooth" style={{ scrollbarWidth: 'none' }}>
         <TabButton active={groupFilter.length === 0} onClick={() => selectGroup(null)}>全部</TabButton>
         {customGroups.map((g) => (
           <TabButton
