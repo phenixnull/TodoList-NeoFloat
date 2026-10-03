@@ -98,6 +98,7 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   const ratio = tasks.length ? completedIds.size / tasks.length : 0;
 
   const dragTaskId = useRef<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   // Ctrl+Z undo for check-in only (max 8 steps).
   useEffect(() => {
@@ -125,13 +126,29 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         e.preventDefault();
         setCtxMenu({ taskId: task.id, x: e.clientX, y: e.clientY });
       }}
+      onDragStart={(e) => {
+        dragTaskId.current = task.id;
+        e.dataTransfer.effectAllowed = 'move';
+      }}
+      onDragEnd={() => {
+        dragTaskId.current = null;
+        setDragOverId(null);
+      }}
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
+        if (dragTaskId.current && dragTaskId.current !== task.id) {
+          setDragOverId(task.id);
+        }
+      }}
+      onDragLeave={() => {
+        if (dragOverId === task.id) setDragOverId(null);
       }}
       onDrop={(e) => {
         e.preventDefault();
         const draggedId = e.dataTransfer.getData('text/plain');
+        setDragOverId(null);
+        dragTaskId.current = null;
         if (!draggedId || draggedId === task.id) return;
         const ids = filtered.map((t) => t.id);
         const from = ids.indexOf(draggedId);
@@ -143,6 +160,8 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         void reorderTasks(next);
       }}
     >
+      <div style={{ opacity: dragTaskId.current === task.id ? 0.35 : 1, transform: dragTaskId.current === task.id ? 'scale(0.96)' : 'scale(1)', transition: 'opacity 0.2s, transform 0.2s' }}>
+        {dragOverId === task.id && <div className='absolute inset-0 rounded-2xl ring-2 ring-cyan-400/60 pointer-events-none' />}
       <TaskCard
         task={task}
         date={today}
@@ -151,6 +170,7 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         onOpenDetail={() => onOpenRecord({ taskId: task.id, date: today })}
         onDropImages={(files) => onOpenRecord({ taskId: task.id, date: today }, files)}
       />
+      </div>
     </div>
   );
 
