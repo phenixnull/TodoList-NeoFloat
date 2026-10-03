@@ -12,7 +12,7 @@ let currentMode = 'full';
 let tray = null;
 
 const isDev = !app.isPackaged && process.env.HP_DEV === '1';
-const appIconPath = path.join(__dirname, '..', 'build', 'icon-256.png');
+const appIconPath = path.join(__dirname, '..', 'build', 'icon.ico');
 
 function createWindow() {
   if (process.env.HP_TEST_HASH) {

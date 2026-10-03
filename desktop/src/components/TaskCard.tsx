@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion';
 import { Check, Pencil, Play, Square, StickyNote } from 'lucide-react';
 import {
   calculateTimeSegmentsDurationForDate,
@@ -34,11 +33,7 @@ export default function TaskCard({
   const running = isTimerRunning(task);
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.22 }}
+    <div
       onDragOver={
         onDropImages
           ? (event) => {
@@ -144,6 +139,6 @@ export default function TaskCard({
           <Check size={compact ? 15 : 18} strokeWidth={3} />
         </button>
       </div>
-    </motion.div>
+    </div>
   );
 }

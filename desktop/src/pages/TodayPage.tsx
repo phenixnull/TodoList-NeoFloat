@@ -24,6 +24,8 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
   const [ctxMenu, setCtxMenu] = useState<{ taskId: string; x: number; y: number } | null>(null);
+  const [groupMenu, setGroupMenu] = useState<{ group: string; x: number; y: number } | null>(null);
+  const [renameModal, setRenameModal] = useState<{ group: string; name: string } | null>(null);
   const [addModal, setAddModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const completedIds = useMemo(
@@ -52,6 +54,31 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   }, [allFlat, groupFilter, statusFilter, completedIds]);
   const filteredUnfinished = useMemo(() => filtered.filter((t) => !completedIds.has(t.id)), [filtered, completedIds]);
   const filteredFinished = useMemo(() => filtered.filter((t) => completedIds.has(t.id)), [filtered, completedIds]);
+
+  const renameGroup = useCallback((oldName: string, newName: string) => {
+    if (!newName.trim() || customGroups.includes(newName.trim())) return;
+    const next = storedGroups.map((g) => (g === oldName ? newName.trim() : g));
+    setStoredGroups(next);
+    localStorage.setItem('habitpulse.desktop.customGroups', JSON.stringify(next));
+    void Promise.all(
+      tasks
+        .filter((t) => t.customGroups?.includes(oldName))
+        .map((t) => updateTask(t.id, { customGroups: (t.customGroups ?? []).map((g) => (g === oldName ? newName.trim() : g)) })),
+    );
+    if (groupFilter === oldName) setGroupFilter(newName.trim());
+  }, [storedGroups, customGroups, tasks, updateTask, groupFilter]);
+
+  const deleteGroup = useCallback((name: string) => {
+    const next = storedGroups.filter((g) => g !== name);
+    setStoredGroups(next);
+    localStorage.setItem('habitpulse.desktop.customGroups', JSON.stringify(next));
+    void Promise.all(
+      tasks
+        .filter((t) => t.customGroups?.includes(name))
+        .map((t) => updateTask(t.id, { customGroups: (t.customGroups ?? []).filter((g) => g !== name) })),
+    );
+    if (groupFilter === name) setGroupFilter(null);
+  }, [storedGroups, tasks, updateTask, groupFilter]);
 
   const moveToGroup = useCallback((taskId: string, groups: string[]) => {
     void updateTask(taskId, { customGroups: groups });
@@ -172,7 +199,14 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
       <div className="glass flex items-stretch overflow-hidden rounded-2xl">
         <TabButton active={groupFilter === null} onClick={() => setGroupFilter(null)}>全部</TabButton>
         {customGroups.map((g) => (
-          <TabButton key={g} active={groupFilter === g} onClick={() => setGroupFilter(g)}>{g}</TabButton>
+          <TabButton
+            key={g}
+            active={groupFilter === g}
+            onClick={() => setGroupFilter(g)}
+            onContextMenu={(e: React.MouseEvent) => { e.preventDefault(); setGroupMenu({ group: g, x: e.clientX, y: e.clientY }); }}
+          >
+            {g}
+          </TabButton>
         ))}
         <button
           onClick={() => setAddModal(true)}
@@ -217,6 +251,51 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
 
       {filtered.length === 0 && (
         <p className="text-sm text-slate-500">没有符合条件的任务</p>
+      )}
+
+      {/* Group context menu — right-click on tab */}
+      {groupMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setGroupMenu(null)} onContextMenu={(e) => { e.preventDefault(); setGroupMenu(null); }} />
+          <div
+            className="fixed z-50 min-w-[140px] rounded-xl border border-white/10 bg-slate-900/95 py-1 shadow-2xl backdrop-blur-sm"
+            style={{ left: groupMenu.x, top: groupMenu.y }}
+          >
+            <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">{groupMenu.group}</p>
+            <button
+              className="w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-white/[0.06]"
+              onClick={() => { setRenameModal({ group: groupMenu.group, name: groupMenu.group }); setGroupMenu(null); }}
+            >
+              ✏️ 重命名
+            </button>
+            <button
+              className="w-full px-3 py-1.5 text-left text-xs text-rose-400 hover:bg-rose-500/10"
+              onClick={() => { deleteGroup(groupMenu.group); setGroupMenu(null); }}
+            >
+              🗑 删除分组
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Rename group modal */}
+      {renameModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setRenameModal(null)}>
+          <div className="glass-strong w-[360px] p-5" onClick={(e) => e.stopPropagation()}>
+            <p className="mb-3 text-sm font-extrabold text-slate-100">重命名分组</p>
+            <input
+              autoFocus
+              className="input w-full"
+              value={renameModal.name}
+              onChange={(e) => setRenameModal({ ...renameModal, name: e.target.value })}
+              onKeyDown={(e) => { if (e.key === 'Enter') { renameGroup(renameModal.group, renameModal.name); setRenameModal(null); } }}
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button className="btn-ghost px-3 py-1.5 text-xs" onClick={() => setRenameModal(null)}>取消</button>
+              <button className="btn-accent px-3 py-1.5 text-xs" onClick={() => { renameGroup(renameModal.group, renameModal.name); setRenameModal(null); }} disabled={!renameModal.name.trim()}>确认</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Add group modal */}
@@ -309,14 +388,16 @@ function FilterChip({ active, small, onClick, children }: {
   );
 }
 
-function TabButton({ active, onClick, children }: {
+function TabButton({ active, onClick, onContextMenu, children }: {
   active: boolean;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   children: React.ReactNode;
 }) {
   return (
     <button
       onClick={onClick}
+      onContextMenu={onContextMenu}
       className={`flex-1 px-4 py-3.5 text-sm font-extrabold transition-all ${
         active
           ? 'bg-cyan-400/15 text-cyan-300 shadow-[inset_0_-3px_0_rgba(34,211,238,0.5)]'
