@@ -21,12 +21,14 @@ function pad2(value: number): string {
 }
 
 export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
-  const { tasks, checkIns, now, updateTask, deleteTask, undoCheckIn, reorderTasks } = useStore();
+  const { tasks, checkIns, now, updateTask, deleteTask, undoCheckIn, reorderTasks, loading } = useStore();
   const today = getTodayKey(now);
   const [groupFilter, setGroupFilter] = useState<string[]>(() => {
     try { const v = JSON.parse(localStorage.getItem('habitpulse.desktop.selectedGroups') ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
   });
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>(() => {
+    try { return (localStorage.getItem('habitpulse.desktop.statusFilter') as 'all' | 'active' | 'done') ?? 'all'; } catch { return 'all'; }
+  });
   const [ctxMenu, setCtxMenu] = useState<{ taskId: string; x: number; y: number } | null>(null);
   const [groupMenu, setGroupMenu] = useState<{ group: string; x: number; y: number } | null>(null);
   const [renameModal, setRenameModal] = useState<{ group: string; name: string } | null>(null);
@@ -319,7 +321,8 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         </section>
       )}
 
-      {filtered.length === 0 && (
+      {loading && <p className="text-sm text-slate-500">正在载入...</p>}
+      {!loading && filtered.length === 0 && (
         <p className="text-sm text-slate-500">没有符合条件的任务</p>
       )}
 
