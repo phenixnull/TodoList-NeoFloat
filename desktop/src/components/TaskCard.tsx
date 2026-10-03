@@ -8,6 +8,7 @@ import {
 import type { Task } from '../../../app/src/domain/types';
 import { extractImageFiles } from '../hooks/useImageCapture';
 import { useStore } from '../data/store';
+import TaskIcon from './TaskIcon';
 
 type Props = {
   task: Task;
@@ -66,11 +67,10 @@ export default function TaskCard({
           width: compact ? 32 : 42,
           height: compact ? 32 : 42,
           backgroundColor: `${task.color}22`,
-          color: task.color,
-          fontSize: compact ? 14 : 18,
+          overflow: 'hidden',
         }}
       >
-        {task.name.slice(0, 1)}
+        <TaskIcon task={task} color={task.color} size={compact ? 28 : 38} />
       </div>
 
       <div className="min-w-0 flex-1">

@@ -22,6 +22,7 @@ import {
   useWindowImageDrop,
 } from '../hooks/useImageCapture';
 import { useStore } from '../data/store';
+import TaskIcon from './TaskIcon';
 
 export type RecordTarget = { taskId: string; date: string };
 
@@ -233,9 +234,9 @@ export default function DayRecordModal({ target, initialFiles, onClose }: Props)
               <div className="flex items-center gap-3">
                 <div
                   className="flex h-9 w-9 items-center justify-center rounded-xl font-black"
-                  style={{ backgroundColor: `${task.color}22`, color: task.color }}
+                  style={{ backgroundColor: `${task.color}22`, overflow: 'hidden' }}
                 >
-                  {task.name.slice(0, 1)}
+                  <TaskIcon task={task} color={task.color} size={34} />
                 </div>
                 <div>
                   <h2 className="text-base font-extrabold text-slate-100">{task.name}</h2>

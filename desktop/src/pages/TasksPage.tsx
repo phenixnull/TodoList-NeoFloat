@@ -13,6 +13,7 @@ import {
 } from '../../../app/src/domain/timeTracking';
 import type { Task } from '../../../app/src/domain/types';
 import { useStore } from '../data/store';
+import TaskIcon from '../components/TaskIcon';
 
 type Props = {
   onEditTask: (task: Task | null) => void;
@@ -63,9 +64,9 @@ export default function TasksPage({ onEditTask }: Props) {
             <div className="flex min-w-0 items-center gap-3">
               <div
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-black"
-                style={{ backgroundColor: `${task.color}22`, color: task.color }}
+                style={{ backgroundColor: `${task.color}22`, overflow: 'hidden' }}
               >
-                {task.name.slice(0, 1)}
+                <TaskIcon task={task} color={task.color} size={30} />
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-slate-200">{task.name}</p>
