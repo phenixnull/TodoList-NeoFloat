@@ -49,6 +49,7 @@ function useHabitStoreInstance() {
   // Push-pending keys: optimistic local edits the server has not confirmed yet.
   const pendingTasksRef = useRef<Set<string>>(new Set());
   const pendingCheckInsRef = useRef<Set<string>>(new Set());
+  const pendingCheckInDeletionsRef = useRef<Set<string>>(new Set());
   const pullTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flushChainRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -74,6 +75,7 @@ function useHabitStoreInstance() {
     const remoteTasksById = new Map(snapshot.tasks.map((t) => [t.id, t]));
     const pendingTasks = pendingTasksRef.current;
     const pendingCheckIns = pendingCheckInsRef.current;
+    const pendingDeletions = pendingCheckInDeletionsRef.current;
 
     // Tasks: LWW for known ids; local-only pending kept; local tasks missing
     // remotely and not pending were deleted on another device -> drop.
@@ -105,6 +107,7 @@ function useHabitStoreInstance() {
     const seen = new Set<string>();
     for (const remote of snapshot.checkIns) {
       const k = keyOf(remote.taskId, remote.date);
+      if (pendingDeletions.has(k)) continue;
       if (seen.has(k)) continue;
       seen.add(k);
       checkIns.push(remote);
@@ -218,6 +221,7 @@ function useHabitStoreInstance() {
     if (!base) return;
     const k = keyOf(taskId, date);
     if (adding) pendingCheckInsRef.current.add(k);
+    else pendingCheckInDeletionsRef.current.add(k);
     try {
       if (adding) {
         await apiRequest(base, '/api/checkins/toggle', {
@@ -233,6 +237,7 @@ function useHabitStoreInstance() {
       schedulePull();
     } catch (error) {
       if (adding) pendingCheckInsRef.current.delete(k);
+      else pendingCheckInDeletionsRef.current.delete(k);
       setSyncState({ status: 'error', message: error instanceof Error ? error.message : '打卡同步失败' });
       throw error;
     }

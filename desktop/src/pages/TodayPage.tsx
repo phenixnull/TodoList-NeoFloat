@@ -235,7 +235,7 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
               今日进度 · {today}
             </p>
             <div className="mt-3 flex items-end gap-2">
-              <span className="text-6xl font-black leading-none text-slate-50">{filteredCompletedCount}</span>
+              <span className="text-6xl font-black leading-none text-slate-50">{Math.min(filteredCompletedCount, filtered.length)}</span>
               <span className="mb-1 text-2xl font-bold text-slate-500">/ {filtered.length}</span>
             </div>
             <p className="mt-3 text-sm font-semibold text-slate-400">

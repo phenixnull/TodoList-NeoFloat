@@ -39,10 +39,20 @@ export default function HomeScreen() {
   } = useHabitStore();
   const { settings } = useHabitStore();
   const theme = useTheme(settings.appearance);
-  const [groupFilter, setGroupFilter] = useState<string | null>(settings.selectedGroup ?? null);
+  const [groupFilter, setGroupFilter] = useState<string[]>(() => {
+    const s = settings.selectedGroup;
+    return s ? [s] : [];
+  });
   const selectGroup = useCallback((g: string | null) => {
-    setGroupFilter(g);
-    updateSettings({ selectedGroup: g });
+    setGroupFilter((prev) => {
+      if (g === null) {
+        updateSettings({ selectedGroup: null });
+        return [];
+      }
+      const next = prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g];
+      updateSettings({ selectedGroup: next.length === 1 ? next[0] : null });
+      return next;
+    });
   }, [updateSettings]);
   const customGroups = settings.customGroups ?? [];
   const todayCheckIns = useMemo(
@@ -73,7 +83,7 @@ export default function HomeScreen() {
     if (groupFilter === null) {
       pool = allTasksFlat;
     } else {
-      pool = allTasksFlat.filter((t) => t.customGroups?.includes(groupFilter));
+      pool = allTasksFlat.filter((t) => groupFilter.some((g) => t.customGroups?.includes(g)));
     }
 
     if (statusFilter === 'active') {
@@ -251,7 +261,7 @@ export default function HomeScreen() {
       <Animated.View entering={FadeInDown.springify().damping(17)}>
         <DailyOverviewCard
           today={today}
-          completedCount={completedIds.size}
+          completedCount={Math.min(completedIds.size, activeTasks.length)}
           totalCount={activeTasks.length}
         />
       </Animated.View>
@@ -292,19 +302,19 @@ export default function HomeScreen() {
             {customGroups.map((group) => (
               <PressableScale
                 key={group}
-                style={[styles.filterChip, groupFilter === group && styles.filterChipActive, { borderColor: theme.surfaceBorder }]}
+                style={[styles.filterChip, groupFilter.includes(group) && styles.filterChipActive, { borderColor: theme.surfaceBorder }]}
                 onPress={() => selectGroup(group)}
                 onLongPress={() => {
                   Alert.alert('删除分组', `确定删除"${group}"？任务不会删除。`, [
                     { text: '取消', style: 'cancel' },
                     { text: '删除', style: 'destructive', onPress: () => {
                       updateSettings({ customGroups: customGroups.filter((g) => g !== group) });
-                      if (groupFilter === group) selectGroup(null);
+                      if (groupFilter.includes(group)) selectGroup(null);
                     }},
                   ]);
                 }}
               >
-                <Text style={[styles.filterChipText, groupFilter === group && { color: theme.accentText }]}>{group}</Text>
+                <Text style={[styles.filterChipText, groupFilter.includes(group) && { color: theme.accentText }]}>{group}</Text>
               </PressableScale>
             ))}
             <PressableScale
