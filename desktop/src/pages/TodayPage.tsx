@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { AlarmClock, Plus } from 'lucide-react';
+import { AlarmClock, ArrowUpDown, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ProgressRing from '../components/ProgressRing';
 import TaskCard from '../components/TaskCard';
@@ -58,6 +58,28 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   }, [allFlat, groupFilter, statusFilter, completedIds]);
   const filteredUnfinished = useMemo(() => filtered.filter((t) => !completedIds.has(t.id)), [filtered, completedIds]);
   const filteredFinished = useMemo(() => filtered.filter((t) => completedIds.has(t.id)), [filtered, completedIds]);
+  const [sortDesc, setSortDesc] = useState(true);
+  const checkInTimeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of checkIns) {
+      if (!map.has(c.taskId) || c.createdAt! > map.get(c.taskId)!) map.set(c.taskId, c.createdAt!);
+    }
+    return map;
+  }, [checkIns]);
+  const sortedUnfinished = useMemo(() => {
+    return [...filteredUnfinished].sort((a, b) => {
+      const ta = checkInTimeMap.get(a.id) ?? '';
+      const tb = checkInTimeMap.get(b.id) ?? '';
+      return sortDesc ? tb.localeCompare(ta) : ta.localeCompare(tb);
+    });
+  }, [filteredUnfinished, checkInTimeMap, sortDesc]);
+  const sortedFinished = useMemo(() => {
+    return [...filteredFinished].sort((a, b) => {
+      const ta = checkInTimeMap.get(a.id) ?? '';
+      const tb = checkInTimeMap.get(b.id) ?? '';
+      return sortDesc ? tb.localeCompare(ta) : ta.localeCompare(tb);
+    });
+  }, [filteredFinished, checkInTimeMap, sortDesc]);
   const filteredCompletedCount = useMemo(() => filtered.filter((t) => completedIds.has(t.id)).length, [filtered, completedIds]);
   const filteredRatio = filtered.length ? filteredCompletedCount / filtered.length : 0;
 
@@ -249,35 +271,42 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         </button>
       </div>
 
-      {/* Status sub-filter */}
       <div className="flex flex-wrap items-center gap-1.5">
         <FilterChip small active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>全部</FilterChip>
         <FilterChip small active={statusFilter === 'active'} onClick={() => setStatusFilter('active')}>进行中</FilterChip>
         <FilterChip small active={statusFilter === 'done'} onClick={() => setStatusFilter('done')}>已完成</FilterChip>
+        <button
+          onClick={() => setSortDesc((prev) => !prev)}
+          className="ml-1 flex h-7 items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2.5 text-[11px] font-bold text-slate-400 transition-all hover:text-slate-200"
+          title={sortDesc ? '按打卡时间倒序' : '按打卡时间正序'}
+        >
+          <ArrowUpDown size={11} />
+          {sortDesc ? '最新在上' : '最早在上'}
+        </button>
       </div>
 
       {/* Unfinished */}
-      {statusFilter !== 'done' && filteredUnfinished.length > 0 && (
+      {statusFilter !== 'done' && sortedUnfinished.length > 0 && (
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-extrabold text-slate-200">
-              进行中 <span className="ml-1 text-slate-500">{filteredUnfinished.length}</span>
+              进行中 <span className="ml-1 text-slate-500">{sortedUnfinished.length}</span>
             </h3>
           <button onClick={() => onEditTask(null)} className="btn-ghost px-3 py-1.5 text-xs">
             <Plus size={13} /> 新建任务
           </button>
         </div>
-          <div className="flex flex-col gap-2.5">{filteredUnfinished.map(renderCard)}</div>
+          <div className="flex flex-col gap-2.5">{sortedUnfinished.map(renderCard)}</div>
         </section>
       )}
 
       {/* Finished */}
-      {statusFilter !== 'active' && filteredFinished.length > 0 && (
+      {statusFilter !== 'active' && sortedFinished.length > 0 && (
         <section>
           <h3 className="mb-3 text-sm font-extrabold text-slate-200">
-            已完成 <span className="ml-1 text-slate-500">{filteredFinished.length}</span>
+            已完成 <span className="ml-1 text-slate-500">{sortedFinished.length}</span>
           </h3>
-          <div className="flex flex-col gap-2.5">{filteredFinished.map(renderCard)}</div>
+          <div className="flex flex-col gap-2.5">{sortedFinished.map(renderCard)}</div>
         </section>
       )}
 
