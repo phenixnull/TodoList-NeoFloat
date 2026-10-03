@@ -2,6 +2,7 @@ import { AlarmClock } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { StoreProvider } from './data/store';
 import DayRecordModal, { type RecordTarget } from './components/DayRecordModal';
+import FeedbackModal from './components/FeedbackModal';
 import ProgressRing from './components/ProgressRing';
 import Sidebar from './components/Sidebar';
 import TaskCard from './components/TaskCard';
@@ -48,6 +49,7 @@ function Shell() {
   const [editorTask, setEditorTask] = useState<Task | null | undefined>(undefined);
   const [recordTarget, setRecordTarget] = useState<RecordTarget | null>(null);
   const [recordFiles, setRecordFiles] = useState<File[]>([]);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   useEffect(() => {
     const api = window.hpDesktop;
@@ -93,6 +95,7 @@ function Shell() {
   const modals = (
     <>
       <TaskEditorModal task={editorTask} onClose={() => setEditorTask(undefined)} />
+      <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
       <DayRecordModal
         target={recordTarget}
         initialFiles={recordFiles}
@@ -147,7 +150,7 @@ function Shell() {
     <div className="flex h-full flex-col">
       <TitleBar title={PAGE_TITLES[page]} mode={mode} />
       <div className="flex min-h-0 flex-1">
-        <Sidebar current={page} online={store.online} onNavigate={setPage} />
+        <Sidebar current={page} online={store.online} onNavigate={setPage} onOpenFeedback={() => setFeedbackOpen(true)} />
         <main className="flex-1 overflow-y-auto px-7 py-6">
           {page === 'today' && <TodayPage onEditTask={openEditor} onOpenRecord={openRecord} />}
           {page === 'tasks' && <TasksPage onEditTask={openEditor} />}

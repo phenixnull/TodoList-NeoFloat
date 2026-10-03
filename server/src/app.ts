@@ -80,6 +80,22 @@ const dayRecordSchema = z.object({
   updatedAt: isoDateTime.optional(),
 });
 
+const feedbackImageSchema = z.object({
+  fileName: z.string().min(1).max(200),
+  width: z.number().int().min(0),
+  height: z.number().int().min(0),
+  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  base64: z.string().base64().max(24_000_000),
+});
+
+const createFeedbackSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  description: z.string().max(10_000).default(''),
+  deviceInfo: z.string().max(2_000).default(''),
+  appVersion: z.string().max(50).default(''),
+  images: z.array(feedbackImageSchema).max(6).default([]),
+});
+
 export type AppConfig = {
   database?: string;
   imageRoot?: string;
@@ -254,6 +270,103 @@ export function buildApp({
   }
 
   app.get('/api/health', async () => ({ ok: true }));
+
+  app.post('/api/feedback', async (request, reply) => {
+    const parsed = createFeedbackSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid feedback', details: parsed.error.flatten() });
+    }
+
+    const id = randomUUID();
+    const now = new Date().toISOString();
+
+    db.prepare(`
+      INSERT INTO feedback (id, title, description, device_info, app_version, status, created_at)
+      VALUES (@id, @title, @description, @deviceInfo, @appVersion, 'open', @createdAt)
+    `).run({
+      id,
+      title: parsed.data.title,
+      description: parsed.data.description,
+      deviceInfo: parsed.data.deviceInfo,
+      appVersion: parsed.data.appVersion,
+      createdAt: now,
+    });
+
+    for (const [index, image] of parsed.data.images.entries()) {
+      const storageName = `${randomUUID()}.${extensionForMimeType(image.mimeType)}`;
+
+      fs.writeFileSync(
+        path.join(resolvedImageRoot, storageName),
+        Buffer.from(image.base64, 'base64'),
+      );
+
+      db.prepare(`
+        INSERT INTO feedback_images (feedback_id, file_name, width, height, mime_type, storage_name, sort_order)
+        VALUES (@feedbackId, @fileName, @width, @height, @mimeType, @storageName, @sortOrder)
+      `).run({
+        feedbackId: id,
+        fileName: image.fileName,
+        width: image.width,
+        height: image.height,
+        mimeType: image.mimeType,
+        storageName,
+        sortOrder: index,
+      });
+    }
+
+    broadcast('feedback.created', { id });
+    return reply.code(201).send({ ok: true, id });
+  });
+
+  app.get('/api/feedback', async () => {
+    const rows = db.prepare('SELECT * FROM feedback ORDER BY created_at DESC').all() as Array<any>;
+
+    return rows.map((row) => {
+      const images = db.prepare(
+        'SELECT file_name, width, height, mime_type FROM feedback_images WHERE feedback_id = ? ORDER BY sort_order',
+      ).all(row.id) as Array<any>;
+
+      return {
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        deviceInfo: row.device_info,
+        appVersion: row.app_version,
+        status: row.status,
+        createdAt: row.created_at,
+        images: images.map((img) => ({
+          fileName: img.file_name,
+          width: img.width,
+          height: img.height,
+          mimeType: img.mime_type,
+          url: `/api/feedback/${row.id}/images/${images.indexOf(img)}`,
+        })),
+      };
+    });
+  });
+
+  app.get('/api/feedback/:id/images/:index', async (request, reply) => {
+    const { id, index } = request.params as { id: string; index: string };
+    const row = db.prepare(
+      'SELECT storage_name, mime_type FROM feedback_images WHERE feedback_id = ? ORDER BY sort_order LIMIT 1 OFFSET ?',
+    ).get(id, Number(index)) as any;
+
+    if (!row) {
+      return reply.code(404).send({ error: 'Feedback image not found' });
+    }
+
+    const filePath = path.join(resolvedImageRoot, path.basename(row.storage_name));
+
+    if (!fs.existsSync(filePath)) {
+      return reply.code(404).send({ error: 'Feedback image file not found' });
+    }
+
+    return reply
+      .header('Content-Type', row.mime_type)
+      .header('Cache-Control', 'public, max-age=86400')
+      .send(fs.readFileSync(filePath));
+  });
 
   app.get('/api/tasks', async () => {
     const rows = db.prepare('SELECT * FROM tasks WHERE deleted_at IS NULL ORDER BY created_at').all() as Array<any>;

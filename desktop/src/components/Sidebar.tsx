@@ -4,6 +4,7 @@ import {
   History,
   ListTodo,
   Settings,
+  Bug,
 } from 'lucide-react';
 import type { PageKey } from '../App';
 
@@ -19,9 +20,10 @@ type Props = {
   current: PageKey;
   online: boolean;
   onNavigate: (page: PageKey) => void;
+  onOpenFeedback: () => void;
 };
 
-export default function Sidebar({ current, online, onNavigate }: Props) {
+export default function Sidebar({ current, online, onNavigate, onOpenFeedback }: Props) {
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-white/[0.07] bg-white/[0.02] px-3 py-3">
       <nav className="flex flex-col gap-1">
@@ -48,6 +50,14 @@ export default function Sidebar({ current, online, onNavigate }: Props) {
           );
         })}
       </nav>
+
+      <button
+        onClick={onOpenFeedback}
+        className="mt-4 flex w-full items-center gap-3 rounded-xl border border-amber-400/15 bg-amber-400/[0.04] px-3.5 py-2.5 text-sm font-semibold text-amber-300/70 transition-all hover:border-amber-400/30 hover:bg-amber-400/[0.08] hover:text-amber-300"
+      >
+        <Bug size={18} strokeWidth={2} />
+        问题反馈
+      </button>
 
       <div className="mt-auto flex items-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.03] px-3 py-2.5">
         <span

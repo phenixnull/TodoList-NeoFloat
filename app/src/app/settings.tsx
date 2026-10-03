@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Platform, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { ThemeMode, useTheme } from '../theme/theme';
@@ -26,6 +26,7 @@ type UpdateUiState =
   | { phase: 'error'; message: string };
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const { settings, syncState, updateSettings, syncNow } = useHabitStore();
   const theme = useTheme(settings.appearance);
   const [updateState, setUpdateState] = useState<UpdateUiState>({ phase: 'idle' });
@@ -260,6 +261,14 @@ export default function SettingsScreen() {
           Android 模拟器访问电脑服务端使用 http://10.0.2.2:8787。真机请使用电脑局域网 IP，并保证服务端监听 0.0.0.0。
         </Text>
       </GlassCard>
+
+      <PressableScale
+        style={[styles.feedbackButton, { borderColor: 'rgba(251,191,36,0.2)', backgroundColor: 'rgba(251,191,36,0.05)' }]}
+        onPress={() => router.push('/feedback' as never)}
+      >
+        <MaterialCommunityIcons name="bug-outline" size={20} color="#fbbf24" />
+        <Text style={[styles.feedbackText, { color: '#fbbf24' }]}>问题反馈</Text>
+      </PressableScale>
     </ScreenShell>
   );
 }
@@ -345,5 +354,18 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 12,
     textAlign: 'center',
+  },
+  feedbackButton: {
+    borderWidth: 1,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+  },
+  feedbackText: {
+    fontSize: 15,
+    fontWeight: '800',
   },
 });

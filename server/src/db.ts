@@ -59,6 +59,30 @@ export function createDatabase({ database = 'habitpulse.db' }: DatabaseOptions =
       PRIMARY KEY(task_id, date),
       FOREIGN KEY(task_id) REFERENCES tasks(id)
     );
+
+    CREATE TABLE IF NOT EXISTS feedback (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      device_info TEXT NOT NULL DEFAULT '',
+      app_version TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS feedback_images (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      feedback_id TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      width INTEGER NOT NULL DEFAULT 0,
+      height INTEGER NOT NULL DEFAULT 0,
+      mime_type TEXT NOT NULL DEFAULT 'image/jpeg',
+      storage_name TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY(feedback_id) REFERENCES feedback(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_feedback_images_feedback ON feedback_images(feedback_id);
   `);
 
   const taskColumns = db.prepare('PRAGMA table_info(tasks)').all() as Array<{ name: string }>;
