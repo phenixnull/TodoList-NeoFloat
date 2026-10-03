@@ -10,7 +10,7 @@ import GlassCard from './GlassCard';
 import PressableScale from './PressableScale';
 import { taskColors, taskIcons } from '../domain/taskAppearance';
 import { Task } from '../domain/types';
-import { formatDuration, parseDurationInput } from '../domain/timeTracking';
+import { calculateTaskDurationMs, formatDuration, isTimerRunning, parseDurationInput } from '../domain/timeTracking';
 import { useHabitStore } from '../store/useHabitStore';
 import { useTheme } from '../theme/theme';
 
@@ -23,7 +23,14 @@ type Props = {
   defaultIconImage?: string | null;
   footer?: ReactNode;
   navigateBackOnSubmit?: boolean;
-  onSubmit: (input: Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs'>) => void;
+  onSubmit: (input: {
+    name: string;
+    description: string;
+    icon: string;
+    color: string;
+    iconImage: string | null;
+    totalDurationMs: number;
+  }) => void;
 };
 
 export default function TaskForm({
@@ -50,7 +57,7 @@ export default function TaskForm({
   const [error, setError] = useState('');
   const [processingImage, setProcessingImage] = useState(false);
   const [durationInput, setDurationInput] = useState(
-    initialTask ? formatDuration(initialTask.manualDurationMs) : '',
+    initialTask ? formatDuration(calculateTaskDurationMs(initialTask)) : '',
   );
 
   const save = () => {
@@ -59,17 +66,17 @@ export default function TaskForm({
       return;
     }
 
-    const manualDurationMs = durationInput.trim()
+    const totalDurationMs = durationInput.trim()
       ? parseDurationInput(durationInput)
       : 0;
 
-    if (manualDurationMs === null) {
+    if (totalDurationMs === null) {
       setError('耗时格式不正确，可用 30、1.5、20m、1h 30m 或 01:02:03');
       return;
     }
 
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onSubmit({ name, description, icon, color, iconImage, manualDurationMs });
+    onSubmit({ name, description, icon, color, iconImage, totalDurationMs });
     if (navigateBackOnSubmit) {
       router.back();
     }
@@ -164,7 +171,7 @@ export default function TaskForm({
           style={[styles.input, styles.textArea, { borderColor: theme.inputBorder, backgroundColor: theme.inputBackground, color: theme.text }]}
         />
 
-        <Text style={[styles.label, { color: theme.mutedText }]}>手动耗时</Text>
+        <Text style={[styles.label, { color: theme.mutedText }]}>总耗时</Text>
         <View style={styles.durationRow}>
           <TextInput
             value={durationInput}
@@ -179,7 +186,7 @@ export default function TaskForm({
               borderColor: theme.surfaceBorder,
               backgroundColor: theme.inputBackground,
             }]}
-            accessibilityLabel="重置手动耗时为00:00:00"
+            accessibilityLabel="重置总耗时为00:00:00"
             onPress={() => {
               setDurationInput('00:00:00');
               setError('');
@@ -193,6 +200,12 @@ export default function TaskForm({
             />
           </PressableScale>
         </View>
+
+        {initialTask && isTimerRunning(initialTask) ? (
+          <Text style={styles.durationHint}>
+            计时中：保存时会按当前时间先锁定这段耗时。
+          </Text>
+        ) : null}
 
         <Text style={[styles.label, { color: theme.mutedText }]}>图标</Text>
         <View style={styles.customIconRow}>
@@ -325,6 +338,11 @@ const styles = StyleSheet.create({
   },
   durationInput: {
     flex: 1,
+  },
+  durationHint: {
+    marginTop: 7,
+    color: '#94a3b8',
+    fontSize: 12,
   },
   durationReset: {
     width: 48,

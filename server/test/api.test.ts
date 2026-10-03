@@ -64,6 +64,64 @@ describe('HabitPulse API', () => {
     expect(tasks).toHaveLength(0);
   });
 
+  it('deletes timer segments with tombstones and prevents stale sync from reviving them', async () => {
+    const app = buildApp({ database: ':memory:' });
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      payload: {
+        name: 'Timer sync',
+        icon: 'timer-outline',
+        color: '#22d3ee',
+        description: '',
+        timerSegments: [
+          { id: 'old', startAt: '2026-10-02T08:00:00.000Z', stopAt: '2026-10-02T08:30:00.000Z' },
+          { id: 'current', startAt: '2026-10-02T09:00:00.000Z', stopAt: '2026-10-02T10:00:00.000Z' },
+        ],
+        removedSegmentIds: [],
+      },
+    });
+    const taskId = created.json().id;
+
+    const deleted = await app.inject({
+      method: 'PATCH',
+      url: `/api/tasks/${taskId}`,
+      payload: {
+        timerSegments: [
+          { id: 'current', startAt: '2026-10-02T09:00:00.000Z', stopAt: '2026-10-02T10:00:00.000Z' },
+        ],
+        removedSegmentIds: ['old'],
+      },
+    });
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json().timerSegments.map((segment: any) => segment.id)).toEqual(['current']);
+    expect(deleted.json().removedSegmentIds).toEqual(['old']);
+
+    // A stale client may still send the full pre-deletion list after refresh.
+    const staleSync = await app.inject({
+      method: 'PATCH',
+      url: `/api/tasks/${taskId}`,
+      payload: {
+        timerSegments: [
+          { id: 'old', startAt: '2026-10-02T08:00:00.000Z', stopAt: '2026-10-02T08:30:00.000Z' },
+          { id: 'current', startAt: '2026-10-02T09:00:00.000Z', stopAt: '2026-10-02T10:00:00.000Z' },
+        ],
+      },
+    });
+    expect(staleSync.json().timerSegments.map((segment: any) => segment.id)).toEqual(['current']);
+
+    const editCurrent = await app.inject({
+      method: 'PATCH',
+      url: `/api/tasks/${taskId}`,
+      payload: {
+        timerSegments: [
+          { id: 'current', startAt: '2026-10-02T09:00:00.000Z', stopAt: '2026-10-02T10:30:00.000Z' },
+        ],
+      },
+    });
+    expect(editCurrent.json().timerSegments[0].stopAt).toBe('2026-10-02T10:30:00.000Z');
+  });
+
   it('toggles one check-in per task per day', async () => {
     const app = buildApp({ database: ':memory:' });
     const created = await app.inject({

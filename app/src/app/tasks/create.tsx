@@ -16,7 +16,10 @@ export default function CreateTaskScreen() {
         submitLabel="保存任务"
         defaultIcon={suggestedAppearance.icon}
         defaultColor={suggestedAppearance.color}
-        onSubmit={createTask}
+        onSubmit={({ totalDurationMs, ...input }) => createTask({
+          ...input,
+          manualDurationMs: totalDurationMs,
+        })}
       />
     </ScreenShell>
   );

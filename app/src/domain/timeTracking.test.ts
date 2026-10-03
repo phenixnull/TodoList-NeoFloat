@@ -10,6 +10,7 @@ import {
   parseDurationInput,
   replaceTimeSegment,
   resetTaskDuration,
+  setTaskTotalDuration,
   toggleTimer,
 } from './timeTracking';
 import { Task } from './types';
@@ -138,6 +139,66 @@ describe('time tracking', () => {
     });
     expect(reset.timerSegments).toHaveLength(0);
     expect(reset.manualDurationMs).toBe(0);
+    expect(reset.removedSegmentIds).toEqual(['before', 'only-this-day']);
+  });
+
+  it('sets total duration without changing segments when the target is large enough', () => {
+    const source = task({
+      timerSegments: [
+        { id: 'a', startAt: '2026-10-02T08:00:00Z', stopAt: '2026-10-02T08:30:00Z' },
+        { id: 'b', startAt: '2026-10-02T09:00:00Z', stopAt: '2026-10-02T10:00:00Z' },
+      ],
+    });
+
+    const updated = setTaskTotalDuration(source, 120 * 60_000, new Date('2026-10-02T12:00:00Z'));
+    expect(updated.timerSegments).toEqual(source.timerSegments);
+    expect(updated.removedSegmentIds).toEqual([]);
+    expect(updated.manualDurationMs).toBe(30 * 60_000);
+  });
+
+  it('trims the newest segment first when the target is smaller than segment time', () => {
+    const source = task({
+      timerSegments: [
+        { id: 'a', startAt: '2026-10-02T08:00:00Z', stopAt: '2026-10-02T08:30:00Z' },
+        { id: 'b', startAt: '2026-10-02T09:00:00Z', stopAt: '2026-10-02T10:00:00Z' },
+      ],
+    });
+
+    const trimmed = setTaskTotalDuration(source, 75 * 60_000, new Date('2026-10-02T12:00:00Z'));
+    expect(trimmed.timerSegments).toEqual([
+      source.timerSegments[0],
+      { id: 'b', startAt: '2026-10-02T09:00:00Z', stopAt: '2026-10-02T09:45:00.000Z' },
+    ]);
+    expect(trimmed.removedSegmentIds).toEqual([]);
+    expect(trimmed.manualDurationMs).toBe(0);
+
+    const partiallyDeleted = setTaskTotalDuration(source, 20 * 60_000, new Date('2026-10-02T12:00:00Z'));
+    expect(partiallyDeleted.timerSegments).toEqual([
+      { id: 'a', startAt: '2026-10-02T08:00:00Z', stopAt: '2026-10-02T08:20:00.000Z' },
+    ]);
+    expect(partiallyDeleted.removedSegmentIds).toEqual(['b']);
+
+    const cleared = setTaskTotalDuration(source, 0, new Date('2026-10-02T12:00:00Z'));
+    expect(cleared.timerSegments).toEqual([]);
+    expect(cleared.removedSegmentIds).toEqual(['a', 'b']);
+    expect(cleared.manualDurationMs).toBe(0);
+  });
+
+  it('locks a live timer before applying a total-duration target', () => {
+    const source = task({
+      timerSegments: [
+        { id: 'closed', startAt: '2026-10-02T08:00:00Z', stopAt: '2026-10-02T08:30:00Z' },
+        { id: 'live', startAt: '2026-10-02T09:00:00Z', stopAt: null },
+      ],
+    });
+
+    const updated = setTaskTotalDuration(source, 70 * 60_000, new Date('2026-10-02T09:10:00Z'));
+    expect(isTimerRunning(updated)).toBe(false);
+    expect(updated.timerSegments).toEqual([
+      source.timerSegments[0],
+      { id: 'live', startAt: '2026-10-02T09:00:00Z', stopAt: '2026-10-02T09:10:00.000Z' },
+    ]);
+    expect(updated.manualDurationMs).toBe(30 * 60_000);
   });
 
   it('formats duration as HH:mm:ss', () => {

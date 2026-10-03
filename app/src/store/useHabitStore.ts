@@ -200,6 +200,7 @@ function useHabitStoreInstance() {
             description: task.description,
             sortOrder: task.sortOrder,
             timerSegments: task.timerSegments,
+            removedSegmentIds: task.removedSegmentIds ?? [],
             manualDurationMs: task.manualDurationMs,
           }),
         });
@@ -298,7 +299,8 @@ function useHabitStoreInstance() {
           body: JSON.stringify({
             name: task.name, icon: task.icon, iconImage: task.iconImage ?? null,
             color: task.color, description: task.description, sortOrder: task.sortOrder,
-            timerSegments: task.timerSegments, manualDurationMs: task.manualDurationMs,
+            timerSegments: task.timerSegments, removedSegmentIds: task.removedSegmentIds ?? [],
+            manualDurationMs: task.manualDurationMs,
           }),
         });
       }
@@ -387,7 +389,7 @@ function useHabitStoreInstance() {
   }, [commit, schedulePull]);
 
   // ---- mutations (optimistic local + direct push) ----
-  const createTask = useCallback((input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage'>>) => {
+  const createTask = useCallback((input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs'>>) => {
     const now = new Date().toISOString();
     const suggested = getNextTaskAppearance(dataRef.current.tasks);
     const nextSortOrder = dataRef.current.tasks
@@ -402,7 +404,8 @@ function useHabitStoreInstance() {
       description: input.description?.trim() ?? '',
       sortOrder: nextSortOrder,
       timerSegments: [],
-      manualDurationMs: 0,
+      removedSegmentIds: [],
+      manualDurationMs: input.manualDurationMs ?? 0,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -412,7 +415,7 @@ function useHabitStoreInstance() {
     void pushTask(task);
   }, [commit, pushTask]);
 
-  const updateTask = useCallback((id: string, input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs' | 'timerSegments'>>) => {
+  const updateTask = useCallback((id: string, input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs' | 'timerSegments' | 'removedSegmentIds'>>) => {
     const tasks = dataRef.current.tasks.map((task) => (task.id === id
       ? { ...task, ...input, updatedAt: new Date().toISOString() }
       : task));

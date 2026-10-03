@@ -176,12 +176,17 @@ export default function DayRecordModal({ target, initialFiles, onClose }: Props)
     if (!task) return;
     setSaving(true);
     try {
-      // 1. Replace time segments for this date.
-      const outside = clearTimeSegmentsForDate(task, date).timerSegments;
+      // 1. Replace time segments for this date. The tombstone list is required
+      // because the server deliberately unions segments across devices.
+      const cleared = clearTimeSegmentsForDate(task, date);
+      const outside = cleared.timerSegments;
       const validSegments = segments.filter(
         (segment) => segment.stopAt && new Date(segment.stopAt) > new Date(segment.startAt),
       );
-      await updateTask(task.id, { timerSegments: [...outside, ...validSegments] });
+      await updateTask(task.id, {
+        timerSegments: [...outside, ...validSegments],
+        removedSegmentIds: cleared.removedSegmentIds,
+      });
 
       // 2. Save note + images.
       const kept = images

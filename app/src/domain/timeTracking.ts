@@ -10,6 +10,12 @@ function createSegmentId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function mergeIdLists(current: string[] | undefined, removed: Iterable<string>): string[] {
+  return [...new Set([...(current ?? []), ...removed])]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+}
+
 function parseDateKey(dateKey: string): Date | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
     return null;
@@ -165,17 +171,21 @@ export function clearTimeSegmentsForDate(
   }
 
   const nextSegments: TimeSegment[] = [];
+  const removedSegmentIds: string[] = [];
 
   for (const segment of task.timerSegments) {
     const start = new Date(segment.startAt).getTime();
     const stop = segment.stopAt ? new Date(segment.stopAt).getTime() : now.getTime();
 
     if (Number.isNaN(start) || Number.isNaN(stop) || start >= range.end || stop <= range.start) {
-      nextSegments.push(segment);
-      continue;
-    }
+        nextSegments.push(segment);
+        continue;
+      }
 
-    if (start < range.start) {
+    const startsBeforeDate = start < range.start;
+    const stopsAfterDate = stop > range.end;
+
+    if (startsBeforeDate) {
       const beforeEnd = Math.min(stop, range.start);
       if (beforeEnd > start) {
         nextSegments.push({
@@ -186,7 +196,7 @@ export function clearTimeSegmentsForDate(
       }
     }
 
-    if (stop > range.end) {
+    if (stopsAfterDate) {
       const afterStart = Math.max(start, range.end);
       if (stop > afterStart) {
         nextSegments.push({
@@ -196,11 +206,39 @@ export function clearTimeSegmentsForDate(
         });
       }
     }
+
+    // A segment which only existed inside the cleared date is explicitly
+    // deleted. A segment crossing the boundary keeps its original id on the
+    // retained side, so it must not be tombstoned.
+    if (!startsBeforeDate && !stopsAfterDate) {
+      removedSegmentIds.push(segment.id);
+    } else if (startsBeforeDate && stopsAfterDate) {
+      // The original id survives as the before-date fragment.
+    } else if (!startsBeforeDate && stopsAfterDate) {
+      removedSegmentIds.push(segment.id);
+    }
   }
 
   return {
     ...task,
     timerSegments: nextSegments,
+    removedSegmentIds: removedSegmentIds.length
+      ? mergeIdLists(task.removedSegmentIds, removedSegmentIds)
+      : task.removedSegmentIds,
+    updatedAt: now.toISOString(),
+  };
+}
+
+export function removeTimeSegments(task: Task, segmentIds: string[], now: Date = new Date()): Task {
+  const removeSet = new Set(segmentIds.filter(Boolean));
+  if (removeSet.size === 0) {
+    return task;
+  }
+
+  return {
+    ...task,
+    timerSegments: task.timerSegments.filter((segment) => !removeSet.has(segment.id)),
+    removedSegmentIds: mergeIdLists(task.removedSegmentIds, removeSet),
     updatedAt: now.toISOString(),
   };
 }
@@ -209,7 +247,91 @@ export function resetTaskDuration(task: Task, now: Date = new Date()): Task {
   return {
     ...task,
     timerSegments: [],
+    removedSegmentIds: mergeIdLists(
+      task.removedSegmentIds,
+      task.timerSegments.map((segment) => segment.id),
+    ),
     manualDurationMs: 0,
+    updatedAt: now.toISOString(),
+  };
+}
+
+export function setTaskTotalDuration(
+  task: Task,
+  targetDurationMs: number,
+  now: Date = new Date(),
+): Task {
+  const target = Math.max(0, Math.round(targetDurationMs));
+  const nowMs = now.getTime();
+
+  // Freeze live timers before calculating, otherwise the target is stale by
+  // the time the task is displayed again.
+  const lockedSegments = task.timerSegments.map((segment) => (
+    segment.stopAt
+      ? segment
+      : { ...segment, stopAt: new Date(nowMs).toISOString() }
+  ));
+
+  const segmentsWithDuration = lockedSegments.map((segment) => {
+    const start = new Date(segment.startAt).getTime();
+    const stop = segment.stopAt ? new Date(segment.stopAt).getTime() : nowMs;
+    const duration = Number.isNaN(start) || Number.isNaN(stop)
+      ? 0
+      : Math.max(0, stop - start);
+    return { segment, start, stop, duration };
+  });
+
+  const decisions = segmentsWithDuration.map((item) => ({ ...item, keptMs: item.duration }));
+  const ordered = decisions
+    .filter((item) => item.duration > 0)
+    .sort((a, b) => (
+      b.stop - a.stop
+      || b.start - a.start
+      || a.segment.id.localeCompare(b.segment.id)
+    ));
+
+  const segmentMs = segmentsWithDuration.reduce((total, item) => total + item.duration, 0);
+  let remainingToRemove = Math.max(0, segmentMs - target);
+
+  for (const item of ordered) {
+    if (remainingToRemove <= 0) {
+      continue;
+    }
+
+    const removedMs = Math.min(item.duration, remainingToRemove);
+    remainingToRemove -= removedMs;
+    item.keptMs = item.duration - removedMs;
+  }
+
+  const keptSegments: TimeSegment[] = [];
+
+  for (const item of decisions) {
+    if (item.keptMs <= 0) continue;
+    keptSegments.push(
+      item.keptMs === item.duration
+        ? item.segment
+        : {
+          ...item.segment,
+          stopAt: new Date(item.start + item.keptMs).toISOString(),
+        },
+    );
+  }
+
+  const keptIds = new Set(keptSegments.map((segment) => segment.id));
+  const keptMs = keptSegments.reduce((total, segment) => {
+    const start = new Date(segment.startAt).getTime();
+    const stop = segment.stopAt ? new Date(segment.stopAt).getTime() : nowMs;
+    return total + Math.max(0, stop - start);
+  }, 0);
+  const removed = lockedSegments
+    .filter((segment) => !keptIds.has(segment.id))
+    .map((segment) => segment.id);
+
+  return {
+    ...task,
+    timerSegments: keptSegments,
+    removedSegmentIds: mergeIdLists(task.removedSegmentIds, removed),
+    manualDurationMs: Math.max(0, target - keptMs),
     updatedAt: now.toISOString(),
   };
 }

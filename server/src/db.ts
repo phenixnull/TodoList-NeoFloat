@@ -25,6 +25,7 @@ export function createDatabase({ database = 'habitpulse.db' }: DatabaseOptions =
       description TEXT NOT NULL DEFAULT '',
       sort_order INTEGER NOT NULL DEFAULT 0,
       timer_segments TEXT NOT NULL DEFAULT '[]',
+      removed_segment_ids TEXT NOT NULL DEFAULT '[]',
       manual_duration_ms INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -69,6 +70,7 @@ export function createDatabase({ database = 'habitpulse.db' }: DatabaseOptions =
   for (const migration of [
     { column: 'sort_order', sql: 'ALTER TABLE tasks ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0' },
     { column: 'timer_segments', sql: "ALTER TABLE tasks ADD COLUMN timer_segments TEXT NOT NULL DEFAULT '[]'" },
+    { column: 'removed_segment_ids', sql: "ALTER TABLE tasks ADD COLUMN removed_segment_ids TEXT NOT NULL DEFAULT '[]'" },
     { column: 'manual_duration_ms', sql: 'ALTER TABLE tasks ADD COLUMN manual_duration_ms INTEGER NOT NULL DEFAULT 0' },
   ]) {
     if (!taskColumns.some((column) => column.name === migration.column)) {

@@ -7,6 +7,8 @@ export type Task = {
   description: string;
   sortOrder: number;
   timerSegments: TimeSegment[];
+  /** IDs intentionally deleted on any device. Used to stop server-side union sync from resurrecting them. */
+  removedSegmentIds?: string[];
   manualDurationMs: number;
   createdAt: string;
   updatedAt: string;

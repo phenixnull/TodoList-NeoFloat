@@ -15,7 +15,10 @@ import TaskForm from '@/components/TaskForm';
 import TimeSegmentsEditor from '@/components/TimeSegmentsEditor';
 import { buildHeatmap } from '@/domain/heatmap';
 import { formatCheckInTime } from '@/domain/format';
-import { calculateTimeSegmentsDurationForDate } from '@/domain/timeTracking';
+import {
+  calculateTimeSegmentsDurationForDate,
+  setTaskTotalDuration,
+} from '@/domain/timeTracking';
 import { computeStats, toLocalDateKey } from '@/domain/streak';
 import { useTodayKey } from '@/hooks/useTodayKey';
 import { useHabitStore } from '@/store/useHabitStore';
@@ -264,7 +267,15 @@ export default function TaskDetailScreen() {
           submitLabel="保存任务"
           initialTask={task}
           navigateBackOnSubmit={false}
-          onSubmit={(input) => updateTask(task.id, input)}
+          onSubmit={({ totalDurationMs, ...input }) => {
+            const durationUpdate = setTaskTotalDuration(task, totalDurationMs);
+            updateTask(task.id, {
+              ...input,
+              timerSegments: durationUpdate.timerSegments,
+              removedSegmentIds: durationUpdate.removedSegmentIds,
+              manualDurationMs: durationUpdate.manualDurationMs,
+            });
+          }}
           footer={(
             <>
               <TimeSegmentsEditor

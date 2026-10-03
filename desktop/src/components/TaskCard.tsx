@@ -1,11 +1,10 @@
 import { motion } from 'framer-motion';
 import { Check, Pencil, Play, Square, StickyNote } from 'lucide-react';
 import {
-  calculateTimeSegmentsDurationForDate,
+  calculateTaskDurationMs,
   formatDuration,
   isTimerRunning,
 } from '../../../app/src/domain/timeTracking';
-import { getTodayKey } from '../../../app/src/domain/streak';
 import type { Task } from '../../../app/src/domain/types';
 import { extractImageFiles } from '../hooks/useImageCapture';
 import { useStore } from '../data/store';
@@ -30,8 +29,7 @@ export default function TaskCard({
   compact = false,
 }: Props) {
   const { now, toggleCheckIn, toggleTimer, busy } = useStore();
-  const todayDuration = calculateTimeSegmentsDurationForDate(task, date, now.getTime());
-  const total = todayDuration + (date === getTodayKey(now) ? task.manualDurationMs : 0);
+  const total = calculateTaskDurationMs(task, now.getTime());
   const running = isTimerRunning(task);
 
   return (

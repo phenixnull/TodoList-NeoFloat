@@ -21,6 +21,7 @@ function normalizeTask(task: Task, index: number): Task {
     ...task,
     sortOrder: Number.isFinite(task.sortOrder) ? task.sortOrder : index,
     timerSegments: Array.isArray(task.timerSegments) ? task.timerSegments : [],
+    removedSegmentIds: Array.isArray(task.removedSegmentIds) ? task.removedSegmentIds : [],
     manualDurationMs: Number.isFinite(task.manualDurationMs) ? task.manualDurationMs : 0,
   };
 }

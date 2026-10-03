@@ -14,6 +14,8 @@ const timeSegmentSchema = z.object({
   stopAt: isoDateTime.nullable().optional(),
 });
 
+const stringIdListSchema = z.array(z.string().min(1));
+
 const createTaskSchema = z.object({
   id: z.string().min(1).optional(),
   name: z.string().trim().min(1).max(80),
@@ -23,6 +25,7 @@ const createTaskSchema = z.object({
   description: z.string().max(500).default(''),
   sortOrder: z.number().int().min(0).default(0),
   timerSegments: z.array(timeSegmentSchema).default([]),
+  removedSegmentIds: stringIdListSchema.default([]),
   manualDurationMs: z.number().int().min(0).default(0),
   createdAt: isoDateTime.optional(),
   updatedAt: isoDateTime.optional(),
@@ -36,6 +39,7 @@ const updateTaskSchema = z.object({
   description: z.string().max(500).optional(),
   sortOrder: z.number().int().min(0).optional(),
   timerSegments: z.array(timeSegmentSchema).optional(),
+  removedSegmentIds: stringIdListSchema.optional(),
   manualDurationMs: z.number().int().min(0).optional(),
 });
 
@@ -97,6 +101,15 @@ function parseTimerSegments(value: string): any[] {
     const parsed = JSON.parse(value);
 
     return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseIdList(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string' && item.length > 0) : [];
   } catch {
     return [];
   }
@@ -264,6 +277,7 @@ export function buildApp({
       description: parsed.data.description,
       sortOrder: parsed.data.sortOrder,
       timerSegments: parsed.data.timerSegments,
+      removedSegmentIds: parsed.data.removedSegmentIds,
       manualDurationMs: parsed.data.manualDurationMs,
       createdAt: parsed.data.createdAt ?? now,
       updatedAt: parsed.data.updatedAt ?? now,
@@ -273,16 +287,20 @@ export function buildApp({
     db.prepare(`
       INSERT INTO tasks (
         id, name, icon, icon_image, color, description, sort_order, timer_segments,
+        removed_segment_ids,
         manual_duration_ms, created_at, updated_at, deleted_at
       )
       VALUES (
         @id, @name, @icon, @iconImage, @color, @description, @sortOrder, @timerSegmentsJson,
+        @removedSegmentIdsJson,
         @manualDurationMs, @createdAt, @updatedAt, @deletedAt
       )
   `).run({
     ...task,
     timerSegments: undefined,
     timerSegmentsJson: JSON.stringify(parsed.data.timerSegments),
+    removedSegmentIds: undefined,
+    removedSegmentIdsJson: JSON.stringify(parsed.data.removedSegmentIds),
   });
 
     broadcast('task.created', { id: task.id });
@@ -303,18 +321,26 @@ export function buildApp({
     }
 
     const patch = parsed.data;
-    // Timer segments are append-only operational state: union by id and never
-    // drop segments known to the server, so concurrent timer use on two
-    // devices cannot erase each other's running segments.
+    // New timer segments are union-merged so concurrent timers on different
+    // devices do not erase each other. Deletions are explicit tombstones so a
+    // refresh or a stale full-state sync cannot resurrect removed segments.
+    const tombstones = [...new Set([
+      ...parseIdList(existing.removed_segment_ids ?? '[]'),
+      ...(patch.removedSegmentIds ?? []),
+    ])].sort((a, b) => a.localeCompare(b));
+    const tombstoneSet = new Set(tombstones);
+
     const mergedSegments = (() => {
       if (!patch.timerSegments) {
-        return parseTimerSegments(existing.timer_segments);
+        return parseTimerSegments(existing.timer_segments).filter((seg: any) => !tombstoneSet.has(seg.id));
       }
       const byId = new Map<string, any>();
       for (const seg of parseTimerSegments(existing.timer_segments)) {
+        if (tombstoneSet.has(seg.id)) continue;
         byId.set(seg.id, seg);
       }
       for (const seg of patch.timerSegments) {
+        if (tombstoneSet.has(seg.id)) continue;
         const stored = byId.get(seg.id);
         if (!stored) {
           byId.set(seg.id, seg);
@@ -334,6 +360,7 @@ export function buildApp({
       ...current,
       ...patch,
       timerSegments: mergedSegments,
+      removedSegmentIds: tombstones,
       updatedAt: new Date().toISOString(),
     };
 
@@ -346,6 +373,7 @@ export function buildApp({
         description = @description,
         sort_order = @sortOrder,
         timer_segments = @timerSegmentsJson,
+        removed_segment_ids = @removedSegmentIdsJson,
         manual_duration_ms = @manualDurationMs,
         updated_at = @updatedAt
       WHERE id = @id
@@ -353,6 +381,7 @@ export function buildApp({
       ...updated,
       iconImage: updated.iconImage ?? null,
       timerSegmentsJson: JSON.stringify(updated.timerSegments),
+      removedSegmentIdsJson: JSON.stringify(updated.removedSegmentIds),
       deletedAt: undefined,
     });
 
@@ -661,6 +690,7 @@ function rowFromTask(row: any) {
     description: row.description,
     sortOrder: row.sort_order ?? 0,
     timerSegments: parseTimerSegments(row.timer_segments ?? '[]'),
+    removedSegmentIds: parseIdList(row.removed_segment_ids ?? '[]'),
     manualDurationMs: row.manual_duration_ms ?? 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

@@ -14,6 +14,7 @@ import {
   formatDuration,
   getTaskTimeSegmentsForDate,
   isTimerRunning,
+  removeTimeSegments,
   resetTaskDuration,
 } from '../domain/timeTracking';
 
@@ -24,7 +25,7 @@ type Props = {
   onToggleTimer: (taskId: string) => void;
   onUpdateTask: (
     taskId: string,
-    input: Partial<Pick<Task, 'timerSegments' | 'manualDurationMs'>>,
+    input: Partial<Pick<Task, 'timerSegments' | 'manualDurationMs' | 'removedSegmentIds'>>,
   ) => void;
 };
 
@@ -303,8 +304,10 @@ export default function TimeSegmentsEditor({
   };
 
   const deleteSegment = (id: string) => {
+    const updated = removeTimeSegments(task, [id]);
     onUpdateTask(task.id, {
-      timerSegments: task.timerSegments.filter((item) => item.id !== id),
+      timerSegments: updated.timerSegments,
+      removedSegmentIds: updated.removedSegmentIds,
     });
   };
 
@@ -484,9 +487,13 @@ export default function TimeSegmentsEditor({
                 {
                   text: '清空',
                   style: 'destructive',
-                  onPress: () => onUpdateTask(task.id, {
-                    timerSegments: clearTimeSegmentsForDate(task, date).timerSegments,
-                  }),
+                  onPress: () => {
+                    const cleared = clearTimeSegmentsForDate(task, date);
+                    onUpdateTask(task.id, {
+                      timerSegments: cleared.timerSegments,
+                      removedSegmentIds: cleared.removedSegmentIds,
+                    });
+                  },
                 },
               ],
             )}
@@ -518,6 +525,7 @@ export default function TimeSegmentsEditor({
                     const reset = resetTaskDuration(task);
                     onUpdateTask(task.id, {
                       timerSegments: reset.timerSegments,
+                      removedSegmentIds: reset.removedSegmentIds,
                       manualDurationMs: reset.manualDurationMs,
                     });
                   },
@@ -746,4 +754,3 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
-
