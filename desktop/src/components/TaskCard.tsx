@@ -1,4 +1,4 @@
-import { Check, Pencil, Play, Square, StickyNote } from 'lucide-react';
+import { Check, Play, Square } from 'lucide-react';
 import {
   calculateTimeSegmentsDurationForDate,
   formatDuration,
@@ -111,20 +111,6 @@ export default function TaskCard({
 
       </div>
 
-      {!compact && (task.customGroups?.length ?? 0) > 0 && (
-        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1 overflow-hidden px-2">
-          {(task.customGroups ?? []).map((g) => (
-            <span
-              key={g}
-              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-semibold text-slate-400"
-            >
-              <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: getGroupColor(g) }} />
-              {g}
-            </span>
-          ))}
-        </div>
-      )}
-
       <div className="flex shrink-0 items-center gap-1.5">
         <button
           title={running ? '停止计时' : '开始计时'}
@@ -138,24 +124,6 @@ export default function TaskCard({
         >
           {running ? <Square size={14} fill="currentColor" /> : <Play size={14} />}
         </button>
-
-        <button
-          title="当日记录"
-          onClick={onOpenDetail}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-300 transition-all hover:bg-white/10"
-        >
-          <StickyNote size={14} />
-        </button>
-
-        {!compact && (
-          <button
-            title="编辑任务"
-            onClick={onEdit}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-300 transition-all hover:bg-white/10"
-          >
-            <Pencil size={14} />
-          </button>
-        )}
 
         <button
           title={checked ? '取消打卡' : '完成打卡'}

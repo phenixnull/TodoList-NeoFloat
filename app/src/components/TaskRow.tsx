@@ -290,22 +290,6 @@ function TaskRow({
               </Text>
               <TaskDuration task={task} today={today} isLight={isLight} />
             </View>
-
-            {(task.customGroups?.length ?? 0) > 0 && (
-              <View style={[styles.groupChipsRow, { maxHeight: 20 }]}>
-                {(task.customGroups ?? []).map((g) => (
-                  <View
-                    key={g}
-                    style={[styles.groupChip, { borderColor: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)', backgroundColor: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.04)' }]}
-                  >
-                    <View style={[styles.groupDot, { backgroundColor: getGroupColor(g) }]} />
-                    <Text style={[styles.groupChipText, { color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(148,163,184,0.7)' }]} numberOfLines={1}>
-                      {g}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
           </PressableScale>
 
           <View style={styles.sideColumn}>
