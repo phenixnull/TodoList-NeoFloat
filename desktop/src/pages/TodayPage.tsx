@@ -70,14 +70,16 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
     return [...filteredUnfinished].sort((a, b) => {
       const ta = checkInTimeMap.get(a.id) ?? '';
       const tb = checkInTimeMap.get(b.id) ?? '';
-      return sortDesc ? tb.localeCompare(ta) : ta.localeCompare(tb);
+      if (ta !== tb) return sortDesc ? tb.localeCompare(ta) : ta.localeCompare(tb);
+      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
     });
   }, [filteredUnfinished, checkInTimeMap, sortDesc]);
   const sortedFinished = useMemo(() => {
     return [...filteredFinished].sort((a, b) => {
       const ta = checkInTimeMap.get(a.id) ?? '';
       const tb = checkInTimeMap.get(b.id) ?? '';
-      return sortDesc ? tb.localeCompare(ta) : ta.localeCompare(tb);
+      if (ta !== tb) return sortDesc ? tb.localeCompare(ta) : ta.localeCompare(tb);
+      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
     });
   }, [filteredFinished, checkInTimeMap, sortDesc]);
   const filteredCompletedCount = useMemo(() => filtered.filter((t) => completedIds.has(t.id)).length, [filtered, completedIds]);
