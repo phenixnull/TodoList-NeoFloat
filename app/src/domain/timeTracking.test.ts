@@ -5,6 +5,7 @@ import {
   clearTimeSegmentsForDate,
   createTimeSegment,
   formatDuration,
+  formatManualDuration,
   getTaskTimeSegmentsForDate,
   isTimerRunning,
   parseDurationInput,
@@ -142,7 +143,7 @@ describe('time tracking', () => {
     expect(reset.removedSegmentIds).toEqual(['before', 'only-this-day']);
   });
 
-  it('sets total duration without changing segments when the target is large enough', () => {
+  it('sets total duration by changing only the signed manual value', () => {
     const source = task({
       timerSegments: [
         { id: 'a', startAt: '2026-10-02T08:00:00Z', stopAt: '2026-10-02T08:30:00Z' },
@@ -152,11 +153,16 @@ describe('time tracking', () => {
 
     const updated = setTaskTotalDuration(source, 120 * 60_000, new Date('2026-10-02T12:00:00Z'));
     expect(updated.timerSegments).toEqual(source.timerSegments);
-    expect(updated.removedSegmentIds).toEqual([]);
+    expect(updated.removedSegmentIds ?? []).toEqual([]);
     expect(updated.manualDurationMs).toBe(30 * 60_000);
+
+    const calibratedDown = setTaskTotalDuration(source, 50 * 60_000, new Date('2026-10-02T12:00:00Z'));
+    expect(calibratedDown.timerSegments).toEqual(source.timerSegments);
+    expect(calibratedDown.removedSegmentIds ?? []).toEqual([]);
+    expect(calibratedDown.manualDurationMs).toBe(-40 * 60_000);
   });
 
-  it('trims the newest segment first when the target is smaller than segment time', () => {
+  it('keeps segment history and clamps negative totals at zero', () => {
     const source = task({
       timerSegments: [
         { id: 'a', startAt: '2026-10-02T08:00:00Z', stopAt: '2026-10-02T08:30:00Z' },
@@ -164,27 +170,14 @@ describe('time tracking', () => {
       ],
     });
 
-    const trimmed = setTaskTotalDuration(source, 75 * 60_000, new Date('2026-10-02T12:00:00Z'));
-    expect(trimmed.timerSegments).toEqual([
-      source.timerSegments[0],
-      { id: 'b', startAt: '2026-10-02T09:00:00Z', stopAt: '2026-10-02T09:45:00.000Z' },
-    ]);
-    expect(trimmed.removedSegmentIds).toEqual([]);
-    expect(trimmed.manualDurationMs).toBe(0);
-
-    const partiallyDeleted = setTaskTotalDuration(source, 20 * 60_000, new Date('2026-10-02T12:00:00Z'));
-    expect(partiallyDeleted.timerSegments).toEqual([
-      { id: 'a', startAt: '2026-10-02T08:00:00Z', stopAt: '2026-10-02T08:20:00.000Z' },
-    ]);
-    expect(partiallyDeleted.removedSegmentIds).toEqual(['b']);
-
-    const cleared = setTaskTotalDuration(source, 0, new Date('2026-10-02T12:00:00Z'));
-    expect(cleared.timerSegments).toEqual([]);
-    expect(cleared.removedSegmentIds).toEqual(['a', 'b']);
-    expect(cleared.manualDurationMs).toBe(0);
+    const calibrated = setTaskTotalDuration(source, 0, new Date('2026-10-02T12:00:00Z'));
+    expect(calibrated.timerSegments).toEqual(source.timerSegments);
+    expect(calibrated.removedSegmentIds ?? []).toEqual([]);
+    expect(calibrated.manualDurationMs).toBe(-90 * 60_000);
+    expect(calculateTaskDurationMs(calibrated)).toBe(0);
   });
 
-  it('locks a live timer before applying a total-duration target', () => {
+  it('locks a live timer before applying a signed correction', () => {
     const source = task({
       timerSegments: [
         { id: 'closed', startAt: '2026-10-02T08:00:00Z', stopAt: '2026-10-02T08:30:00Z' },
@@ -201,9 +194,10 @@ describe('time tracking', () => {
     expect(updated.manualDurationMs).toBe(30 * 60_000);
   });
 
-  it('formats duration as HH:mm:ss', () => {
+  it('formats normal and signed manual durations', () => {
     expect(formatDuration(0)).toBe('00:00:00');
     expect(formatDuration(3_723_000)).toBe('01:02:03');
+    expect(formatManualDuration(-3_723_000)).toBe('-01:02:03');
   });
 
   it('parses minutes, hours, compact units, and clock durations', () => {
@@ -213,6 +207,9 @@ describe('time tracking', () => {
     expect(parseDurationInput('1h 30m')).toBe(90 * 60_000);
     expect(parseDurationInput('01:02:03')).toBe(3_723_000);
     expect(parseDurationInput('02:03')).toBe(123_000);
+    expect(parseDurationInput('-30')).toBe(-30 * 60_000);
+    expect(parseDurationInput('-01:02:03')).toBe(-3_723_000);
+    expect(parseDurationInput('-20m')).toBe(-20 * 60_000);
     expect(parseDurationInput('bad')).toBeNull();
   });
 });

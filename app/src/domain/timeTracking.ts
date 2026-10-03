@@ -264,8 +264,7 @@ export function setTaskTotalDuration(
   const target = Math.max(0, Math.round(targetDurationMs));
   const nowMs = now.getTime();
 
-  // Freeze live timers before calculating, otherwise the target is stale by
-  // the time the task is displayed again.
+  // Locking live time makes the result stable immediately after save.
   const lockedSegments = task.timerSegments.map((segment) => (
     segment.stopAt
       ? segment
@@ -281,57 +280,12 @@ export function setTaskTotalDuration(
     return { segment, start, stop, duration };
   });
 
-  const decisions = segmentsWithDuration.map((item) => ({ ...item, keptMs: item.duration }));
-  const ordered = decisions
-    .filter((item) => item.duration > 0)
-    .sort((a, b) => (
-      b.stop - a.stop
-      || b.start - a.start
-      || a.segment.id.localeCompare(b.segment.id)
-    ));
-
   const segmentMs = segmentsWithDuration.reduce((total, item) => total + item.duration, 0);
-  let remainingToRemove = Math.max(0, segmentMs - target);
-
-  for (const item of ordered) {
-    if (remainingToRemove <= 0) {
-      continue;
-    }
-
-    const removedMs = Math.min(item.duration, remainingToRemove);
-    remainingToRemove -= removedMs;
-    item.keptMs = item.duration - removedMs;
-  }
-
-  const keptSegments: TimeSegment[] = [];
-
-  for (const item of decisions) {
-    if (item.keptMs <= 0) continue;
-    keptSegments.push(
-      item.keptMs === item.duration
-        ? item.segment
-        : {
-          ...item.segment,
-          stopAt: new Date(item.start + item.keptMs).toISOString(),
-        },
-    );
-  }
-
-  const keptIds = new Set(keptSegments.map((segment) => segment.id));
-  const keptMs = keptSegments.reduce((total, segment) => {
-    const start = new Date(segment.startAt).getTime();
-    const stop = segment.stopAt ? new Date(segment.stopAt).getTime() : nowMs;
-    return total + Math.max(0, stop - start);
-  }, 0);
-  const removed = lockedSegments
-    .filter((segment) => !keptIds.has(segment.id))
-    .map((segment) => segment.id);
 
   return {
     ...task,
-    timerSegments: keptSegments,
-    removedSegmentIds: mergeIdLists(task.removedSegmentIds, removed),
-    manualDurationMs: Math.max(0, target - keptMs),
+    timerSegments: lockedSegments,
+    manualDurationMs: target - segmentMs,
     updatedAt: now.toISOString(),
   };
 }
@@ -348,7 +302,14 @@ export function calculateTaskDurationMs(task: Task, nowMs: number = Date.now()):
     .filter(isOpen)
     .reduce((total, segment) => total + Math.max(0, nowMs - new Date(segment.startAt).getTime()), 0);
 
-  return Math.max(0, closed + open + Math.max(0, task.manualDurationMs));
+  return Math.max(0, closed + open + task.manualDurationMs);
+}
+
+export function calculateTaskSegmentDurationMs(task: Task, nowMs: number = Date.now()): number {
+  return calculateTaskDurationMs({
+    ...task,
+    manualDurationMs: 0,
+  }, nowMs);
 }
 
 export function formatDuration(durationMs: number): string {
@@ -362,6 +323,11 @@ export function formatDuration(durationMs: number): string {
     .join(':');
 }
 
+export function formatManualDuration(manualDurationMs: number): string {
+  const negative = manualDurationMs < 0;
+  return `${negative ? '-' : ''}${formatDuration(Math.abs(manualDurationMs))}`;
+}
+
 export function parseDurationInput(input: string): number | null {
   const trimmed = input.trim();
 
@@ -369,8 +335,15 @@ export function parseDurationInput(input: string): number | null {
     return null;
   }
 
-  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(trimmed)) {
-    const parts = trimmed.split(':').map(Number);
+  const sign = trimmed.startsWith('-') ? -1 : 1;
+  const value = sign < 0 ? trimmed.slice(1).trim() : trimmed;
+
+  if (!value) {
+    return null;
+  }
+
+  if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(value)) {
+    const parts = value.split(':').map(Number);
     const seconds = parts.length === 3 ? parts[2] : parts[1];
     const minutes = parts.length === 3 ? parts[1] : parts[0];
     const hours = parts.length === 3 ? parts[0] : 0;
@@ -379,14 +352,14 @@ export function parseDurationInput(input: string): number | null {
       return null;
     }
 
-    return ((hours * 60 + minutes) * 60 + seconds) * 1000;
+    return sign * ((hours * 60 + minutes) * 60 + seconds) * 1000;
   }
 
-  if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
-    return Math.round(Number(trimmed) * (trimmed.includes('.') ? 60 * minuteMs : minuteMs));
+  if (/^\d+(?:\.\d+)?$/.test(value)) {
+    return sign * Math.round(Number(value) * (value.includes('.') ? 60 * minuteMs : minuteMs));
   }
 
-  const compact = trimmed.toLowerCase().replace(/\s+/g, '');
+  const compact = value.toLowerCase().replace(/\s+/g, '');
   const match = /^(?:(\d+(?:\.\d+)?)h)?(?:(\d+(?:\.\d+)?)m)?$/.exec(compact);
 
   if (!match || (!match[1] && !match[2])) {
@@ -396,5 +369,5 @@ export function parseDurationInput(input: string): number | null {
   const hours = match[1] ? Number(match[1]) : 0;
   const minutes = match[2] ? Number(match[2]) : 0;
 
-  return Math.round(hours * 60 * minuteMs + minutes * minuteMs);
+  return sign * Math.round(hours * 60 * minuteMs + minutes * minuteMs);
 }

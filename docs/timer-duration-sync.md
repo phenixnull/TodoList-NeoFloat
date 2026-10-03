@@ -5,38 +5,42 @@
 一张任务卡同时有两类时间数据：
 
 1. **时间段记录（timerSegments）**：一次开始/暂停，或手工补录的一段起止时间。
-2. **手动剩余时长（manualDurationMs）**：没有落到具体时间段的补充时长。
+2. **手动时长 / 校准（manualDurationMs）**：用户独立维护的补充或扣减值，可以为负数。
 
-任务总时长固定使用：
+manualDurationMs 可以是正数（补充）或负数（校准扣除）：
 
 ```text
-total = closedSegmentMs + liveSegmentMs + max(0, manualDurationMs)
+total = max(0, closedSegmentMs + liveSegmentMs + manualDurationMs)
 ```
 
-用户在编辑页输入的“耗时”按 **任务总时长目标值** 解释，不再只是追加的 manual 值。
+用户在编辑页直接编辑 manual 值；这个操作 **不会删除/裁剪时间段**。
+
+### 手动值单独编辑
+
+当用户只修改“手动时长 / 校准”时：
+
+1. `timerSegments` 不参与这次 patch。
+2. `manualDurationMs` 原样保存，支持正数和负数。
+3. 总耗时立即变成 `max(0, 当前时间段合计 + 新 manual 值)`。
+4. 之后新增、删除或编辑时间段，manual 值保持不变。
+5. 如果任务正在计时，manual 值不需要锁定；计时会让总耗时继续实时增加。
 
 ## 修改总时长的统一算法
 
 `setTaskTotalDuration(task, targetMs, now)` 的规则：
 
-1. `targetMs < 0` 按 0 处理。
-2. 如果任务正在计时，先把当前打开的 segment 的 `stopAt` 锁定到保存时间。
-   - 否则 open duration 会持续增长，用户刚保存的目标值马上又会失真。
-3. 计算锁存后的 segment 总时长 `segmentMs`。
-4. 从最新时间段往旧时间段裁剪：
-   - `targetMs >= segmentMs`：保留全部时间段，`manualDurationMs = targetMs - segmentMs`。
-   - `targetMs < segmentMs`：优先缩短最新时间段；如果整个最新时间段都要去掉，则删除该 segment。
-   - `targetMs = 0`：删除全部时间段，且 `manualDurationMs = 0`。
-5. 被完整删除的 segment id 进入 `removedSegmentIds`。
-6. 一次 patch 同时提交：
-   - `timerSegments`
-   - `manualDurationMs`
-   - `removedSegmentIds`
+1. 如果任务正在计时，先把进行中 segment 的 `stopAt` 锁定到保存时间。
+2. 计算锁存后的 segment 总时长 `segmentMs`。
+3. 只写入一个 signed manual 校准值，不裁剪时间段：
+   - `targetMs >= segmentMs`：`manualDurationMs = targetMs - segmentMs`。
+   - `targetMs < segmentMs`：`manualDurationMs = targetMs - segmentMs`（负数）。
+   - `targetMs = 0`：`manualDurationMs = -segmentMs`。
+4. 不裁剪时间段，不新增 `removedSegmentIds`。
 
 因此：
 
-- 输入总时长 >= 已记录时间段总和：只增加无明细的 manual 补充。
-- 输入总时长 < 已记录时间段总和：通过裁剪明细把总时长降到目标值。
+- 输入总时长 >= 已记录时间段总和：manual 为正数补充。
+- 输入总时长 < 已记录时间段总和：manual 为负数校准，不破坏时间段历史。
 - 输入总时长 = 已记录时间段总和：manual 清零，但时间段保留。
 
 ## 删除/清空时间段
@@ -67,6 +71,6 @@ active = (old.timerSegments ∪ patch.timerSegments) - tombstones
 
 ## 用户可见语义
 
-- 编辑页字段显示“总耗时”，当前计时中会显示提示：保存时会先按当前时间锁存。
+- 编辑页字段显示“手动时长 / 校准”；普通输入是补充，`-` 开头是扣减。
 - 卡片累计耗时使用 `calculateTaskDurationMs(task, now)`，避免只看当天 segment 漏掉历史时间段。
-- 手工输入不再是“追加时间”，而是“设置总耗时目标”。
+- “设置总耗时目标”只在显式调用 `setTaskTotalDuration` 时使用；它也是通过 signed manual 校准实现，不自动删段。

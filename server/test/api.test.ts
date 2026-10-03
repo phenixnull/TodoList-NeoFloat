@@ -64,6 +64,37 @@ describe('HabitPulse API', () => {
     expect(tasks).toHaveLength(0);
   });
 
+  it('stores negative manual duration as a signed correction', async () => {
+    const app = buildApp({ database: ':memory:' });
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      payload: {
+        name: 'Signed manual',
+        icon: 'timer-outline',
+        color: '#22d3ee',
+        description: '',
+        timerSegments: [
+          { id: 'segment', startAt: '2026-10-02T08:00:00.000Z', stopAt: '2026-10-02T09:00:00.000Z' },
+        ],
+        manualDurationMs: -20 * 60_000,
+      },
+    });
+
+    expect(created.statusCode).toBe(201);
+    expect(created.json().manualDurationMs).toBe(-20 * 60_000);
+
+    const updated = await app.inject({
+      method: 'PATCH',
+      url: `/api/tasks/${created.json().id}`,
+      payload: { manualDurationMs: -45 * 60_000 },
+    });
+
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json().timerSegments).toHaveLength(1);
+    expect(updated.json().manualDurationMs).toBe(-45 * 60_000);
+  });
+
   it('deletes timer segments with tombstones and prevents stale sync from reviving them', async () => {
     const app = buildApp({ database: ':memory:' });
     const created = await app.inject({

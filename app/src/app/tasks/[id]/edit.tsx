@@ -7,7 +7,6 @@ import DayRecordEditor from '@/components/DayRecordEditor';
 import { useTodayKey } from '@/hooks/useTodayKey';
 import { useHabitStore } from '@/store/useHabitStore';
 import { useTheme } from '@/theme/theme';
-import { setTaskTotalDuration } from '@/domain/timeTracking';
 
 export default function EditTaskScreen() {
   const params = useLocalSearchParams<{ id: string }>();
@@ -25,15 +24,10 @@ export default function EditTaskScreen() {
           title="编辑任务"
           submitLabel="保存修改"
           initialTask={task}
-          onSubmit={({ totalDurationMs, ...input }) => {
-            const durationUpdate = setTaskTotalDuration(task, totalDurationMs);
-            updateTask(task.id, {
-              ...input,
-              timerSegments: durationUpdate.timerSegments,
-              removedSegmentIds: durationUpdate.removedSegmentIds,
-              manualDurationMs: durationUpdate.manualDurationMs,
-            });
-          }}
+          onSubmit={({ manualDurationMs, ...input }) => updateTask(task.id, {
+            ...input,
+            manualDurationMs,
+          })}
           footer={(
             <DayRecordEditor
               taskId={task.id}

@@ -9,6 +9,7 @@ export type Task = {
   timerSegments: TimeSegment[];
   /** IDs intentionally deleted on any device. Used to stop server-side union sync from resurrecting them. */
   removedSegmentIds?: string[];
+  /** User-editable correction/additional time. May be negative; task total is clamped at zero. */
   manualDurationMs: number;
   createdAt: string;
   updatedAt: string;

@@ -17,7 +17,6 @@ import { buildHeatmap } from '@/domain/heatmap';
 import { formatCheckInTime } from '@/domain/format';
 import {
   calculateTimeSegmentsDurationForDate,
-  setTaskTotalDuration,
 } from '@/domain/timeTracking';
 import { computeStats, toLocalDateKey } from '@/domain/streak';
 import { useTodayKey } from '@/hooks/useTodayKey';
@@ -267,15 +266,10 @@ export default function TaskDetailScreen() {
           submitLabel="保存任务"
           initialTask={task}
           navigateBackOnSubmit={false}
-          onSubmit={({ totalDurationMs, ...input }) => {
-            const durationUpdate = setTaskTotalDuration(task, totalDurationMs);
-            updateTask(task.id, {
-              ...input,
-              timerSegments: durationUpdate.timerSegments,
-              removedSegmentIds: durationUpdate.removedSegmentIds,
-              manualDurationMs: durationUpdate.manualDurationMs,
-            });
-          }}
+          onSubmit={({ manualDurationMs, ...input }) => updateTask(task.id, {
+            ...input,
+            manualDurationMs,
+          })}
           footer={(
             <>
               <TimeSegmentsEditor

@@ -26,7 +26,8 @@ const createTaskSchema = z.object({
   sortOrder: z.number().int().min(0).default(0),
   timerSegments: z.array(timeSegmentSchema).default([]),
   removedSegmentIds: stringIdListSchema.default([]),
-  manualDurationMs: z.number().int().min(0).default(0),
+  // A negative value is a manual correction that can offset timer segments.
+  manualDurationMs: z.number().int().default(0),
   createdAt: isoDateTime.optional(),
   updatedAt: isoDateTime.optional(),
 });
@@ -40,7 +41,7 @@ const updateTaskSchema = z.object({
   sortOrder: z.number().int().min(0).optional(),
   timerSegments: z.array(timeSegmentSchema).optional(),
   removedSegmentIds: stringIdListSchema.optional(),
-  manualDurationMs: z.number().int().min(0).optional(),
+  manualDurationMs: z.number().int().optional(),
 });
 
 const toggleCheckInSchema = z.object({
