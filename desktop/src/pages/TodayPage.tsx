@@ -56,6 +56,8 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   }, [allFlat, groupFilter, statusFilter, completedIds]);
   const filteredUnfinished = useMemo(() => filtered.filter((t) => !completedIds.has(t.id)), [filtered, completedIds]);
   const filteredFinished = useMemo(() => filtered.filter((t) => completedIds.has(t.id)), [filtered, completedIds]);
+  const filteredCompletedCount = useMemo(() => filtered.filter((t) => completedIds.has(t.id)).length, [filtered, completedIds]);
+  const filteredRatio = filtered.length ? filteredCompletedCount / filtered.length : 0;
 
   const renameGroup = useCallback((oldName: string, newName: string) => {
     if (!newName.trim() || customGroups.includes(newName.trim())) return;
@@ -97,7 +99,7 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   }, [newGroupName, customGroups, storedGroups]);
 
   const ctxTask = ctxMenu ? tasks.find((t) => t.id === ctxMenu.taskId) : undefined;
-  const ratio = tasks.length ? completedIds.size / tasks.length : 0;
+  const ratio = filteredRatio;
 
   const dragTaskId = useRef<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
@@ -193,8 +195,8 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
               今日进度 · {today}
             </p>
             <div className="mt-3 flex items-end gap-2">
-              <span className="text-6xl font-black leading-none text-slate-50">{completedIds.size}</span>
-              <span className="mb-1 text-2xl font-bold text-slate-500">/ {tasks.length}</span>
+              <span className="text-6xl font-black leading-none text-slate-50">{filteredCompletedCount}</span>
+              <span className="mb-1 text-2xl font-bold text-slate-500">/ {filtered.length}</span>
             </div>
             <p className="mt-3 text-sm font-semibold text-slate-400">
               {ratio === 1 ? '今日全部完成，状态拉满' : '保持节奏，继续推进'}
