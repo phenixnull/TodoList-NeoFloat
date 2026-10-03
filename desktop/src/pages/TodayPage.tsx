@@ -142,6 +142,7 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   const ratio = filteredRatio;
 
   const dragTaskId = useRef<string | null>(null);
+  const tabBarRef = useRef<HTMLDivElement>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   // Ctrl+Z undo for check-in only (max 8 steps).
@@ -259,8 +260,27 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         </div>
       </motion.div>
 
-      {/* Group tabs — full-width horizontal drawer */}
-      <div className="glass flex items-stretch overflow-x-auto overflow-y-hidden rounded-2xl scroll-smooth" style={{ scrollbarWidth: 'none' }}>
+      {/* Group tabs — full-width horizontal drawer with mouse drag-to-scroll */}
+      <div
+        ref={tabBarRef}
+        className="glass flex items-stretch overflow-x-auto overflow-y-hidden rounded-2xl"
+        style={{ scrollbarWidth: 'none' }}
+        onMouseDown={(e) => {
+          const el = tabBarRef.current;
+          if (!el) return;
+          const startX = e.clientX;
+          const startScroll = el.scrollLeft;
+          const onMove = (ev: MouseEvent) => {
+            el.scrollLeft = startScroll - (ev.clientX - startX);
+          };
+          const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+          };
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+        }}
+      >
         <TabButton active={groupFilter.length === 0} onClick={() => selectGroup(null)}>全部</TabButton>
         {customGroups.map((g) => (
           <TabButton
