@@ -15,7 +15,7 @@ export default function HeatmapBlock() {
   const [selectedId, setSelectedId] = useState('');
   const task = selectedId ? activeTasks.find((t) => t.id === selectedId) : undefined;
   const today = getTodayKey(now);
-  const [hovered, setHovered] = useState<{ date: string; x: number; y: number } | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const grid = useMemo(() => {
     if (!activeTasks.length) return [];
@@ -67,31 +67,35 @@ export default function HeatmapBlock() {
     return labels;
   }, [grid]);
 
-  const hoverInfo = useMemo(() => {
-    if (!hovered) return null;
-    const cell = grid.flat().find((c) => c.date === hovered.date);
+  const detail = useMemo(() => {
+    if (!selectedDate) return null;
+    const cell = grid.flat().find((c) => c.date === selectedDate);
     if (!cell) return null;
 
     const dayCheckins = task
-      ? checkIns.filter((c) => c.taskId === task.id && c.date === hovered.date)
-      : checkIns.filter((c) => c.date === hovered.date);
+      ? checkIns.filter((c) => c.taskId === task.id && c.date === selectedDate)
+      : checkIns.filter((c) => c.date === selectedDate);
 
-    const checkinCount = dayCheckins.length;
-    const checkinTime = dayCheckins[0]?.createdAt
-      ? new Date(dayCheckins[0].createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-      : null;
+    const checkinTasks = dayCheckins
+      .map((c) => {
+        const t = activeTasks.find((at) => at.id === c.taskId);
+        return {
+          name: t?.name ?? '未知',
+          color: t?.color ?? '#22d3ee',
+          time: c.createdAt ? new Date(c.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '',
+        };
+      });
 
     return {
-      date: hovered.date,
-      weekday: new Date(`${hovered.date}T00:00:00`).toLocaleDateString('zh-CN', { weekday: 'short' }),
+      date: selectedDate,
+      weekday: new Date(`${selectedDate}T00:00:00`).toLocaleDateString('zh-CN', { weekday: 'long' }),
       completed: cell.status === 'complete',
       partial: cell.status === 'partial',
       durationMs: cell.durationMs,
-      checkinCount,
-      checkinTime,
+      checkinTasks,
       taskName: task?.name,
     };
-  }, [hovered, grid, checkIns, task]);
+  }, [selectedDate, grid, checkIns, task, activeTasks]);
 
   return (
     <div className="glass p-5">
@@ -132,12 +136,10 @@ export default function HeatmapBlock() {
                   return (
                     <div
                       key={cell.date}
-                      onMouseEnter={(e) => {
-                        const rect = (e.target as HTMLElement).getBoundingClientRect();
-                        setHovered({ date: cell.date, x: rect.left, y: rect.top });
-                      }}
-                      onMouseLeave={() => setHovered(null)}
-                      className="h-[14px] w-[14px] rounded-[3px] transition-transform hover:scale-125"
+                      onClick={() => setSelectedDate((prev) => (prev === cell.date ? null : cell.date))}
+                      className={`h-[14px] w-[14px] cursor-pointer rounded-[3px] transition-all hover:scale-125 ${
+                        selectedDate === cell.date ? 'ring-2 ring-cyan-400 ring-offset-1 ring-offset-slate-900' : ''
+                      }`}
                       style={style}
                     />
                   );
@@ -160,39 +162,34 @@ export default function HeatmapBlock() {
         <span>多</span>
       </div>
 
-      {hoverInfo && (
-        <div
-          className="pointer-events-none fixed z-50 w-max rounded-xl border border-white/10 bg-slate-900/95 px-3.5 py-2.5 shadow-2xl backdrop-blur-md"
-          style={{
-            left: Math.min(hovered!.x, window.innerWidth - 200),
-            top: hovered!.y - 8,
-            transform: 'translateY(-100%)',
-          }}
-        >
-          <p className="text-xs font-bold text-slate-100">
-            {hoverInfo.date} {hoverInfo.weekday}
-          </p>
-          <div className="mt-1 space-y-0.5">
-            {hoverInfo.taskName && (
-              <p className="text-[11px] text-cyan-300">{hoverInfo.taskName}</p>
-            )}
-            <p className="text-[11px] text-slate-300">
-              {hoverInfo.completed
-                ? '✅ 已完成打卡'
-                : hoverInfo.partial
-                  ? '⏱ 有计时记录'
-                  : '无记录'}
+      {detail && (
+        <div className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-extrabold text-slate-100">
+              {detail.date} {detail.weekday}
+              {detail.taskName && <span className="ml-2 text-xs font-semibold text-cyan-300">{detail.taskName}</span>}
             </p>
-            {hoverInfo.checkinCount > 0 && hoverInfo.checkinTime && (
-              <p className="text-[11px] text-slate-400">
-                打卡时间 {hoverInfo.checkinTime}
-                {hoverInfo.checkinCount > 1 ? ` · ${hoverInfo.checkinCount} 个任务` : ''}
+            <button onClick={() => setSelectedDate(null)} className="text-xs text-slate-500 hover:text-slate-300">✕</button>
+          </div>
+          <div className="mt-3 flex items-start justify-between gap-6">
+            <div>
+              <p className={`text-sm font-bold ${detail.completed ? 'text-emerald-400' : detail.partial ? 'text-cyan-400' : 'text-slate-500'}`}>
+                {detail.completed ? '✅ 已完成打卡' : detail.partial ? '⏱ 有计时记录' : '无记录'}
               </p>
-            )}
-            {hoverInfo.durationMs > 0 && (
-              <p className="font-mono text-[11px] text-emerald-400">
-                ⏱ {formatMs(hoverInfo.durationMs)}
-              </p>
+              {detail.durationMs > 0 && (
+                <p className="mt-1 font-mono text-sm text-emerald-300">⏱ {formatMs(detail.durationMs)}</p>
+              )}
+            </div>
+            {detail.checkinTasks.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {detail.checkinTasks.map((ct, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[11px] text-slate-300">
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: ct.color }} />
+                    {ct.name}
+                    {ct.time && <span className="text-slate-500">{ct.time}</span>}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
         </div>
