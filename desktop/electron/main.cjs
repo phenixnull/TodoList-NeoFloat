@@ -12,6 +12,7 @@ let currentMode = 'full';
 let tray = null;
 
 const isDev = !app.isPackaged && process.env.HP_DEV === '1';
+const appIconPath = path.join(__dirname, '..', 'build', 'icon-256.png');
 
 function createWindow() {
   if (process.env.HP_TEST_HASH) {
@@ -33,6 +34,7 @@ function createWindow() {
     backgroundColor: '#05060f',
     alwaysOnTop: preset.alwaysOnTop,
     title: 'HabitPulse Desktop',
+    icon: appIconPath,
     ...(process.env.HP_TEST_OFFSCREEN === '1' ? { x: -2400, y: -1600 } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
