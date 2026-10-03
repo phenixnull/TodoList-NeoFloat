@@ -24,6 +24,7 @@ export default function HomeScreen() {
   const today = useTodayKey();
   const [dragListKey, setDragListKey] = useState(0);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
+  const [sortDesc, setSortDesc] = useState(true);
   const {
     activeTasks,
     checkIns,
@@ -92,6 +93,29 @@ export default function HomeScreen() {
     () => filteredTasks.filter((t) => completedIds.has(t.id)),
     [filteredTasks, completedIds],
   );
+  const checkInTimeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of checkIns) {
+      if (!map.has(c.taskId) || c.createdAt! > map.get(c.taskId)!) map.set(c.taskId, c.createdAt!);
+    }
+    return map;
+  }, [checkIns]);
+  const sortedUnfinished = useMemo(() => {
+    return [...filteredUnfinished].sort((a, b) => {
+      const ta = checkInTimeMap.get(a.id) ?? '';
+      const tb = checkInTimeMap.get(b.id) ?? '';
+      if (ta !== tb) return sortDesc ? tb.localeCompare(ta) : ta.localeCompare(tb);
+      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+    });
+  }, [filteredUnfinished, checkInTimeMap, sortDesc]);
+  const sortedFinished = useMemo(() => {
+    return [...filteredFinished].sort((a, b) => {
+      const ta = checkInTimeMap.get(a.id) ?? '';
+      const tb = checkInTimeMap.get(b.id) ?? '';
+      if (ta !== tb) return sortDesc ? tb.localeCompare(ta) : ta.localeCompare(tb);
+      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+    });
+  }, [filteredFinished, checkInTimeMap, sortDesc]);
 
   const addGroup = useCallback(() => {
     Alert.prompt(
@@ -303,19 +327,26 @@ export default function HomeScreen() {
                 </Text>
               </PressableScale>
             ))}
+            <PressableScale
+              style={[styles.filterChip, styles.filterChipSm, { borderColor: theme.surfaceBorder }]}
+              onPress={() => setSortDesc((prev) => !prev)}
+            >
+              <MaterialCommunityIcons name="arrow-up-down" size={12} color={theme.mutedText} />
+              <Text style={[styles.filterChipTextSm, { color: theme.mutedText }]}>{sortDesc ? '最新在上' : '最早在上'}</Text>
+            </PressableScale>
           </View>
 
-          {statusFilter !== 'done' && filteredUnfinished.length > 0 && (
+          {statusFilter !== 'done' && sortedUnfinished.length > 0 && (
             <>
               <Text style={[styles.groupTitle, { color: theme.subtleText }]}>进行中 · 点住图标拖动</Text>
               <NestableDraggableFlatList
                 key={`uf-${dragListKey}-${groupFilter}-${statusFilter}`}
-                data={filteredUnfinished}
+                data={sortedUnfinished}
                 keyExtractor={(item) => item.id}
                 renderItem={renderTask}
                 dragGestureDetector="item"
                 onDragEnd={({ from, to }) => handleReorder(
-                  filteredUnfinished.map((item) => item.id),
+                  sortedUnfinished.map((item) => item.id),
                   from,
                   to,
                   'unfinished',
@@ -332,17 +363,17 @@ export default function HomeScreen() {
             </>
           )}
 
-          {statusFilter !== 'active' && filteredFinished.length > 0 && (
+          {statusFilter !== 'active' && sortedFinished.length > 0 && (
             <>
               <Text style={[styles.groupTitle, { color: theme.subtleText }]}>已完成 · 点住图标拖动</Text>
               <NestableDraggableFlatList
                 key={`fn-${dragListKey}-${groupFilter}-${statusFilter}`}
-                data={filteredFinished}
+                data={sortedFinished}
                 keyExtractor={(item) => item.id}
                 renderItem={renderTask}
                 dragGestureDetector="item"
                 onDragEnd={({ from, to }) => handleReorder(
-                  filteredFinished.map((item) => item.id),
+                  sortedFinished.map((item) => item.id),
                   from,
                   to,
                   'finished',

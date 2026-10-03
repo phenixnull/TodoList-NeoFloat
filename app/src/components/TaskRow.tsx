@@ -24,6 +24,14 @@ import { Task } from '../domain/types';
 import { calculateTimeSegmentsDurationForDate, formatDuration, isTimerRunning } from '../domain/timeTracking';
 import { resolveTheme } from '../theme/theme';
 
+const GROUP_COLORS = ['#22d3ee', '#a78bfa', '#f472b6', '#fb923c', '#34d399', '#facc15', '#60a5fa', '#f87171', '#2dd4bf', '#c084fc'];
+
+function getGroupColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return GROUP_COLORS[Math.abs(hash) % GROUP_COLORS.length];
+}
+
 type Props = {
   task: Task;
   today: string;
@@ -282,6 +290,22 @@ function TaskRow({
               </Text>
               <TaskDuration task={task} today={today} isLight={isLight} />
             </View>
+
+            {(task.customGroups?.length ?? 0) > 0 && (
+              <View style={[styles.groupChipsRow, { maxHeight: 20 }]}>
+                {(task.customGroups ?? []).map((g) => (
+                  <View
+                    key={g}
+                    style={[styles.groupChip, { borderColor: isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)', backgroundColor: isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.04)' }]}
+                  >
+                    <View style={[styles.groupDot, { backgroundColor: getGroupColor(g) }]} />
+                    <Text style={[styles.groupChipText, { color: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(148,163,184,0.7)' }]} numberOfLines={1}>
+                      {g}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </PressableScale>
 
           <View style={styles.sideColumn}>
@@ -420,6 +444,31 @@ const styles = StyleSheet.create({
   },
   completedText: {
     color: '#cbd5e1',
+  },
+  groupChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 3,
+    overflow: 'hidden',
+  },
+  groupChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderRadius: 99,
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  groupDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  groupChipText: {
+    fontSize: 9,
+    fontWeight: '600',
   },
   taskMeta: {
     color: 'rgba(226,232,240,0.62)',
