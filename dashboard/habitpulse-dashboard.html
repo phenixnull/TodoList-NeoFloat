@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HabitPulse · 坚持面板</title>
+<style>
+  :root {
+    --bg: #05060f;
+    --bg2: #0b1025;
+    --surface: rgba(255,255,255,0.05);
+    --surface-strong: rgba(255,255,255,0.08);
+    --border: rgba(255,255,255,0.10);
+    --text: #f8fafc;
+    --muted: #cbd5e1;
+    --subtle: rgba(148,163,184,0.75);
+    --accent: #22d3ee;
+    --accent-text: #67e8f9;
+    --green: #22c55e;
+    --sky: #38bdf8;
+    --red: #f87171;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--text);
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(34,211,238,0.10), transparent 60%),
+      radial-gradient(900px 500px at -10% 10%, rgba(99,102,241,0.10), transparent 60%),
+      linear-gradient(180deg, var(--bg), var(--bg2));
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 36px 28px 80px; }
+  header.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  h1 { font-size: 34px; font-weight: 900; margin: 0 0 6px; letter-spacing: -0.5px; }
+  .sub { color: var(--subtle); font-size: 13px; }
+  .connBox { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .connBox input {
+    background: rgba(2,6,23,0.5); border: 1px solid var(--border); color: var(--text);
+    border-radius: 12px; padding: 10px 14px; font-size: 13px; width: 280px;
+  }
+  button {
+    border: none; cursor: pointer; font-weight: 800; border-radius: 12px;
+    padding: 10px 16px; font-size: 13px; background: var(--accent); color: #020617;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  button.ghost { background: var(--surface-strong); color: var(--muted); border: 1px solid var(--border); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.ok { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .dot.err { background: var(--red); }
+  .summary {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 26px 0 10px;
+  }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 18px;
+  }
+  .stat .v { font-size: 30px; font-weight: 900; letter-spacing: -0.5px; }
+  .stat .l { color: var(--subtle); font-size: 12px; margin-top: 4px; font-weight: 600; }
+  .section-title { font-size: 18px; font-weight: 800; margin: 34px 0 14px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 22px;
+    padding: 20px 22px; margin-bottom: 16px;
+  }
+  .cardHead { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .iconBadge { width: 46px; height: 46px; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+  .cardHead h3 { margin: 0; font-size: 17px; font-weight: 800; }
+  .cardHead .meta { color: var(--subtle); font-size: 12px; margin-top: 3px; }
+  .chips { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
+  .chip { font-size: 11px; font-weight: 700; padding: 6px 10px; border-radius: 999px; background: var(--surface-strong); color: var(--muted); border: 1px solid var(--border); }
+  .chip.green { color: #86efac; border-color: rgba(34,197,94,0.35); background: rgba(34,197,94,0.12); }
+  .chip.cyan { color: var(--accent-text); border-color: rgba(34,211,238,0.35); background: rgba(34,211,238,0.10); }
+  .heatScroll { overflow-x: auto; padding-bottom: 4px; }
+  .heat { display: flex; gap: 4px; }
+  .weekCol { display: flex; flex-direction: column; gap: 4px; }
+  .cell { width: 15px; height: 15px; border-radius: 4px; cursor: pointer; background: rgba(2,6,23,0.75); border: 1px solid transparent; }
+  .cell:hover { border-color: var(--accent); }
+  .cell.sel { border-color: #fff; }
+  .legend { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; color: var(--subtle); font-size: 11px; align-items: center; }
+  .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 5px; }
+  .dayDetail { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 14px; display: none; }
+  .dayDetail.show { display: block; }
+  .dayDetail h4 { margin: 0 0 8px; font-size: 14px; }
+  .dayDetail p { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 0 0 10px; white-space: pre-wrap; }
+  .imgs { display: flex; gap: 10px; flex-wrap: wrap; }
+  .imgs img { width: 110px; height: 110px; object-fit: cover; border-radius: 12px; border: 1px solid var(--border); cursor: zoom-in; }
+  .errBox { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); color: #fca5a5; border-radius: 14px; padding: 14px 16px; font-size: 13px; margin-top: 18px; display: none; }
+  .spin { animation: rot 1s linear infinite; }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  @media (max-width: 720px) { .summary { grid-template-columns: repeat(2,1fr); } .wrap { padding: 24px 16px 60px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>HabitPulse · 坚持面板</h1>
+      <div class="sub"><span id="connDot" class="dot err"></span><span id="connText">未连接</span></div>
+    </div>
+    <div class="connBox">
+      <input id="baseUrl" value="" placeholder="http://127.0.0.1:8787" spellcheck="false" />
+      <button id="refreshBtn">↻ 刷新</button>
+      <button class="ghost" id="autoBtn">自动刷新：开</button>
+    </div>
+  </header>
+
+  <div class="summary">
+    <div class="stat"><div class="v" id="sTasks">-</div><div class="l">任务总数</div></div>
+    <div class="stat"><div class="v" id="sToday">-</div><div class="l">今日已完成</div></div>
+    <div class="stat"><div class="v" id="sCheckins">-</div><div class="l">累计打卡</div></div>
+    <div class="stat"><div class="v" id="sStreak">-</div><div class="l">最长连续天数</div></div>
+  </div>
+
+  <div class="errBox" id="errBox"></div>
+
+  <div class="section-title">任务坚持热图 · 近 15 周</div>
+  <div id="cards"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const todayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
+function addDaysKey(key, n) {
+  const d = new Date(`${key}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function fmtDuration(ms) {
+  const s = Math.max(0, Math.floor(ms/1000));
+  const h = Math.floor(s/3600), m = Math.floor(s%3600/60), ss = s%60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+}
+// Mirror of calculateTimeSegmentsDurationForDate (local-day window)
+function durationForDate(task, date) {
+  const winStart = new Date(`${date}T00:00:00`).getTime();
+  const winEnd = new Date(`${addDaysKey(date,1)}T00:00:00`).getTime();
+  const now = Date.now();
+  let ms = 0;
+  for (const seg of task.timerSegments || []) {
+    const s = new Date(seg.startAt).getTime();
+    const e = seg.stopAt ? new Date(seg.stopAt).getTime() : now;
+    ms += Math.max(0, Math.min(e, winEnd) - Math.max(s, winStart));
+  }
+  return ms;
+}
+function totalDuration(task) {
+  let ms = task.manualDurationMs || 0;
+  const now = Date.now();
+  for (const seg of task.timerSegments || []) {
+    const s = new Date(seg.startAt).getTime();
+    const e = seg.stopAt ? new Date(seg.stopAt).getTime() : now;
+    ms += Math.max(0, e - s);
+  }
+  return ms;
+}
+function computeStreaks(dates, today) {
+  const set = new Set(dates);
+  let current = 0;
+  let cursor = set.has(today) ? today : addDaysKey(today, -1);
+  while (set.has(cursor)) { current++; cursor = addDaysKey(cursor, -1); }
+  let longest = 0, run = 0;
+  const sorted = [...set].sort();
+  for (let i=0;i<sorted.length;i++) {
+    if (i>0 && addDaysKey(sorted[i-1],1)===sorted[i]) run++; else run=1;
+    longest = Math.max(longest, run);
+  }
+  return { current, longest };
+}
+
+let state = { tasks: [], checkIns: [], dayRecords: [], selected: {} };
+
+async function load() {
+  const base = ($('baseUrl').value || 'http://127.0.0.1:8787').replace(/\/+$/,'');
+  try {
+    const [tasks, checkIns, dayRecords] = await Promise.all(
+      ['/api/tasks','/api/checkins','/api/day-records'].map(p => fetch(base+p).then(r=>{
+        if(!r.ok) throw new Error('HTTP '+r.status); return r.json();
+      }))
+    );
+    state = { tasks, checkIns, dayRecords, selected: state.selected };
+    $('connDot').className = 'dot ok';
+    $('connText').textContent = '已连接 · 数据更新于 ' + new Date().toLocaleTimeString('zh-CN');
+    $('errBox').style.display = 'none';
+    render();
+  } catch (e) {
+    $('connDot').className = 'dot err';
+    $('connText').textContent = '连接失败';
+    const box = $('errBox');
+    box.style.display = 'block';
+    box.textContent = `无法连接 ${base}：${e.message}。请确认本机同步服务已启动（server 目录 npm start），或在上方切换为公网地址 https://habitpulse.vip.cpolar.top`;
+  }
+}
+
+function cellColor(status, intensity) {
+  if (status==='empty') return 'rgba(2,6,23,0.75)';
+  const rgb = status==='complete' ? '34,197,94' : '56,189,248';
+  const a = 0.28 + 0.72*intensity;
+  return `rgba(${rgb},${a.toFixed(3)})`;
+}
+
+function render() {
+  const today = todayKey();
+  const checkinsByTask = {};
+  for (const c of state.checkIns) {
+    (checkinsByTask[c.taskId] ??= []).push(c.date);
+  }
+  const recordsByKey = {};
+  for (const r of state.dayRecords) recordsByKey[`${r.taskId}:${r.date}`] = r;
+
+  // summary
+  const todaySet = new Set(state.checkIns.filter(c=>c.date===today).map(c=>c.taskId));
+  $('sTasks').textContent = state.tasks.length;
+  $('sToday').textContent = `${todaySet.size}/${state.tasks.length}`;
+  $('sCheckins').textContent = state.checkIns.length;
+  let maxStreak = 0;
+  for (const t of state.tasks) {
+    maxStreak = Math.max(maxStreak, computeStreaks(checkinsByTask[t.id]||[], today).longest);
+  }
+  $('sStreak').textContent = maxStreak;
+
+  const container = $('cards');
+  container.innerHTML = '';
+  for (const task of state.tasks) {
+    const dates = checkinsByTask[task.id] || [];
+    const dateSet = new Set(dates);
+    const streaks = computeStreaks(dates, today);
+    const totalMs = totalDuration(task);
+
+    // build 15-week grid
+    const totalDays = 105;
+    const startDate = addDaysKey(today, -(totalDays-1));
+    const dayDurations = new Map();
+    let maxDur = 0;
+    for (let i=0;i<totalDays;i++) {
+      const dk = addDaysKey(startDate, i);
+      const dur = durationForDate(task, dk);
+      dayDurations.set(dk, dur);
+      if (dur > maxDur) maxDur = dur;
+    }
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    const doneToday = dateSet.has(today);
+    card.innerHTML = `
+      <div class="cardHead">
+        <div class="iconBadge" style="background:${task.color}26">
+          ${task.iconImage ? `<img src="${task.iconImage}" style="width:100%;height:100%;border-radius:15px;object-fit:cover"/>` : '🎯'}
+        </div>
+        <div>
+          <h3>${escapeHtml(task.name)}</h3>
+          <div class="meta">连续 ${streaks.current} 天 · 最长 ${streaks.longest} 天 · 累计 ${dates.length} 次 · 总时长 ${fmtDuration(totalMs)}</div>
+        </div>
+        <div class="chips">
+          ${doneToday ? '<span class="chip green">今日已打卡</span>' : '<span class="chip">今日未打卡</span>'}
+          <span class="chip cyan">${task.color}</span>
+        </div>
+      </div>
+      <div class="heatScroll"><div class="heat" data-task="${task.id}"></div></div>
+      <div class="legend">
+        <span><i style="background:rgba(2,6,23,0.75)"></i>无记录</span>
+        <span><i style="background:#38bdf8"></i>有用时未打卡</span>
+        <span><i style="background:#22c55e"></i>已完成</span>
+        <span style="margin-left:auto">点击格子查看当天记录</span>
+      </div>
+      <div class="dayDetail" id="detail-${task.id}"></div>
+    `;
+    const heat = card.querySelector('.heat');
+    for (let w=0; w<15; w++) {
+      const col = document.createElement('div');
+      col.className = 'weekCol';
+      for (let d=0; d<7; d++) {
+        const dk = addDaysKey(startDate, w*7+d);
+        const dur = dayDurations.get(dk) || 0;
+        const complete = dateSet.has(dk);
+        const status = complete ? 'complete' : dur>0 ? 'partial' : 'empty';
+        const intensity = maxDur>0 ? Math.min(1, dur/maxDur) : 0;
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.style.background = cellColor(status, intensity);
+        cell.title = `${dk} · ${complete?'已完成':dur>0?'用时 '+fmtDuration(dur):'无记录'}`;
+        cell.dataset.task = task.id;
+        cell.dataset.date = dk;
+        cell.onclick = () => showDay(task, dk, cell);
+        col.appendChild(cell);
+      }
+      heat.appendChild(col);
+    }
+    container.appendChild(card);
+  }
+  applyHashSelection();
+}
+
+function applyHashSelection() {
+  const m = /task=([^&]+)&date=(\d{4}-\d{2}-\d{2})/.exec(location.hash || '');
+  if (!m) return;
+  const taskId = decodeURIComponent(m[1]);
+  const date = m[2];
+  const el = document.querySelector(`.cell[data-task="${CSS.escape(taskId)}"][data-date="${date}"]`);
+  if (el) {
+    el.click();
+    el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+}
+
+function showDay(task, date, cellEl) {
+  const key = task.id;
+  const detail = $(`detail-${key}`);
+  // clear previous selection in this card
+  detail.parentElement.querySelectorAll('.cell.sel').forEach(c=>c.classList.remove('sel'));
+  cellEl.classList.add('sel');
+  history.replaceState(null, '', `#task=${encodeURIComponent(key)}&date=${date}`);
+  const base = ($('baseUrl').value || 'http://127.0.0.1:8787').replace(/\/+$/,'');
+  const rec = state.dayRecords.find(r=>r.taskId===key && r.date===date);
+  const dur = durationForDate(task, date);
+  const checkin = state.checkIns.find(c=>c.taskId===key && c.date===date);
+  let imgsHtml = '';
+  if (rec && rec.images && rec.images.length) {
+    imgsHtml = '<div class="imgs">' + rec.images.map((_,i)=>
+      `<img loading="lazy" src="${base}/api/day-records/${encodeURIComponent(key)}/${date}/images/${i}" />`).join('') + '</div>';
+  }
+  detail.classList.add('show');
+  detail.innerHTML = `
+    <h4>${date} · ${checkin?'已打卡':dur>0?'有用时未打卡':'无记录'} · 当天时长 ${fmtDuration(dur)}</h4>
+    <p>${rec && rec.note ? escapeHtml(rec.note) : '这一天还没有描述。'}</p>
+    ${imgsHtml}
+  `;
+}
+
+function escapeHtml(s) {
+  return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+$('refreshBtn').onclick = load;
+$('baseUrl').onkeydown = (e)=>{ if(e.key==='Enter') load(); };
+let auto = true, timer = setInterval(load, 30000);
+$('autoBtn').onclick = () => {
+  auto = !auto;
+  $('autoBtn').textContent = '自动刷新：' + (auto?'开':'关');
+  if (auto) timer = setInterval(load, 30000); else clearInterval(timer);
+};
+// default base url guess
+$('baseUrl').value = location.protocol.startsWith('http') ? location.origin : 'http://127.0.0.1:8787';
+load();
+</script>
+</body>
+</html>

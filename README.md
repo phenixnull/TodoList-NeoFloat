@@ -1,177 +1,82 @@
-# Neo Float Todo
+# HabitPulse
 
-<p align="center">
-  <img src="build/icons/neo-float.png" alt="Neo Float Todo icon" width="120" />
-</p>
+A local-first habit tracker for Android, iOS, and web. Android is the primary development target.
 
-<p align="center">
-  A colorful Electron desktop app for managing personal to-do lists in a floating, always-on-top window.
-</p>
+## Features
 
-<p align="center">
-  <img src="docs/assets/neo-float-todo-showcase.png" alt="Neo Float Todo showcase" width="100%" />
-</p>
+- Multiple custom tasks with name, description, icon, and color
+- Random icon/color suggestions that avoid the six most recently created task cards
+- Upload a custom image icon and crop it to 1:1
+- Daily note and image records for each task
+- Interactive heat-map date browsing
+- One-tap daily check-in
+- GitHub-style 15-week heatmap
+- Current streak, longest streak, and lifetime count
+- Segment-based task timers and manual duration input
+- Grouped task ordering with long-press drag-and-drop
+- Dark glassmorphism UI with progress ring, spring animations, and task-colored pulsing gradients
+- Offline-first AsyncStorage persistence
+- Optional independent Fastify + SQLite server synchronization
 
-<p align="center">
-  <sub>GitHub-ready showcase view of the floating desktop app</sub>
-</p>
+## Structure
 
-<p align="center">
-  <img alt="Platform" src="https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white" />
-  <img alt="Electron" src="https://img.shields.io/badge/Electron-40-47848F?style=for-the-badge&logo=electron&logoColor=white" />
-  <img alt="React" src="https://img.shields.io/badge/React-19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" />
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white" />
-  <img alt="Vite" src="https://img.shields.io/badge/Vite-7-646CFF?style=for-the-badge&logo=vite&logoColor=white" />
-  <img alt="Zustand" src="https://img.shields.io/badge/Zustand-State%20Store-7B5CFA?style=for-the-badge" />
-</p>
-
-<p align="center">
-  <img alt="Repo stars" src="https://img.shields.io/github/stars/phenixnull/TodoList-NeoFloat?style=flat-square" />
-  <img alt="Last commit" src="https://img.shields.io/github/last-commit/phenixnull/TodoList-NeoFloat?style=flat-square" />
-  <img alt="Top language" src="https://img.shields.io/github/languages/top/phenixnull/TodoList-NeoFloat?style=flat-square" />
-  <img alt="License" src="https://img.shields.io/github/license/phenixnull/TodoList-NeoFloat?style=flat-square" />
-</p>
-
-## Overview
-
-Neo Float Todo is designed for people who want their task list visible without giving up screen space. It combines a frameless translucent desktop window, task timers, markdown rendering, attachment support, and optional sync tooling in one Windows-first app.
-
-## Highlights
-
-- Frameless transparent floating window with always-on-top behavior
-- Edge docking and auto-hide behavior for a less intrusive desktop layout
-- Rich task editing with markdown and math rendering via KaTeX
-- Per-task colors, typography controls, and drag-and-drop sorting
-- Start, pause, and multi-segment time tracking for each task
-- Local persistence with snapshot files and append-only daily event logs
-- Optional sync server plus mobile web client support
-- Electron packaging flow for a Windows installer
-
-## Tech Stack
-
-<p>
-  <img alt="Electron" src="https://img.shields.io/badge/Electron-Desktop-47848F?style=flat-square&logo=electron&logoColor=white" />
-  <img alt="React" src="https://img.shields.io/badge/React-UI-20232A?style=flat-square&logo=react&logoColor=61DAFB" />
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-App%20Code-3178C6?style=flat-square&logo=typescript&logoColor=white" />
-  <img alt="Vite" src="https://img.shields.io/badge/Vite-Build%20Tool-646CFF?style=flat-square&logo=vite&logoColor=white" />
-  <img alt="Zustand" src="https://img.shields.io/badge/Zustand-State-111111?style=flat-square" />
-  <img alt="Markdown" src="https://img.shields.io/badge/Markdown-Supported-000000?style=flat-square&logo=markdown&logoColor=white" />
-  <img alt="KaTeX" src="https://img.shields.io/badge/KaTeX-Math%20Rendering-008080?style=flat-square" />
-</p>
-
-## Quick Start
-
-### Requirements
-
-- Node.js 20+
-- npm
-- Windows environment for the Electron desktop app
-
-### Install
-
-```bash
-npm install
+```text
+HabitPulse/
+  app/     Expo React Native client
+  server/  Fastify + SQLite API
 ```
 
-### Run in Development
+## Run the server
 
 ```bash
+cd server
+npm install
 npm run dev
 ```
 
-This starts the Vite renderer on port `5173` and launches the Electron shell against it.
+The API listens on `http://0.0.0.0:8787`.
 
-## Available Scripts
-
-| Command | Description |
-| --- | --- |
-| `npm run dev` | Start Vite and Electron together for local development |
-| `npm run build` | Build the renderer into `dist/` |
-| `npm start` | Run Electron against the built app |
-| `npm run dist` | Build and package the desktop app |
-| `npm run dist:win` | Create the Windows NSIS installer in `release/` |
-| `npm run lint` | Run ESLint |
-| `npm test` | Run the current web, mobile, store, sync, and Electron tests |
-| `npm run server:sync` | Start the optional sync server |
-
-## Project Structure
-
-```text
-.
-|-- build/                 App icons and packaging assets
-|-- deploy/server-sync/    Service and deployment helpers for the sync server
-|-- electron/              Electron main process, preload bridge, and runtime helpers
-|-- public/                Static public assets
-|-- server/                Optional sync API
-|-- src/
-|   |-- components/        Desktop UI components
-|   |-- lib/               Shared helpers and sync utilities
-|   |-- mobile/            Mobile web client
-|   |-- store/             Zustand task store
-|   `-- types/             Shared TypeScript types
-`-- tests/                 Automated tests for app and sync behavior
-```
-
-## Local Data and Sync
-
-Runtime data is stored locally and intentionally excluded from Git:
-
-- `data/state.snapshot.json`
-- `data/events.YYYY-MM-DD.jsonl`
-- `data/task-assets/`
-- `.runtime/`
-
-The repository contains app code and sync server code, but not personal task data.
-
-## Build a Windows Installer
+## Run the Android client
 
 ```bash
-npm run dist:win
+cd app
+npm install
+npm run android
 ```
 
-The packaged installer is generated under `release/`.
+Use Expo Go or an installed Android developer build. The app is also buildable with `npm run ios` and `npm run web`.
 
-## Development Notes
+## Server address
 
-- The desktop app entry point is `electron/main.cjs`
-- The renderer starts from `src/main.tsx`
-- Mobile web support lives in `mobile.html` and `src/mobile/`
-- Sync behavior is implemented in `server/`, `src/lib/sync.ts`, and `electron/syncRuntime.cjs`
+- Android emulator: `http://10.0.2.2:8787`
+- Android phone: use your computer's LAN IP, for example `http://192.168.1.10:8787`
+
+Open **Settings** in the app, enable **服务端同步**, enter the address, then tap **立即同步**.
+
+## API
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/api/health` | Health check |
+| GET | `/api/tasks` | List active tasks |
+| POST | `/api/tasks` | Create/upsert a task |
+| PATCH | `/api/tasks/:id` | Update a task |
+| DELETE | `/api/tasks/:id` | Soft-delete a task |
+| GET | `/api/checkins` | List check-ins |
+| POST | `/api/checkins` | Upsert a check-in for synchronization |
+| POST | `/api/checkins/toggle` | Create today's check-in |
+| DELETE | `/api/checkins/:taskId/:date` | Remove a check-in |
 
 ## Verification
 
 ```bash
+cd app
+npm run typecheck
+npm test
 npm run lint
+npx expo export --platform web
+
+cd ../server
+npm run typecheck
 npm test
 ```
-
-## Update Log
-
-### 2026-04-04
-
-- Added the Expo-based `native-app/` Android source branch and aligned the mobile APK workflow with a desktop-inspired task-strip UI instead of a generic card layout.
-- Refined the Android task strips with stronger running-state spectrum borders, internal animated gradients, centered editing sheets, and swipe-left delete actions.
-- Stabilized the desktop live editor so the visible editing layer is the actual `textarea`, preventing caret drift after line wraps.
-- Updated desktop live-editor autosizing to use textarea-driven height while editing and preview-driven height while browsing, avoiding premature card growth before the cursor reaches the next line.
-- Aligned plain-text task preview flow with the textarea text flow so ordinary multiline notes no longer pick up extra preview spacing or premature height expansion from Markdown rendering.
-- Added regression coverage for native task-strip source expectations and desktop live-editor measurement behavior.
-
-### 2026-04-03
-
-- Added per-task duration display controls with right-click actions for current-item show/hide, all-items show/hide, and explicit `single-line` vs `2+1` duration layouts.
-- Added batch layout actions that apply the chosen duration layout to all currently visible tasks without touching hidden task records.
-- Improved archive and hidden-task behavior so plain archive state can stay visible, archive-and-hide remains available, and hidden archived task filtering supports date ranges.
-- Added backward-compatible duration normalization for desktop and mobile persisted state so older tasks can recover `totalDurationMs` and newer layout metadata safely.
-- Made the desktop context menu scrollable in small windows and fixed internal menu scrolling so wheel input does not immediately close the menu.
-- Added persistent right-click menu ordering with direct drag-and-drop reordering inside the menu instead of a separate reorder panel.
-- Refined context menu affordances with updated insert/unfinish emoji labels and aligned the left drag handle height to single-line action rows.
-- Added regression coverage for context menu labels, ordering helpers, and CSS row-height consistency.
-- Added Windows dev launch helpers (`start-dev.ps1`, `launch-dev-hidden.vbs`, updated `start-dev.bat`) for source-based startup and desktop shortcut workflows.
-
-## Repository Goal
-
-This repository tracks the application itself only. Generated output, machine-local runtime files, and personal to-do data are not committed.
-
-## License
-
-This project is licensed under `MIT`. See `LICENSE` for the full text.

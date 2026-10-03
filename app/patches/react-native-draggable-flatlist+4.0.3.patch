@@ -1,0 +1,910 @@
+diff --git a/node_modules/react-native-draggable-flatlist/lib/commonjs/components/DraggableFlatList.js b/node_modules/react-native-draggable-flatlist/lib/commonjs/components/DraggableFlatList.js
+index 94b6623..29c737b 100644
+--- a/node_modules/react-native-draggable-flatlist/lib/commonjs/components/DraggableFlatList.js
++++ b/node_modules/react-native-draggable-flatlist/lib/commonjs/components/DraggableFlatList.js
+@@ -1,2 +1,2 @@
+-var _interopRequireDefault=require("@babel/runtime/helpers/interopRequireDefault");Object.defineProperty(exports,"__esModule",{value:true});exports.default=void 0;var _extends2=_interopRequireDefault(require("@babel/runtime/helpers/extends"));var _toConsumableArray2=_interopRequireDefault(require("@babel/runtime/helpers/toConsumableArray"));var _slicedToArray2=_interopRequireDefault(require("@babel/runtime/helpers/slicedToArray"));var _react=_interopRequireWildcard(require("react"));var _reactNative=require("react-native");var _reactNativeGestureHandler=require("react-native-gesture-handler");var _reactNativeReanimated=_interopRequireWildcard(require("react-native-reanimated"));var _CellRendererComponent=_interopRequireDefault(require("./CellRendererComponent"));var _constants=require("../constants");var _PlaceholderItem=_interopRequireDefault(require("./PlaceholderItem"));var _RowItem=_interopRequireDefault(require("./RowItem"));var _propsContext=_interopRequireDefault(require("../context/propsContext"));var _animatedValueContext=_interopRequireWildcard(require("../context/animatedValueContext"));var _refContext=_interopRequireWildcard(require("../context/refContext"));var _draggableFlatListContext=_interopRequireDefault(require("../context/draggableFlatListContext"));var _useAutoScroll=require("../hooks/useAutoScroll");var _useStableCallback=require("../hooks/useStableCallback");var _ScrollOffsetListener=_interopRequireDefault(require("./ScrollOffsetListener"));var _utils=require("../utils");var _jsxFileName="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx";function _getRequireWildcardCache(nodeInterop){if(typeof WeakMap!=="function")return null;var cacheBabelInterop=new WeakMap();var cacheNodeInterop=new WeakMap();return(_getRequireWildcardCache=function _getRequireWildcardCache(nodeInterop){return nodeInterop?cacheNodeInterop:cacheBabelInterop;})(nodeInterop);}function _interopRequireWildcard(obj,nodeInterop){if(!nodeInterop&&obj&&obj.__esModule){return obj;}if(obj===null||typeof obj!=="object"&&typeof obj!=="function"){return{default:obj};}var cache=_getRequireWildcardCache(nodeInterop);if(cache&&cache.has(obj)){return cache.get(obj);}var newObj={};var hasPropertyDescriptor=Object.defineProperty&&Object.getOwnPropertyDescriptor;for(var key in obj){if(key!=="default"&&Object.prototype.hasOwnProperty.call(obj,key)){var desc=hasPropertyDescriptor?Object.getOwnPropertyDescriptor(obj,key):null;if(desc&&(desc.get||desc.set)){Object.defineProperty(newObj,key,desc);}else{newObj[key]=obj[key];}}}newObj.default=obj;if(cache){cache.set(obj,newObj);}return newObj;}var AnimatedFlatList=_reactNativeReanimated.default.createAnimatedComponent(_reactNativeGestureHandler.FlatList);function DraggableFlatListInner(props){var _this=this;var _useRefs=(0,_refContext.useRefs)(),cellDataRef=_useRefs.cellDataRef,containerRef=_useRefs.containerRef,flatlistRef=_useRefs.flatlistRef,keyToIndexRef=_useRefs.keyToIndexRef,propsRef=_useRefs.propsRef,animationConfigRef=_useRefs.animationConfigRef;var _useAnimatedValues=(0,_animatedValueContext.useAnimatedValues)(),activeCellOffset=_useAnimatedValues.activeCellOffset,activeCellSize=_useAnimatedValues.activeCellSize,activeIndexAnim=_useAnimatedValues.activeIndexAnim,containerSize=_useAnimatedValues.containerSize,scrollOffset=_useAnimatedValues.scrollOffset,scrollViewSize=_useAnimatedValues.scrollViewSize,spacerIndexAnim=_useAnimatedValues.spacerIndexAnim,horizontalAnim=_useAnimatedValues.horizontalAnim,placeholderOffset=_useAnimatedValues.placeholderOffset,touchTranslate=_useAnimatedValues.touchTranslate,autoScrollDistance=_useAnimatedValues.autoScrollDistance,panGestureState=_useAnimatedValues.panGestureState,isTouchActiveNative=_useAnimatedValues.isTouchActiveNative,viewableIndexMin=_useAnimatedValues.viewableIndexMin,viewableIndexMax=_useAnimatedValues.viewableIndexMax,disabled=_useAnimatedValues.disabled;var reset=(0,_useStableCallback.useStableCallback)(function(){activeIndexAnim.value=-1;spacerIndexAnim.value=-1;touchTranslate.value=0;activeCellSize.value=-1;activeCellOffset.value=-1;setActiveKey(null);});var _props$dragHitSlop=props.dragHitSlop,dragHitSlop=_props$dragHitSlop===void 0?_constants.DEFAULT_PROPS.dragHitSlop:_props$dragHitSlop,_props$scrollEnabled=props.scrollEnabled,scrollEnabled=_props$scrollEnabled===void 0?_constants.DEFAULT_PROPS.scrollEnabled:_props$scrollEnabled,_props$activationDist=props.activationDistance,activationDistanceProp=_props$activationDist===void 0?_constants.DEFAULT_PROPS.activationDistance:_props$activationDist;var _useState=(0,_react.useState)(null),_useState2=(0,_slicedToArray2.default)(_useState,2),activeKey=_useState2[0],setActiveKey=_useState2[1];var _useState3=(0,_react.useState)(!propsRef.current.enableLayoutAnimationExperimental),_useState4=(0,_slicedToArray2.default)(_useState3,2),layoutAnimationDisabled=_useState4[0],setLayoutAnimationDisabled=_useState4[1];var keyExtractor=(0,_useStableCallback.useStableCallback)(function(item,index){if(!props.keyExtractor){throw new Error("You must provide a keyExtractor to DraggableFlatList");}return props.keyExtractor(item,index);});var dataRef=(0,_react.useRef)(props.data);var dataHasChanged=dataRef.current.map(keyExtractor).join("")!==props.data.map(keyExtractor).join("");dataRef.current=props.data;if(dataHasChanged){activeKey=null;_reactNative.InteractionManager.runAfterInteractions(function(){reset();});}(0,_react.useEffect)(function(){if(!propsRef.current.enableLayoutAnimationExperimental)return;if(activeKey){setLayoutAnimationDisabled(true);}else{setTimeout(function(){setLayoutAnimationDisabled(false);},100);}},[activeKey]);(0,_react.useLayoutEffect)(function(){props.data.forEach(function(d,i){var key=keyExtractor(d,i);keyToIndexRef.current.set(key,i);});},[props.data,keyExtractor,keyToIndexRef]);var drag=(0,_useStableCallback.useStableCallback)(function(activeKey){if(disabled.value)return;var index=keyToIndexRef.current.get(activeKey);var cellData=cellDataRef.current.get(activeKey);if(cellData){activeCellOffset.value=cellData.measurements.offset;activeCellSize.value=cellData.measurements.size;}var onDragBegin=propsRef.current.onDragBegin;if(index!==undefined){spacerIndexAnim.value=index;activeIndexAnim.value=index;setActiveKey(activeKey);onDragBegin==null?void 0:onDragBegin(index);}});var onContainerLayout=function onContainerLayout(_ref){var layout=_ref.nativeEvent.layout;var width=layout.width,height=layout.height;containerSize.value=props.horizontal?width:height;props.onContainerLayout==null?void 0:props.onContainerLayout({layout:layout,containerRef:containerRef});};var onListContentSizeChange=function onListContentSizeChange(w,h){scrollViewSize.value=props.horizontal?w:h;props.onContentSizeChange==null?void 0:props.onContentSizeChange(w,h);};var onContainerTouchStart=function onContainerTouchStart(){if(!disabled.value){isTouchActiveNative.value=true;}return false;};var onContainerTouchEnd=function onContainerTouchEnd(){isTouchActiveNative.value=false;};var extraData=(0,_react.useMemo)(function(){return{activeKey:activeKey,extraData:props.extraData};},[activeKey,props.extraData]);var renderItem=(0,_react.useCallback)(function(_ref2){var item=_ref2.item,index=_ref2.index;var key=keyExtractor(item,index);if(index!==keyToIndexRef.current.get(key)){keyToIndexRef.current.set(key,index);}return _react.default.createElement(_RowItem.default,{item:item,itemKey:key,renderItem:props.renderItem,drag:drag,extraData:props.extraData,__self:_this,__source:{fileName:_jsxFileName,lineNumber:205,columnNumber:9}});},[props.renderItem,props.extraData,drag,keyExtractor]);var onRelease=(0,_useStableCallback.useStableCallback)(function(index){props.onRelease==null?void 0:props.onRelease(index);});var onDragEnd=(0,_useStableCallback.useStableCallback)(function(_ref3){var from=_ref3.from,to=_ref3.to;var onDragEnd=props.onDragEnd,data=props.data;var newData=(0,_toConsumableArray2.default)(data);if(from!==to){newData.splice(from,1);newData.splice(to,0,data[from]);}onDragEnd==null?void 0:onDragEnd({from:from,to:to,data:newData});setActiveKey(null);});var onPlaceholderIndexChange=(0,_useStableCallback.useStableCallback)(function(index){props.onPlaceholderIndexChange==null?void 0:props.onPlaceholderIndexChange(index);});(0,_reactNativeReanimated.useAnimatedReaction)(function(){var _f=function _f(){return isTouchActiveNative.value;};_f._closure={isTouchActiveNative:isTouchActiveNative};_f.asString="function _f(){const{isTouchActiveNative}=jsThis._closure;{return isTouchActiveNative.value;}}";_f.__workletHash=14702024657843;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (243:4)";return _f;}(),function(){var _f=function _f(cur,prev){if(cur!==prev&&!cur){var hasMoved=!!touchTranslate.value;if(!hasMoved&&activeIndexAnim.value>=0&&!disabled.value){(0,_reactNativeReanimated.runOnJS)(onRelease)(activeIndexAnim.value);(0,_reactNativeReanimated.runOnJS)(onDragEnd)({from:activeIndexAnim.value,to:spacerIndexAnim.value});}}};_f._closure={touchTranslate:touchTranslate,activeIndexAnim:activeIndexAnim,disabled:disabled,runOnJS:_reactNativeReanimated.runOnJS,onRelease:onRelease,onDragEnd:onDragEnd,spacerIndexAnim:spacerIndexAnim};_f.asString="function _f(cur,prev){const{touchTranslate,activeIndexAnim,disabled,runOnJS,onRelease,onDragEnd,spacerIndexAnim}=jsThis._closure;{if(cur!==prev&&!cur){const hasMoved=!!touchTranslate.value;if(!hasMoved&&activeIndexAnim.value>=0&&!disabled.value){runOnJS(onRelease)(activeIndexAnim.value);runOnJS(onDragEnd)({from:activeIndexAnim.value,to:spacerIndexAnim.value});}}}}";_f.__workletHash=5951241873481;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (246:4)";return _f;}(),[isTouchActiveNative,onDragEnd,onRelease]);(0,_reactNativeReanimated.useAnimatedReaction)(function(){var _f=function _f(){return spacerIndexAnim.value;};_f._closure={spacerIndexAnim:spacerIndexAnim};_f.asString="function _f(){const{spacerIndexAnim}=jsThis._closure;{return spacerIndexAnim.value;}}";_f.__workletHash=2960108028947;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (262:4)";return _f;}(),function(){var _f=function _f(cur,prev){if(prev!==null&&cur!==prev&&cur>=0&&prev>=0){(0,_reactNativeReanimated.runOnJS)(onPlaceholderIndexChange)(cur);}};_f._closure={runOnJS:_reactNativeReanimated.runOnJS,onPlaceholderIndexChange:onPlaceholderIndexChange};_f.asString="function _f(cur,prev){const{runOnJS,onPlaceholderIndexChange}=jsThis._closure;{if(prev!==null&&cur!==prev&&cur>=0&&prev>=0){runOnJS(onPlaceholderIndexChange)(cur);}}}";_f.__workletHash=16965253726735;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (265:4)";return _f;}(),[spacerIndexAnim]);var gestureDisabled=(0,_reactNativeReanimated.useSharedValue)(false);var panGesture=_reactNativeGestureHandler.Gesture.Pan().onBegin(function(){var _f=function _f(evt){gestureDisabled.value=disabled.value;if(gestureDisabled.value)return;panGestureState.value=evt.state;};_f._closure={gestureDisabled:gestureDisabled,disabled:disabled,panGestureState:panGestureState};_f.asString="function _f(evt){const{gestureDisabled,disabled,panGestureState}=jsThis._closure;{gestureDisabled.value=disabled.value;if(gestureDisabled.value)return;panGestureState.value=evt.state;}}";_f.__workletHash=17574034116918;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (276:13)";return _f;}()).onUpdate(function(){var _f=function _f(evt){if(gestureDisabled.value)return;panGestureState.value=evt.state;var translation=horizontalAnim.value?evt.translationX:evt.translationY;touchTranslate.value=translation;};_f._closure={gestureDisabled:gestureDisabled,panGestureState:panGestureState,horizontalAnim:horizontalAnim,touchTranslate:touchTranslate};_f.asString="function _f(evt){const{gestureDisabled,panGestureState,horizontalAnim,touchTranslate}=jsThis._closure;{if(gestureDisabled.value)return;panGestureState.value=evt.state;const translation=horizontalAnim.value?evt.translationX:evt.translationY;touchTranslate.value=translation;}}";_f.__workletHash=5455568984874;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (281:14)";return _f;}()).onEnd(function(){var _f=function _f(evt){if(gestureDisabled.value)return;isTouchActiveNative.value=false;var translation=horizontalAnim.value?evt.translationX:evt.translationY;touchTranslate.value=translation+autoScrollDistance.value;panGestureState.value=evt.state;if(activeIndexAnim.value===-1||disabled.value)return;disabled.value=true;(0,_reactNativeReanimated.runOnJS)(onRelease)(activeIndexAnim.value);var springTo=placeholderOffset.value-activeCellOffset.value;touchTranslate.value=(0,_reactNativeReanimated.withSpring)(springTo,animationConfigRef.value,function(){var _f=function _f(){(0,_reactNativeReanimated.runOnJS)(onDragEnd)({from:activeIndexAnim.value,to:spacerIndexAnim.value});disabled.value=false;};_f._closure={runOnJS:_reactNativeReanimated.runOnJS,onDragEnd:onDragEnd,activeIndexAnim:activeIndexAnim,spacerIndexAnim:spacerIndexAnim,disabled:disabled};_f.asString="function _f(){const{runOnJS,onDragEnd,activeIndexAnim,spacerIndexAnim,disabled}=jsThis._closure;{runOnJS(onDragEnd)({from:activeIndexAnim.value,to:spacerIndexAnim.value});disabled.value=false;}}";_f.__workletHash=1618704508901;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (308:8)";return _f;}());};_f._closure={gestureDisabled:gestureDisabled,isTouchActiveNative:isTouchActiveNative,horizontalAnim:horizontalAnim,touchTranslate:touchTranslate,autoScrollDistance:autoScrollDistance,panGestureState:panGestureState,activeIndexAnim:activeIndexAnim,disabled:disabled,runOnJS:_reactNativeReanimated.runOnJS,onRelease:onRelease,placeholderOffset:placeholderOffset,activeCellOffset:activeCellOffset,withSpring:_reactNativeReanimated.withSpring,animationConfigRef:animationConfigRef,onDragEnd:onDragEnd,spacerIndexAnim:spacerIndexAnim};_f.asString="function _f(evt){const{gestureDisabled,isTouchActiveNative,horizontalAnim,touchTranslate,autoScrollDistance,panGestureState,activeIndexAnim,disabled,runOnJS,onRelease,placeholderOffset,activeCellOffset,withSpring,animationConfigRef,onDragEnd,spacerIndexAnim}=jsThis._closure;{if(gestureDisabled.value)return;isTouchActiveNative.value=false;const translation=horizontalAnim.value?evt.translationX:evt.translationY;touchTranslate.value=translation+autoScrollDistance.value;panGestureState.value=evt.state;if(activeIndexAnim.value===-1||disabled.value)return;disabled.value=true;runOnJS(onRelease)(activeIndexAnim.value);const springTo=placeholderOffset.value-activeCellOffset.value;touchTranslate.value=withSpring(springTo,animationConfigRef.value,function(){runOnJS(onDragEnd)({from:activeIndexAnim.value,to:spacerIndexAnim.value});disabled.value=false;});}}";_f.__workletHash=7842863214419;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (289:11)";return _f;}()).onTouchesDown(function(){var _f=function _f(){(0,_reactNativeReanimated.runOnJS)(onContainerTouchStart)();};_f._closure={runOnJS:_reactNativeReanimated.runOnJS,onContainerTouchStart:onContainerTouchStart};_f.asString="function _f(){const{runOnJS,onContainerTouchStart}=jsThis._closure;{runOnJS(onContainerTouchStart)();}}";_f.__workletHash=4756906064016;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (317:19)";return _f;}()).onTouchesUp(function(){var _f=function _f(){(0,_reactNativeReanimated.runOnJS)(onContainerTouchEnd)();};_f._closure={runOnJS:_reactNativeReanimated.runOnJS,onContainerTouchEnd:onContainerTouchEnd};_f.asString="function _f(){const{runOnJS,onContainerTouchEnd}=jsThis._closure;{runOnJS(onContainerTouchEnd)();}}";_f.__workletHash=9596402198608;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (320:17)";return _f;}());if(dragHitSlop)panGesture.hitSlop(dragHitSlop);if(activationDistanceProp){var activeOffset=[-activationDistanceProp,activationDistanceProp];if(props.horizontal){panGesture.activeOffsetX(activeOffset);}else{panGesture.activeOffsetY(activeOffset);}}var onScroll=(0,_useStableCallback.useStableCallback)(function(scrollOffset){props.onScrollOffsetChange==null?void 0:props.onScrollOffsetChange(scrollOffset);});var scrollHandler=(0,_reactNativeReanimated.useAnimatedScrollHandler)({onScroll:function(){var _f=function _f(evt){scrollOffset.value=horizontalAnim.value?evt.contentOffset.x:evt.contentOffset.y;(0,_reactNativeReanimated.runOnJS)(onScroll)(scrollOffset.value);};_f._closure={scrollOffset:scrollOffset,horizontalAnim:horizontalAnim,runOnJS:_reactNativeReanimated.runOnJS,onScroll:onScroll};_f.asString="function _f(evt){const{scrollOffset,horizontalAnim,runOnJS,onScroll}=jsThis._closure;{scrollOffset.value=horizontalAnim.value?evt.contentOffset.x:evt.contentOffset.y;runOnJS(onScroll)(scrollOffset.value);}}";_f.__workletHash=5653789960368;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (342:16)";return _f;}()},[horizontalAnim]);(0,_useAutoScroll.useAutoScroll)();var onViewableItemsChanged=(0,_useStableCallback.useStableCallback)(function(info){var viewableIndices=info.viewableItems.filter(function(item){return item.isViewable;}).map(function(item){return item.index;}).filter(function(index){return typeof index==="number";});var min=Math.min.apply(Math,(0,_toConsumableArray2.default)(viewableIndices));var max=Math.max.apply(Math,(0,_toConsumableArray2.default)(viewableIndices));viewableIndexMin.value=min;viewableIndexMax.value=max;props.onViewableItemsChanged==null?void 0:props.onViewableItemsChanged(info);});return _react.default.createElement(_draggableFlatListContext.default,{activeKey:activeKey,keyExtractor:keyExtractor,horizontal:!!props.horizontal,layoutAnimationDisabled:layoutAnimationDisabled,__self:this,__source:{fileName:_jsxFileName,lineNumber:370,columnNumber:5}},_react.default.createElement(_reactNativeGestureHandler.GestureDetector,{gesture:panGesture,__self:this,__source:{fileName:_jsxFileName,lineNumber:376,columnNumber:7}},_react.default.createElement(_reactNativeReanimated.default.View,{style:props.containerStyle,ref:containerRef,onLayout:onContainerLayout,__self:this,__source:{fileName:_jsxFileName,lineNumber:377,columnNumber:9}},props.renderPlaceholder&&_react.default.createElement(_PlaceholderItem.default,{renderPlaceholder:props.renderPlaceholder,__self:this,__source:{fileName:_jsxFileName,lineNumber:383,columnNumber:13}}),_react.default.createElement(AnimatedFlatList,(0,_extends2.default)({},props,{data:props.data,onViewableItemsChanged:onViewableItemsChanged,CellRendererComponent:_CellRendererComponent.default,ref:flatlistRef,onContentSizeChange:onListContentSizeChange,scrollEnabled:!activeKey&&scrollEnabled,renderItem:renderItem,extraData:extraData,keyExtractor:keyExtractor,onScroll:scrollHandler,scrollEventThrottle:16,simultaneousHandlers:props.simultaneousHandlers,removeClippedSubviews:false,__self:this,__source:{fileName:_jsxFileName,lineNumber:385,columnNumber:11}})),!!props.onScrollOffsetChange&&_react.default.createElement(_ScrollOffsetListener.default,{onScrollOffsetChange:props.onScrollOffsetChange,scrollOffset:scrollOffset,__self:this,__source:{fileName:_jsxFileName,lineNumber:402,columnNumber:13}}))));}function DraggableFlatList(props,ref){return _react.default.createElement(_propsContext.default,(0,_extends2.default)({},props,{__self:this,__source:{fileName:_jsxFileName,lineNumber:418,columnNumber:5}}),_react.default.createElement(_animatedValueContext.default,{__self:this,__source:{fileName:_jsxFileName,lineNumber:419,columnNumber:7}},_react.default.createElement(_refContext.default,{flatListRef:ref,__self:this,__source:{fileName:_jsxFileName,lineNumber:420,columnNumber:9}},_react.default.createElement(MemoizedInner,(0,_extends2.default)({},props,{__self:this,__source:{fileName:_jsxFileName,lineNumber:421,columnNumber:11}})))));}var MemoizedInner=(0,_utils.typedMemo)(DraggableFlatListInner);var _default=_react.default.forwardRef(DraggableFlatList);exports.default=_default;
++var _interopRequireDefault=require("@babel/runtime/helpers/interopRequireDefault");Object.defineProperty(exports,"__esModule",{value:true});exports.default=void 0;var _extends2=_interopRequireDefault(require("@babel/runtime/helpers/extends"));var _toConsumableArray2=_interopRequireDefault(require("@babel/runtime/helpers/toConsumableArray"));var _slicedToArray2=_interopRequireDefault(require("@babel/runtime/helpers/slicedToArray"));var _react=_interopRequireWildcard(require("react"));var _reactNative=require("react-native");var _reactNativeGestureHandler=require("react-native-gesture-handler");var _reactNativeReanimated=_interopRequireWildcard(require("react-native-reanimated"));var _CellRendererComponent=_interopRequireDefault(require("./CellRendererComponent"));var _constants=require("../constants");var _PlaceholderItem=_interopRequireDefault(require("./PlaceholderItem"));var _RowItem=_interopRequireDefault(require("./RowItem"));var _propsContext=_interopRequireDefault(require("../context/propsContext"));var _animatedValueContext=_interopRequireWildcard(require("../context/animatedValueContext"));var _refContext=_interopRequireWildcard(require("../context/refContext"));var _draggableFlatListContext=_interopRequireDefault(require("../context/draggableFlatListContext"));var _useAutoScroll=require("../hooks/useAutoScroll");var _useStableCallback=require("../hooks/useStableCallback");var _ScrollOffsetListener=_interopRequireDefault(require("./ScrollOffsetListener"));var _utils=require("../utils");var _jsxFileName="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx";function _getRequireWildcardCache(nodeInterop){if(typeof WeakMap!=="function")return null;var cacheBabelInterop=new WeakMap();var cacheNodeInterop=new WeakMap();return(_getRequireWildcardCache=function _getRequireWildcardCache(nodeInterop){return nodeInterop?cacheNodeInterop:cacheBabelInterop;})(nodeInterop);}function _interopRequireWildcard(obj,nodeInterop){if(!nodeInterop&&obj&&obj.__esModule){return obj;}if(obj===null||typeof obj!=="object"&&typeof obj!=="function"){return{default:obj};}var cache=_getRequireWildcardCache(nodeInterop);if(cache&&cache.has(obj)){return cache.get(obj);}var newObj={};var hasPropertyDescriptor=Object.defineProperty&&Object.getOwnPropertyDescriptor;for(var key in obj){if(key!=="default"&&Object.prototype.hasOwnProperty.call(obj,key)){var desc=hasPropertyDescriptor?Object.getOwnPropertyDescriptor(obj,key):null;if(desc&&(desc.get||desc.set)){Object.defineProperty(newObj,key,desc);}else{newObj[key]=obj[key];}}}newObj.default=obj;if(cache){cache.set(obj,newObj);}return newObj;}var AnimatedFlatList=_reactNativeReanimated.default.createAnimatedComponent(_reactNativeGestureHandler.FlatList);function DraggableFlatListInner(props){var _this=this;var _useRefs=(0,_refContext.useRefs)(),cellDataRef=_useRefs.cellDataRef,containerRef=_useRefs.containerRef,flatlistRef=_useRefs.flatlistRef,keyToIndexRef=_useRefs.keyToIndexRef,propsRef=_useRefs.propsRef,animationConfigRef=_useRefs.animationConfigRef;var _useAnimatedValues=(0,_animatedValueContext.useAnimatedValues)(),activeCellOffset=_useAnimatedValues.activeCellOffset,activeCellSize=_useAnimatedValues.activeCellSize,activeIndexAnim=_useAnimatedValues.activeIndexAnim,containerSize=_useAnimatedValues.containerSize,scrollOffset=_useAnimatedValues.scrollOffset,scrollViewSize=_useAnimatedValues.scrollViewSize,spacerIndexAnim=_useAnimatedValues.spacerIndexAnim,horizontalAnim=_useAnimatedValues.horizontalAnim,placeholderOffset=_useAnimatedValues.placeholderOffset,touchTranslate=_useAnimatedValues.touchTranslate,autoScrollDistance=_useAnimatedValues.autoScrollDistance,panGestureState=_useAnimatedValues.panGestureState,isTouchActiveNative=_useAnimatedValues.isTouchActiveNative,viewableIndexMin=_useAnimatedValues.viewableIndexMin,viewableIndexMax=_useAnimatedValues.viewableIndexMax,disabled=_useAnimatedValues.disabled;var reset=(0,_useStableCallback.useStableCallback)(function(){activeIndexAnim.value=-1;spacerIndexAnim.value=-1;touchTranslate.value=0;activeCellSize.value=-1;activeCellOffset.value=-1;setActiveKey(null);});var _props$dragHitSlop=props.dragHitSlop,dragHitSlop=_props$dragHitSlop===void 0?_constants.DEFAULT_PROPS.dragHitSlop:_props$dragHitSlop,_props$scrollEnabled=props.scrollEnabled,scrollEnabled=_props$scrollEnabled===void 0?_constants.DEFAULT_PROPS.scrollEnabled:_props$scrollEnabled,_props$activationDist=props.activationDistance,activationDistanceProp=_props$activationDist===void 0?_constants.DEFAULT_PROPS.activationDistance:_props$activationDist;var _useState=(0,_react.useState)(null),_useState2=(0,_slicedToArray2.default)(_useState,2),activeKey=_useState2[0],setActiveKey=_useState2[1];var _useState3=(0,_react.useState)(!propsRef.current.enableLayoutAnimationExperimental),_useState4=(0,_slicedToArray2.default)(_useState3,2),layoutAnimationDisabled=_useState4[0],setLayoutAnimationDisabled=_useState4[1];var keyExtractor=(0,_useStableCallback.useStableCallback)(function(item,index){if(!props.keyExtractor){throw new Error("You must provide a keyExtractor to DraggableFlatList");}return props.keyExtractor(item,index);});var dataRef=(0,_react.useRef)(props.data);var dataHasChanged=dataRef.current.map(keyExtractor).join("")!==props.data.map(keyExtractor).join("");dataRef.current=props.data;if(dataHasChanged){activeKey=null;_reactNative.InteractionManager.runAfterInteractions(function(){reset();});}(0,_react.useEffect)(function(){if(!propsRef.current.enableLayoutAnimationExperimental)return;if(activeKey){setLayoutAnimationDisabled(true);}else{setTimeout(function(){setLayoutAnimationDisabled(false);},100);}},[activeKey]);(0,_react.useLayoutEffect)(function(){props.data.forEach(function(d,i){var key=keyExtractor(d,i);keyToIndexRef.current.set(key,i);});},[props.data,keyExtractor,keyToIndexRef]);var drag=(0,_useStableCallback.useStableCallback)(function(activeKey){if(disabled.value)return;var index=keyToIndexRef.current.get(activeKey);var cellData=cellDataRef.current.get(activeKey);if(cellData){activeCellOffset.value=cellData.measurements.offset;activeCellSize.value=cellData.measurements.size;}var onDragBegin=propsRef.current.onDragBegin;if(index!==undefined){spacerIndexAnim.value=index;activeIndexAnim.value=index;setActiveKey(activeKey);onDragBegin==null?void 0:onDragBegin(index);}});var onContainerLayout=function onContainerLayout(_ref){var layout=_ref.nativeEvent.layout;var width=layout.width,height=layout.height;containerSize.value=props.horizontal?width:height;props.onContainerLayout==null?void 0:props.onContainerLayout({layout:layout,containerRef:containerRef});};var onListContentSizeChange=function onListContentSizeChange(w,h){scrollViewSize.value=props.horizontal?w:h;props.onContentSizeChange==null?void 0:props.onContentSizeChange(w,h);};var onContainerTouchStart=function onContainerTouchStart(){if(!disabled.value){isTouchActiveNative.value=true;}return false;};var onContainerTouchEnd=function onContainerTouchEnd(){isTouchActiveNative.value=false;};var extraData=(0,_react.useMemo)(function(){return{activeKey:activeKey,extraData:props.extraData};},[activeKey,props.extraData]);var renderItem=(0,_react.useCallback)(function(_ref2){var item=_ref2.item,index=_ref2.index;var key=keyExtractor(item,index);if(index!==keyToIndexRef.current.get(key)){keyToIndexRef.current.set(key,index);}return _react.default.createElement(_RowItem.default,{item:item,itemKey:key,renderItem:props.renderItem,drag:drag,dragGesture:panGesture,extraData:props.extraData,__self:_this,__source:{fileName:_jsxFileName,lineNumber:205,columnNumber:9}});},[props.renderItem,props.extraData,drag,keyExtractor]);var onRelease=(0,_useStableCallback.useStableCallback)(function(index){props.onRelease==null?void 0:props.onRelease(index);});var onDragEnd=(0,_useStableCallback.useStableCallback)(function(_ref3){var from=_ref3.from,to=_ref3.to;var onDragEnd=props.onDragEnd,data=props.data;var newData=(0,_toConsumableArray2.default)(data);if(from!==to){newData.splice(from,1);newData.splice(to,0,data[from]);}onDragEnd==null?void 0:onDragEnd({from:from,to:to,data:newData});setActiveKey(null);});var onPlaceholderIndexChange=(0,_useStableCallback.useStableCallback)(function(index){props.onPlaceholderIndexChange==null?void 0:props.onPlaceholderIndexChange(index);});(0,_reactNativeReanimated.useAnimatedReaction)(function(){var _f=function _f(){return isTouchActiveNative.value;};_f._closure={isTouchActiveNative:isTouchActiveNative};_f.asString="function _f(){const{isTouchActiveNative}=jsThis._closure;{return isTouchActiveNative.value;}}";_f.__workletHash=14702024657843;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (243:4)";return _f;}(),function(){var _f=function _f(cur,prev){if(cur!==prev&&!cur){var hasMoved=!!touchTranslate.value;if(!hasMoved&&activeIndexAnim.value>=0&&!disabled.value){(0,_reactNativeReanimated.runOnJS)(onRelease)(activeIndexAnim.value);(0,_reactNativeReanimated.runOnJS)(onDragEnd)({from:activeIndexAnim.value,to:spacerIndexAnim.value});}}};_f._closure={touchTranslate:touchTranslate,activeIndexAnim:activeIndexAnim,disabled:disabled,runOnJS:_reactNativeReanimated.runOnJS,onRelease:onRelease,onDragEnd:onDragEnd,spacerIndexAnim:spacerIndexAnim};_f.asString="function _f(cur,prev){const{touchTranslate,activeIndexAnim,disabled,runOnJS,onRelease,onDragEnd,spacerIndexAnim}=jsThis._closure;{if(cur!==prev&&!cur){const hasMoved=!!touchTranslate.value;if(!hasMoved&&activeIndexAnim.value>=0&&!disabled.value){runOnJS(onRelease)(activeIndexAnim.value);runOnJS(onDragEnd)({from:activeIndexAnim.value,to:spacerIndexAnim.value});}}}}";_f.__workletHash=5951241873481;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (246:4)";return _f;}(),[isTouchActiveNative,onDragEnd,onRelease]);(0,_reactNativeReanimated.useAnimatedReaction)(function(){var _f=function _f(){return spacerIndexAnim.value;};_f._closure={spacerIndexAnim:spacerIndexAnim};_f.asString="function _f(){const{spacerIndexAnim}=jsThis._closure;{return spacerIndexAnim.value;}}";_f.__workletHash=2960108028947;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (262:4)";return _f;}(),function(){var _f=function _f(cur,prev){if(prev!==null&&cur!==prev&&cur>=0&&prev>=0){(0,_reactNativeReanimated.runOnJS)(onPlaceholderIndexChange)(cur);}};_f._closure={runOnJS:_reactNativeReanimated.runOnJS,onPlaceholderIndexChange:onPlaceholderIndexChange};_f.asString="function _f(cur,prev){const{runOnJS,onPlaceholderIndexChange}=jsThis._closure;{if(prev!==null&&cur!==prev&&cur>=0&&prev>=0){runOnJS(onPlaceholderIndexChange)(cur);}}}";_f.__workletHash=16965253726735;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (265:4)";return _f;}(),[spacerIndexAnim]);var gestureDisabled=(0,_reactNativeReanimated.useSharedValue)(false);var panGesture=_reactNativeGestureHandler.Gesture.Pan().onBegin(function(){var _f=function _f(evt){gestureDisabled.value=disabled.value;if(gestureDisabled.value)return;panGestureState.value=evt.state;};_f._closure={gestureDisabled:gestureDisabled,disabled:disabled,panGestureState:panGestureState};_f.asString="function _f(evt){const{gestureDisabled,disabled,panGestureState}=jsThis._closure;{gestureDisabled.value=disabled.value;if(gestureDisabled.value)return;panGestureState.value=evt.state;}}";_f.__workletHash=17574034116918;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (276:13)";return _f;}()).onUpdate(function(){var _f=function _f(evt){if(gestureDisabled.value)return;panGestureState.value=evt.state;var translation=horizontalAnim.value?evt.translationX:evt.translationY;touchTranslate.value=translation;};_f._closure={gestureDisabled:gestureDisabled,panGestureState:panGestureState,horizontalAnim:horizontalAnim,touchTranslate:touchTranslate};_f.asString="function _f(evt){const{gestureDisabled,panGestureState,horizontalAnim,touchTranslate}=jsThis._closure;{if(gestureDisabled.value)return;panGestureState.value=evt.state;const translation=horizontalAnim.value?evt.translationX:evt.translationY;touchTranslate.value=translation;}}";_f.__workletHash=5455568984874;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (281:14)";return _f;}()).onEnd(function(){var _f=function _f(evt){if(gestureDisabled.value)return;isTouchActiveNative.value=false;var translation=horizontalAnim.value?evt.translationX:evt.translationY;touchTranslate.value=translation+autoScrollDistance.value;panGestureState.value=evt.state;if(activeIndexAnim.value===-1||disabled.value)return;disabled.value=true;(0,_reactNativeReanimated.runOnJS)(onRelease)(activeIndexAnim.value);var springTo=placeholderOffset.value-activeCellOffset.value;touchTranslate.value=(0,_reactNativeReanimated.withSpring)(springTo,animationConfigRef.value,function(){var _f=function _f(){(0,_reactNativeReanimated.runOnJS)(onDragEnd)({from:activeIndexAnim.value,to:spacerIndexAnim.value});disabled.value=false;};_f._closure={runOnJS:_reactNativeReanimated.runOnJS,onDragEnd:onDragEnd,activeIndexAnim:activeIndexAnim,spacerIndexAnim:spacerIndexAnim,disabled:disabled};_f.asString="function _f(){const{runOnJS,onDragEnd,activeIndexAnim,spacerIndexAnim,disabled}=jsThis._closure;{runOnJS(onDragEnd)({from:activeIndexAnim.value,to:spacerIndexAnim.value});disabled.value=false;}}";_f.__workletHash=1618704508901;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (308:8)";return _f;}());};_f._closure={gestureDisabled:gestureDisabled,isTouchActiveNative:isTouchActiveNative,horizontalAnim:horizontalAnim,touchTranslate:touchTranslate,autoScrollDistance:autoScrollDistance,panGestureState:panGestureState,activeIndexAnim:activeIndexAnim,disabled:disabled,runOnJS:_reactNativeReanimated.runOnJS,onRelease:onRelease,placeholderOffset:placeholderOffset,activeCellOffset:activeCellOffset,withSpring:_reactNativeReanimated.withSpring,animationConfigRef:animationConfigRef,onDragEnd:onDragEnd,spacerIndexAnim:spacerIndexAnim};_f.asString="function _f(evt){const{gestureDisabled,isTouchActiveNative,horizontalAnim,touchTranslate,autoScrollDistance,panGestureState,activeIndexAnim,disabled,runOnJS,onRelease,placeholderOffset,activeCellOffset,withSpring,animationConfigRef,onDragEnd,spacerIndexAnim}=jsThis._closure;{if(gestureDisabled.value)return;isTouchActiveNative.value=false;const translation=horizontalAnim.value?evt.translationX:evt.translationY;touchTranslate.value=translation+autoScrollDistance.value;panGestureState.value=evt.state;if(activeIndexAnim.value===-1||disabled.value)return;disabled.value=true;runOnJS(onRelease)(activeIndexAnim.value);const springTo=placeholderOffset.value-activeCellOffset.value;touchTranslate.value=withSpring(springTo,animationConfigRef.value,function(){runOnJS(onDragEnd)({from:activeIndexAnim.value,to:spacerIndexAnim.value});disabled.value=false;});}}";_f.__workletHash=7842863214419;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (289:11)";return _f;}()).onTouchesDown(function(){var _f=function _f(){(0,_reactNativeReanimated.runOnJS)(onContainerTouchStart)();};_f._closure={runOnJS:_reactNativeReanimated.runOnJS,onContainerTouchStart:onContainerTouchStart};_f.asString="function _f(){const{runOnJS,onContainerTouchStart}=jsThis._closure;{runOnJS(onContainerTouchStart)();}}";_f.__workletHash=4756906064016;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (317:19)";return _f;}()).onTouchesUp(function(){var _f=function _f(){(0,_reactNativeReanimated.runOnJS)(onContainerTouchEnd)();};_f._closure={runOnJS:_reactNativeReanimated.runOnJS,onContainerTouchEnd:onContainerTouchEnd};_f.asString="function _f(){const{runOnJS,onContainerTouchEnd}=jsThis._closure;{runOnJS(onContainerTouchEnd)();}}";_f.__workletHash=9596402198608;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (320:17)";return _f;}());if(dragHitSlop)panGesture.hitSlop(dragHitSlop);if(activationDistanceProp){var activeOffset=[-activationDistanceProp,activationDistanceProp];if(props.horizontal){panGesture.activeOffsetX(activeOffset);}else{panGesture.activeOffsetY(activeOffset);}}var onScroll=(0,_useStableCallback.useStableCallback)(function(scrollOffset){props.onScrollOffsetChange==null?void 0:props.onScrollOffsetChange(scrollOffset);});var scrollHandler=(0,_reactNativeReanimated.useAnimatedScrollHandler)({onScroll:function(){var _f=function _f(evt){scrollOffset.value=horizontalAnim.value?evt.contentOffset.x:evt.contentOffset.y;(0,_reactNativeReanimated.runOnJS)(onScroll)(scrollOffset.value);};_f._closure={scrollOffset:scrollOffset,horizontalAnim:horizontalAnim,runOnJS:_reactNativeReanimated.runOnJS,onScroll:onScroll};_f.asString="function _f(evt){const{scrollOffset,horizontalAnim,runOnJS,onScroll}=jsThis._closure;{scrollOffset.value=horizontalAnim.value?evt.contentOffset.x:evt.contentOffset.y;runOnJS(onScroll)(scrollOffset.value);}}";_f.__workletHash=5653789960368;_f.__location="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx (342:16)";return _f;}()},[horizontalAnim]);(0,_useAutoScroll.useAutoScroll)();var onViewableItemsChanged=(0,_useStableCallback.useStableCallback)(function(info){var viewableIndices=info.viewableItems.filter(function(item){return item.isViewable;}).map(function(item){return item.index;}).filter(function(index){return typeof index==="number";});var min=Math.min.apply(Math,(0,_toConsumableArray2.default)(viewableIndices));var max=Math.max.apply(Math,(0,_toConsumableArray2.default)(viewableIndices));viewableIndexMin.value=min;viewableIndexMax.value=max;props.onViewableItemsChanged==null?void 0:props.onViewableItemsChanged(info);});return _react.default.createElement(_draggableFlatListContext.default,{activeKey:activeKey,keyExtractor:keyExtractor,horizontal:!!props.horizontal,layoutAnimationDisabled:layoutAnimationDisabled,__self:this,__source:{fileName:_jsxFileName,lineNumber:370,columnNumber:5}},_react.default.createElement(_reactNativeReanimated.default.View,{style:props.containerStyle,ref:containerRef,onLayout:onContainerLayout,__self:this,__source:{fileName:_jsxFileName,lineNumber:377,columnNumber:9}},props.renderPlaceholder&&_react.default.createElement(_PlaceholderItem.default,{renderPlaceholder:props.renderPlaceholder,__self:this,__source:{fileName:_jsxFileName,lineNumber:383,columnNumber:13}}),_react.default.createElement(AnimatedFlatList,(0,_extends2.default)({},props,{data:props.data,onViewableItemsChanged:onViewableItemsChanged,CellRendererComponent:_CellRendererComponent.default,ref:flatlistRef,onContentSizeChange:onListContentSizeChange,scrollEnabled:!activeKey&&scrollEnabled,renderItem:renderItem,extraData:extraData,keyExtractor:keyExtractor,onScroll:scrollHandler,scrollEventThrottle:16,simultaneousHandlers:props.simultaneousHandlers,removeClippedSubviews:false,__self:this,__source:{fileName:_jsxFileName,lineNumber:385,columnNumber:11}})),!!props.onScrollOffsetChange&&_react.default.createElement(_ScrollOffsetListener.default,{onScrollOffsetChange:props.onScrollOffsetChange,scrollOffset:scrollOffset,__self:this,__source:{fileName:_jsxFileName,lineNumber:402,columnNumber:13}})));}function DraggableFlatList(props,ref){return _react.default.createElement(_propsContext.default,(0,_extends2.default)({},props,{__self:this,__source:{fileName:_jsxFileName,lineNumber:418,columnNumber:5}}),_react.default.createElement(_animatedValueContext.default,{__self:this,__source:{fileName:_jsxFileName,lineNumber:419,columnNumber:7}},_react.default.createElement(_refContext.default,{flatListRef:ref,__self:this,__source:{fileName:_jsxFileName,lineNumber:420,columnNumber:9}},_react.default.createElement(MemoizedInner,(0,_extends2.default)({},props,{__self:this,__source:{fileName:_jsxFileName,lineNumber:421,columnNumber:11}})))));}var MemoizedInner=(0,_utils.typedMemo)(DraggableFlatListInner);var _default=_react.default.forwardRef(DraggableFlatList);exports.default=_default;
+ //# sourceMappingURL=DraggableFlatList.js.map
+\ No newline at end of file
+diff --git a/node_modules/react-native-draggable-flatlist/lib/commonjs/components/RowItem.js b/node_modules/react-native-draggable-flatlist/lib/commonjs/components/RowItem.js
+index 1fd36ae..6ed0bfe 100644
+--- a/node_modules/react-native-draggable-flatlist/lib/commonjs/components/RowItem.js
++++ b/node_modules/react-native-draggable-flatlist/lib/commonjs/components/RowItem.js
+@@ -1,2 +1,2 @@
+-var _interopRequireDefault=require("@babel/runtime/helpers/interopRequireDefault");Object.defineProperty(exports,"__esModule",{value:true});exports.default=void 0;var _objectWithoutProperties2=_interopRequireDefault(require("@babel/runtime/helpers/objectWithoutProperties"));var _react=_interopRequireWildcard(require("react"));var _draggableFlatListContext=require("../context/draggableFlatListContext");var _refContext=require("../context/refContext");var _useStableCallback=require("../hooks/useStableCallback");var _utils=require("../utils");var _jsxFileName="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/RowItem.tsx";function _getRequireWildcardCache(nodeInterop){if(typeof WeakMap!=="function")return null;var cacheBabelInterop=new WeakMap();var cacheNodeInterop=new WeakMap();return(_getRequireWildcardCache=function _getRequireWildcardCache(nodeInterop){return nodeInterop?cacheNodeInterop:cacheBabelInterop;})(nodeInterop);}function _interopRequireWildcard(obj,nodeInterop){if(!nodeInterop&&obj&&obj.__esModule){return obj;}if(obj===null||typeof obj!=="object"&&typeof obj!=="function"){return{default:obj};}var cache=_getRequireWildcardCache(nodeInterop);if(cache&&cache.has(obj)){return cache.get(obj);}var newObj={};var hasPropertyDescriptor=Object.defineProperty&&Object.getOwnPropertyDescriptor;for(var key in obj){if(key!=="default"&&Object.prototype.hasOwnProperty.call(obj,key)){var desc=hasPropertyDescriptor?Object.getOwnPropertyDescriptor(obj,key):null;if(desc&&(desc.get||desc.set)){Object.defineProperty(newObj,key,desc);}else{newObj[key]=obj[key];}}}newObj.default=obj;if(cache){cache.set(obj,newObj);}return newObj;}function RowItem(props){var propsRef=(0,_react.useRef)(props);propsRef.current=props;var _useDraggableFlatList=(0,_draggableFlatListContext.useDraggableFlatListContext)(),activeKey=_useDraggableFlatList.activeKey;var activeKeyRef=(0,_react.useRef)(activeKey);activeKeyRef.current=activeKey;var _useRefs=(0,_refContext.useRefs)(),keyToIndexRef=_useRefs.keyToIndexRef;var drag=(0,_useStableCallback.useStableCallback)(function(){var _propsRef$current=propsRef.current,drag=_propsRef$current.drag,itemKey=_propsRef$current.itemKey,debug=_propsRef$current.debug;if(activeKeyRef.current){if(debug)console.log("## attempt to drag item while another item is already active, noop");}drag(itemKey);});var renderItem=props.renderItem,item=props.item,itemKey=props.itemKey,extraData=props.extraData;var getIndex=(0,_useStableCallback.useStableCallback)(function(){return keyToIndexRef.current.get(itemKey);});return _react.default.createElement(MemoizedInner,{isActive:activeKey===itemKey,drag:drag,renderItem:renderItem,item:item,getIndex:getIndex,extraData:extraData,__self:this,__source:{fileName:_jsxFileName,lineNumber:45,columnNumber:5}});}var _default=(0,_utils.typedMemo)(RowItem);exports.default=_default;function Inner(_ref){var renderItem=_ref.renderItem,extraData=_ref.extraData,rest=(0,_objectWithoutProperties2.default)(_ref,["renderItem","extraData"]);return renderItem(Object.assign({},rest));}var MemoizedInner=(0,_utils.typedMemo)(Inner);
++var _interopRequireDefault=require("@babel/runtime/helpers/interopRequireDefault");Object.defineProperty(exports,"__esModule",{value:true});exports.default=void 0;var _objectWithoutProperties2=_interopRequireDefault(require("@babel/runtime/helpers/objectWithoutProperties"));var _react=_interopRequireWildcard(require("react"));var _draggableFlatListContext=require("../context/draggableFlatListContext");var _refContext=require("../context/refContext");var _useStableCallback=require("../hooks/useStableCallback");var _utils=require("../utils");var _jsxFileName="/Users/danielmerrill/code/oss/react-native-draggable-flatlist/src/components/RowItem.tsx";function _getRequireWildcardCache(nodeInterop){if(typeof WeakMap!=="function")return null;var cacheBabelInterop=new WeakMap();var cacheNodeInterop=new WeakMap();return(_getRequireWildcardCache=function _getRequireWildcardCache(nodeInterop){return nodeInterop?cacheNodeInterop:cacheBabelInterop;})(nodeInterop);}function _interopRequireWildcard(obj,nodeInterop){if(!nodeInterop&&obj&&obj.__esModule){return obj;}if(obj===null||typeof obj!=="object"&&typeof obj!=="function"){return{default:obj};}var cache=_getRequireWildcardCache(nodeInterop);if(cache&&cache.has(obj)){return cache.get(obj);}var newObj={};var hasPropertyDescriptor=Object.defineProperty&&Object.getOwnPropertyDescriptor;for(var key in obj){if(key!=="default"&&Object.prototype.hasOwnProperty.call(obj,key)){var desc=hasPropertyDescriptor?Object.getOwnPropertyDescriptor(obj,key):null;if(desc&&(desc.get||desc.set)){Object.defineProperty(newObj,key,desc);}else{newObj[key]=obj[key];}}}newObj.default=obj;if(cache){cache.set(obj,newObj);}return newObj;}function RowItem(props){var propsRef=(0,_react.useRef)(props);propsRef.current=props;var _useDraggableFlatList=(0,_draggableFlatListContext.useDraggableFlatListContext)(),activeKey=_useDraggableFlatList.activeKey;var activeKeyRef=(0,_react.useRef)(activeKey);activeKeyRef.current=activeKey;var _useRefs=(0,_refContext.useRefs)(),keyToIndexRef=_useRefs.keyToIndexRef;var drag=(0,_useStableCallback.useStableCallback)(function(){var _propsRef$current=propsRef.current,drag=_propsRef$current.drag,itemKey=_propsRef$current.itemKey,debug=_propsRef$current.debug;if(activeKeyRef.current){if(debug)console.log("## attempt to drag item while another item is already active, noop");}drag(itemKey);});var renderItem=props.renderItem,item=props.item,itemKey=props.itemKey,extraData=props.extraData;var getIndex=(0,_useStableCallback.useStableCallback)(function(){return keyToIndexRef.current.get(itemKey);});return _react.default.createElement(MemoizedInner,{isActive:activeKey===itemKey,drag:drag,dragGesture:props.dragGesture,renderItem:renderItem,item:item,getIndex:getIndex,extraData:extraData,__self:this,__source:{fileName:_jsxFileName,lineNumber:45,columnNumber:5}});}var _default=(0,_utils.typedMemo)(RowItem);exports.default=_default;function Inner(_ref){var renderItem=_ref.renderItem,extraData=_ref.extraData,rest=(0,_objectWithoutProperties2.default)(_ref,["renderItem","extraData"]);return renderItem(Object.assign({},rest));}var MemoizedInner=(0,_utils.typedMemo)(Inner);
+ //# sourceMappingURL=RowItem.js.map
+\ No newline at end of file
+diff --git a/node_modules/react-native-draggable-flatlist/lib/module/components/DraggableFlatList.js b/node_modules/react-native-draggable-flatlist/lib/module/components/DraggableFlatList.js
+index 80185d0..db47733 100644
+--- a/node_modules/react-native-draggable-flatlist/lib/module/components/DraggableFlatList.js
++++ b/node_modules/react-native-draggable-flatlist/lib/module/components/DraggableFlatList.js
+@@ -1,5 +1,4 @@
+-function _extends() { _extends = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; return _extends.apply(this, arguments); }
+-
++function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
+ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+ import { InteractionManager } from "react-native";
+ import { FlatList, Gesture, GestureDetector } from "react-native-gesture-handler";
+@@ -17,7 +16,6 @@ import { useStableCallback } from "../hooks/useStableCallback";
+ import ScrollOffsetListener from "./ScrollOffsetListener";
+ import { typedMemo } from "../utils";
+ const AnimatedFlatList = Animated.createAnimatedComponent(FlatList);
+-
+ function DraggableFlatListInner(props) {
+   const {
+     cellDataRef,
+@@ -64,13 +62,11 @@ function DraggableFlatListInner(props) {
+     if (!props.keyExtractor) {
+       throw new Error("You must provide a keyExtractor to DraggableFlatList");
+     }
+-
+     return props.keyExtractor(item, index);
+   });
+   const dataRef = useRef(props.data);
+   const dataHasChanged = dataRef.current.map(keyExtractor).join("") !== props.data.map(keyExtractor).join("");
+   dataRef.current = props.data;
+-
+   if (dataHasChanged) {
+     // When data changes make sure `activeKey` is nulled out in the same render pass
+     activeKey = null;
+@@ -78,10 +74,8 @@ function DraggableFlatListInner(props) {
+       reset();
+     });
+   }
+-
+   useEffect(() => {
+     if (!propsRef.current.enableLayoutAnimationExperimental) return;
+-
+     if (activeKey) {
+       setLayoutAnimationDisabled(true);
+     } else {
+@@ -102,107 +96,72 @@ function DraggableFlatListInner(props) {
+     if (disabled.value) return;
+     const index = keyToIndexRef.current.get(activeKey);
+     const cellData = cellDataRef.current.get(activeKey);
+-
+     if (cellData) {
+       activeCellOffset.value = cellData.measurements.offset;
+       activeCellSize.value = cellData.measurements.size;
+     }
+-
+     const {
+       onDragBegin
+     } = propsRef.current;
+-
+     if (index !== undefined) {
+       spacerIndexAnim.value = index;
+       activeIndexAnim.value = index;
+       setActiveKey(activeKey);
+-      onDragBegin === null || onDragBegin === void 0 ? void 0 : onDragBegin(index);
++      onDragBegin === null || onDragBegin === void 0 || onDragBegin(index);
+     }
+   });
+-
+-  const onContainerLayout = _ref => {
++  const onContainerLayout = ({
++    nativeEvent: {
++      layout
++    }
++  }) => {
+     var _props$onContainerLay;
+-
+-    let {
+-      nativeEvent: {
+-        layout
+-      }
+-    } = _ref;
+     const {
+       width,
+       height
+     } = layout;
+     containerSize.value = props.horizontal ? width : height;
+-    (_props$onContainerLay = props.onContainerLayout) === null || _props$onContainerLay === void 0 ? void 0 : _props$onContainerLay.call(props, {
++    (_props$onContainerLay = props.onContainerLayout) === null || _props$onContainerLay === void 0 || _props$onContainerLay.call(props, {
+       layout,
+       containerRef
+     });
+   };
+-
+   const onListContentSizeChange = (w, h) => {
+     var _props$onContentSizeC;
+-
+     scrollViewSize.value = props.horizontal ? w : h;
+-    (_props$onContentSizeC = props.onContentSizeChange) === null || _props$onContentSizeC === void 0 ? void 0 : _props$onContentSizeC.call(props, w, h);
++    (_props$onContentSizeC = props.onContentSizeChange) === null || _props$onContentSizeC === void 0 || _props$onContentSizeC.call(props, w, h);
+   };
+-
+   const onContainerTouchStart = () => {
+     if (!disabled.value) {
+       isTouchActiveNative.value = true;
+     }
+-
+     return false;
+   };
+-
+   const onContainerTouchEnd = () => {
+     isTouchActiveNative.value = false;
+   };
+-
+   const extraData = useMemo(() => ({
+     activeKey,
+     extraData: props.extraData
+   }), [activeKey, props.extraData]);
+-  const renderItem = useCallback(_ref2 => {
+-    let {
+-      item,
+-      index
+-    } = _ref2;
+-    const key = keyExtractor(item, index);
+-
+-    if (index !== keyToIndexRef.current.get(key)) {
+-      keyToIndexRef.current.set(key, index);
+-    }
+-
+-    return /*#__PURE__*/React.createElement(RowItem, {
+-      item: item,
+-      itemKey: key,
+-      renderItem: props.renderItem,
+-      drag: drag,
+-      extraData: props.extraData
+-    });
+-  }, [props.renderItem, props.extraData, drag, keyExtractor]);
+   const onRelease = useStableCallback(index => {
+     var _props$onRelease;
+-
+-    (_props$onRelease = props.onRelease) === null || _props$onRelease === void 0 ? void 0 : _props$onRelease.call(props, index);
++    (_props$onRelease = props.onRelease) === null || _props$onRelease === void 0 || _props$onRelease.call(props, index);
+   });
+-  const onDragEnd = useStableCallback(_ref3 => {
+-    let {
+-      from,
+-      to
+-    } = _ref3;
++  const onDragEnd = useStableCallback(({
++    from,
++    to
++  }) => {
+     const {
+       onDragEnd,
+       data
+     } = props;
+     const newData = [...data];
+-
+     if (from !== to) {
+       newData.splice(from, 1);
+       newData.splice(to, 0, data[from]);
+     }
+-
+-    onDragEnd === null || onDragEnd === void 0 ? void 0 : onDragEnd({
++    onDragEnd === null || onDragEnd === void 0 || onDragEnd({
+       from,
+       to,
+       data: newData
+@@ -211,16 +170,15 @@ function DraggableFlatListInner(props) {
+   });
+   const onPlaceholderIndexChange = useStableCallback(index => {
+     var _props$onPlaceholderI;
++    (_props$onPlaceholderI = props.onPlaceholderIndexChange) === null || _props$onPlaceholderI === void 0 || _props$onPlaceholderI.call(props, index);
++  });
+ 
+-    (_props$onPlaceholderI = props.onPlaceholderIndexChange) === null || _props$onPlaceholderI === void 0 ? void 0 : _props$onPlaceholderI.call(props, index);
+-  }); // Handle case where user ends drag without moving their finger.
+-
++  // Handle case where user ends drag without moving their finger.
+   useAnimatedReaction(() => {
+     return isTouchActiveNative.value;
+   }, (cur, prev) => {
+     if (cur !== prev && !cur) {
+       const hasMoved = !!touchTranslate.value;
+-
+       if (!hasMoved && activeIndexAnim.value >= 0 && !disabled.value) {
+         runOnJS(onRelease)(activeIndexAnim.value);
+         runOnJS(onDragEnd)({
+@@ -248,13 +206,14 @@ function DraggableFlatListInner(props) {
+     const translation = horizontalAnim.value ? evt.translationX : evt.translationY;
+     touchTranslate.value = translation;
+   }).onEnd(evt => {
+-    if (gestureDisabled.value) return; // Set touch val to current translate val
+-
++    if (gestureDisabled.value) return;
++    // Set touch val to current translate val
+     isTouchActiveNative.value = false;
+     const translation = horizontalAnim.value ? evt.translationX : evt.translationY;
+     touchTranslate.value = translation + autoScrollDistance.value;
+-    panGestureState.value = evt.state; // Only call onDragEnd if actually dragging a cell
++    panGestureState.value = evt.state;
+ 
++    // Only call onDragEnd if actually dragging a cell
+     if (activeIndexAnim.value === -1 || disabled.value) return;
+     disabled.value = true;
+     runOnJS(onRelease)(activeIndexAnim.value);
+@@ -274,21 +233,34 @@ function DraggableFlatListInner(props) {
+     runOnJS(onContainerTouchEnd)();
+   });
+   if (dragHitSlop) panGesture.hitSlop(dragHitSlop);
+-
+   if (activationDistanceProp) {
+     const activeOffset = [-activationDistanceProp, activationDistanceProp];
+-
+     if (props.horizontal) {
+       panGesture.activeOffsetX(activeOffset);
+     } else {
+       panGesture.activeOffsetY(activeOffset);
+     }
+   }
+-
++  const renderItem = useCallback(({
++    item,
++    index
++  }) => {
++    const key = keyExtractor(item, index);
++    if (index !== keyToIndexRef.current.get(key)) {
++      keyToIndexRef.current.set(key, index);
++    }
++    return /*#__PURE__*/React.createElement(RowItem, {
++      item: item,
++      itemKey: key,
++      renderItem: props.renderItem,
++      drag: drag,
++      dragGesture: panGesture,
++      extraData: props.extraData
++    });
++  }, [props.renderItem, props.extraData, drag, keyExtractor, panGesture]);
+   const onScroll = useStableCallback(scrollOffset => {
+     var _props$onScrollOffset;
+-
+-    (_props$onScrollOffset = props.onScrollOffsetChange) === null || _props$onScrollOffset === void 0 ? void 0 : _props$onScrollOffset.call(props, scrollOffset);
++    (_props$onScrollOffset = props.onScrollOffsetChange) === null || _props$onScrollOffset === void 0 || _props$onScrollOffset.call(props, scrollOffset);
+   });
+   const scrollHandler = useAnimatedScrollHandler({
+     onScroll: evt => {
+@@ -299,22 +271,14 @@ function DraggableFlatListInner(props) {
+   useAutoScroll();
+   const onViewableItemsChanged = useStableCallback(info => {
+     var _props$onViewableItem;
+-
+     const viewableIndices = info.viewableItems.filter(item => item.isViewable).map(item => item.index).filter(index => typeof index === "number");
+     const min = Math.min(...viewableIndices);
+     const max = Math.max(...viewableIndices);
+     viewableIndexMin.value = min;
+     viewableIndexMax.value = max;
+-    (_props$onViewableItem = props.onViewableItemsChanged) === null || _props$onViewableItem === void 0 ? void 0 : _props$onViewableItem.call(props, info);
++    (_props$onViewableItem = props.onViewableItemsChanged) === null || _props$onViewableItem === void 0 || _props$onViewableItem.call(props, info);
+   });
+-  return /*#__PURE__*/React.createElement(DraggableFlatListProvider, {
+-    activeKey: activeKey,
+-    keyExtractor: keyExtractor,
+-    horizontal: !!props.horizontal,
+-    layoutAnimationDisabled: layoutAnimationDisabled
+-  }, /*#__PURE__*/React.createElement(GestureDetector, {
+-    gesture: panGesture
+-  }, /*#__PURE__*/React.createElement(Animated.View, {
++  const listContent = /*#__PURE__*/React.createElement(Animated.View, {
+     style: props.containerStyle,
+     ref: containerRef,
+     onLayout: onContainerLayout
+@@ -337,17 +301,32 @@ function DraggableFlatListInner(props) {
+   })), !!props.onScrollOffsetChange && /*#__PURE__*/React.createElement(ScrollOffsetListener, {
+     onScrollOffsetChange: props.onScrollOffsetChange,
+     scrollOffset: scrollOffset
+-  }))));
++  }));
++  if (props.dragGestureDetector === "item") {
++    return /*#__PURE__*/React.createElement(DraggableFlatListProvider, {
++      activeKey: activeKey,
++      keyExtractor: keyExtractor,
++      horizontal: !!props.horizontal,
++      layoutAnimationDisabled: layoutAnimationDisabled
++    }, listContent);
++  }
++  return /*#__PURE__*/React.createElement(DraggableFlatListProvider, {
++    activeKey: activeKey,
++    keyExtractor: keyExtractor,
++    horizontal: !!props.horizontal,
++    layoutAnimationDisabled: layoutAnimationDisabled
++  }, /*#__PURE__*/React.createElement(GestureDetector, {
++    gesture: panGesture
++  }, listContent));
+ }
+-
+ function DraggableFlatList(props, ref) {
+   return /*#__PURE__*/React.createElement(PropsProvider, props, /*#__PURE__*/React.createElement(AnimatedValueProvider, null, /*#__PURE__*/React.createElement(RefProvider, {
+     flatListRef: ref
+   }, /*#__PURE__*/React.createElement(MemoizedInner, props))));
+ }
++const MemoizedInner = typedMemo(DraggableFlatListInner);
+ 
+-const MemoizedInner = typedMemo(DraggableFlatListInner); // Generic forwarded ref type assertion taken from:
++// Generic forwarded ref type assertion taken from:
+ // https://fettblog.eu/typescript-react-generic-forward-refs/#option-1%3A-type-assertion
+-
+ export default /*#__PURE__*/React.forwardRef(DraggableFlatList);
+ //# sourceMappingURL=DraggableFlatList.js.map
+\ No newline at end of file
+diff --git a/node_modules/react-native-draggable-flatlist/lib/module/components/RowItem.js b/node_modules/react-native-draggable-flatlist/lib/module/components/RowItem.js
+index 3207694..c920468 100644
+--- a/node_modules/react-native-draggable-flatlist/lib/module/components/RowItem.js
++++ b/node_modules/react-native-draggable-flatlist/lib/module/components/RowItem.js
+@@ -3,7 +3,6 @@ import { useDraggableFlatListContext } from "../context/draggableFlatListContext
+ import { useRefs } from "../context/refContext";
+ import { useStableCallback } from "../hooks/useStableCallback";
+ import { typedMemo } from "../utils";
+-
+ function RowItem(props) {
+   const propsRef = useRef(props);
+   propsRef.current = props;
+@@ -21,12 +20,10 @@ function RowItem(props) {
+       itemKey,
+       debug
+     } = propsRef.current;
+-
+     if (activeKeyRef.current) {
+       // already dragging an item, noop
+       if (debug) console.log("## attempt to drag item while another item is already active, noop");
+     }
+-
+     drag(itemKey);
+   });
+   const {
+@@ -41,24 +38,22 @@ function RowItem(props) {
+   return /*#__PURE__*/React.createElement(MemoizedInner, {
+     isActive: activeKey === itemKey,
+     drag: drag,
++    dragGesture: props.dragGesture,
+     renderItem: renderItem,
+     item: item,
+     getIndex: getIndex,
+     extraData: extraData
+   });
+ }
+-
+ export default typedMemo(RowItem);
+-
+-function Inner(_ref) {
+-  let {
+-    renderItem,
+-    extraData,
++function Inner({
++  renderItem,
++  extraData,
++  ...rest
++}) {
++  return renderItem({
+     ...rest
+-  } = _ref;
+-  return renderItem({ ...rest
+   });
+ }
+-
+ const MemoizedInner = typedMemo(Inner);
+ //# sourceMappingURL=RowItem.js.map
+\ No newline at end of file
+diff --git a/node_modules/react-native-draggable-flatlist/lib/typescript/components/NestableDraggableFlatList.d.ts b/node_modules/react-native-draggable-flatlist/lib/typescript/components/NestableDraggableFlatList.d.ts
+index d3c6cbb..19cf9d5 100644
+--- a/node_modules/react-native-draggable-flatlist/lib/typescript/components/NestableDraggableFlatList.d.ts
++++ b/node_modules/react-native-draggable-flatlist/lib/typescript/components/NestableDraggableFlatList.d.ts
+@@ -3,12 +3,16 @@ import Animated from "react-native-reanimated";
+ import { DraggableFlatListProps } from "../types";
+ import { FlatList } from "react-native-gesture-handler";
+ declare function NestableDraggableFlatListInner<T>(props: DraggableFlatListProps<T>, ref?: React.ForwardedRef<FlatList<T>>): JSX.Element;
+-export declare const NestableDraggableFlatList: <T>(props: Omit<import("react-native").FlatListProps<T>, "keyExtractor" | "data" | "renderItem" | "debug" | "scrollEnabled" | "autoscrollThreshold" | "autoscrollSpeed" | "animationConfig" | "dragHitSlop" | "activationDistance" | "dragItemOverflow" | "containerStyle" | "onDragBegin" | "onDragEnd" | "onPlaceholderIndexChange" | "onRelease" | "onScrollOffsetChange" | "renderPlaceholder" | "simultaneousHandlers" | "outerScrollOffset" | "onAnimValInit" | "itemEnteringAnimation" | "itemExitingAnimation" | "itemLayoutAnimation" | "enableLayoutAnimationExperimental" | "onContainerLayout"> & {
++export declare const NestableDraggableFlatList: <T>(props: Omit<import("react-native").FlatListProps<T>, "keyExtractor" | "data" | "renderItem" | "debug" | "scrollEnabled" | "autoscrollEnabled" | "autoscrollThreshold" | "autoscrollSpeed" | "animationConfig" | "dropAnimationConfig" | "dropAnimationMode" | "dragHitSlop" | "activationDistance" | "dragGestureDetector" | "dragItemOverflow" | "containerStyle" | "onDragBegin" | "onDragEnd" | "onPlaceholderIndexChange" | "onRelease" | "onScrollOffsetChange" | "renderPlaceholder" | "simultaneousHandlers" | "outerScrollOffset" | "onAnimValInit" | "itemEnteringAnimation" | "itemExitingAnimation" | "itemLayoutAnimation" | "enableLayoutAnimationExperimental" | "onContainerLayout"> & {
+     data: T[];
+     activationDistance?: number | undefined;
++    dragGestureDetector?: "container" | "item" | undefined;
+     animationConfig?: Partial<import("react-native-reanimated").WithSpringConfig> | undefined;
++    autoscrollEnabled?: boolean | undefined;
+     autoscrollSpeed?: number | undefined;
+     autoscrollThreshold?: number | undefined;
++    dropAnimationConfig?: Partial<import("react-native-reanimated").WithSpringConfig> | undefined;
++    dropAnimationMode?: "spring" | "instant" | undefined;
+     containerStyle?: import("react-native").StyleProp<import("react-native").ViewStyle>;
+     debug?: boolean | undefined;
+     dragItemOverflow?: boolean | undefined;
+diff --git a/node_modules/react-native-draggable-flatlist/lib/typescript/types.d.ts b/node_modules/react-native-draggable-flatlist/lib/typescript/types.d.ts
+index 2abb4a2..c257e63 100644
+--- a/node_modules/react-native-draggable-flatlist/lib/typescript/types.d.ts
++++ b/node_modules/react-native-draggable-flatlist/lib/typescript/types.d.ts
+@@ -2,6 +2,7 @@ import React from "react";
+ import { FlatListProps, LayoutChangeEvent, StyleProp, ViewStyle } from "react-native";
+ import { useAnimatedValues } from "./context/animatedValueContext";
+ import { FlatList } from "react-native-gesture-handler";
++import type { GestureType } from "react-native-gesture-handler";
+ import Animated, { AnimateProps, WithSpringConfig } from "react-native-reanimated";
+ import { DEFAULT_PROPS } from "./constants";
+ export declare type DragEndParams<T> = {
+@@ -14,9 +15,13 @@ declare type DefaultProps = Readonly<typeof DEFAULT_PROPS>;
+ export declare type DraggableFlatListProps<T> = Modify<FlatListProps<T>, {
+     data: T[];
+     activationDistance?: number;
++    dragGestureDetector?: "container" | "item";
+     animationConfig?: Partial<WithSpringConfig>;
++    autoscrollEnabled?: boolean;
+     autoscrollSpeed?: number;
+     autoscrollThreshold?: number;
++    dropAnimationConfig?: Partial<WithSpringConfig>;
++    dropAnimationMode?: "spring" | "instant";
+     containerStyle?: StyleProp<ViewStyle>;
+     debug?: boolean;
+     dragItemOverflow?: boolean;
+@@ -48,7 +53,9 @@ export declare type RenderItemParams<T> = {
+     item: T;
+     getIndex: () => number | undefined;
+     drag: () => void;
++    dragGesture?: GestureType;
+     isActive: boolean;
++    isDragging: boolean;
+ };
+ export declare type RenderItem<T> = (params: RenderItemParams<T>) => React.ReactNode;
+ export declare type AnimatedFlatListType = <T>(props: Animated.AnimateProps<FlatListProps<T> & {
+diff --git a/node_modules/react-native-draggable-flatlist/src/components/CellRendererComponent.tsx b/node_modules/react-native-draggable-flatlist/src/components/CellRendererComponent.tsx
+index e4e861a..14c78f0 100644
+--- a/node_modules/react-native-draggable-flatlist/src/components/CellRendererComponent.tsx
++++ b/node_modules/react-native-draggable-flatlist/src/components/CellRendererComponent.tsx
+@@ -53,17 +53,24 @@ function CellRendererComponent<T>(props: Props<T>) {
+     cellIndex: index,
+   });
+ 
++  const clearDropTransformOnRelease = useStableCallback(() => {
++    heldTanslate.value = 0;
++  });
++
++  useEffect(
++    clearDropTransformOnRelease,
++    [activeKey, clearDropTransformOnRelease],
++  );
++
+   const isActive = activeKey === key;
+ 
+   const animStyle = useAnimatedStyle(() => {
+-    // When activeKey becomes null at the end of a drag and the list reorders,
+-    // the animated style may apply before the next paint, causing a flicker.
+-    // Solution is to hold over the last animated value until the next onLayout.
+-    // (Not required in web)
+-    if (translate.value && !isWeb) {
+-      heldTanslate.value = translate.value;
+-    }
+-    const t = activeKey ? translate.value : heldTanslate.value;
++        // Clear the held transform as soon as the drag commits. Keeping the old
++        // value can draw a ghost cell over the reordered list until onLayout.
++        if (translate.value && !isWeb) {
++          heldTanslate.value = translate.value;
++        }
++        const t = activeKey ? translate.value : 0;
+     return {
+       transform: [horizontalAnim.value ? { translateX: t } : { translateY: t }],
+     };
+diff --git a/node_modules/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx b/node_modules/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx
+index 7c88afc..cb1843a 100644
+--- a/node_modules/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx
++++ b/node_modules/react-native-draggable-flatlist/src/components/DraggableFlatList.tsx
+@@ -194,26 +194,6 @@ function DraggableFlatListInner<T>(props: DraggableFlatListProps<T>) {
+     [activeKey, props.extraData]
+   );
+ 
+-  const renderItem: ListRenderItem<T> = useCallback(
+-    ({ item, index }) => {
+-      const key = keyExtractor(item, index);
+-      if (index !== keyToIndexRef.current.get(key)) {
+-        keyToIndexRef.current.set(key, index);
+-      }
+-
+-      return (
+-        <RowItem
+-          item={item}
+-          itemKey={key}
+-          renderItem={props.renderItem}
+-          drag={drag}
+-          extraData={props.extraData}
+-        />
+-      );
+-    },
+-    [props.renderItem, props.extraData, drag, keyExtractor]
+-  );
+-
+   const onRelease = useStableCallback((index: number) => {
+     props.onRelease?.(index);
+   });
+@@ -234,6 +214,11 @@ function DraggableFlatListInner<T>(props: DraggableFlatListProps<T>) {
+     }
+   );
+ 
++  const finishInstantDrag = useStableCallback((from: number, to: number) => {
++    onDragEnd({ from, to });
++    disabled.value = false;
++  });
++
+   const onPlaceholderIndexChange = useStableCallback((index: number) => {
+     props.onPlaceholderIndexChange?.(index);
+   });
+@@ -272,66 +257,103 @@ function DraggableFlatListInner<T>(props: DraggableFlatListProps<T>) {
+ 
+   const gestureDisabled = useSharedValue(false);
+ 
+-  const panGesture = Gesture.Pan()
+-    .onBegin((evt) => {
+-      gestureDisabled.value = disabled.value;
+-      if (gestureDisabled.value) return;
+-      panGestureState.value = evt.state;
+-    })
+-    .onUpdate((evt) => {
+-      if (gestureDisabled.value) return;
+-      panGestureState.value = evt.state;
+-      const translation = horizontalAnim.value
+-        ? evt.translationX
+-        : evt.translationY;
+-      touchTranslate.value = translation;
+-    })
+-    .onEnd((evt) => {
+-      if (gestureDisabled.value) return;
+-      // Set touch val to current translate val
+-      isTouchActiveNative.value = false;
+-      const translation = horizontalAnim.value
+-        ? evt.translationX
+-        : evt.translationY;
+-
+-      touchTranslate.value = translation + autoScrollDistance.value;
+-      panGestureState.value = evt.state;
+-
+-      // Only call onDragEnd if actually dragging a cell
++  const createDragGesture = useCallback(() => {
++    const panGesture = Gesture.Pan()
++      .onBegin((evt) => {
++        gestureDisabled.value = disabled.value;
++        if (gestureDisabled.value) return;
++        panGestureState.value = evt.state;
++      })
++      .onUpdate((evt) => {
++        if (gestureDisabled.value) return;
++        panGestureState.value = evt.state;
++        const translation = horizontalAnim.value
++          ? evt.translationX
++          : evt.translationY;
++        touchTranslate.value = translation;
++      })
++      .onEnd((evt) => {
++        if (gestureDisabled.value) return;
++        isTouchActiveNative.value = false;
++        const translation = horizontalAnim.value
++          ? evt.translationX
++          : evt.translationY;
++
++        touchTranslate.value = translation + autoScrollDistance.value;
++        panGestureState.value = evt.state;
++
+       if (activeIndexAnim.value === -1 || disabled.value) return;
+       disabled.value = true;
+       runOnJS(onRelease)(activeIndexAnim.value);
+       const springTo = placeholderOffset.value - activeCellOffset.value;
++      if (propsRef.current.dropAnimationMode === "instant") {
++        touchTranslate.value = springTo;
++        runOnJS(finishInstantDrag)(activeIndexAnim.value, spacerIndexAnim.value);
++        return;
++      }
+       touchTranslate.value = withSpring(
+         springTo,
+-        animationConfigRef.value,
+-        () => {
+-          runOnJS(onDragEnd)({
+-            from: activeIndexAnim.value,
+-            to: spacerIndexAnim.value,
+-          });
+-          disabled.value = false;
+-        }
+-      );
+-    })
+-    .onTouchesDown(() => {
+-      runOnJS(onContainerTouchStart)();
+-    })
+-    .onTouchesUp(() => {
+-      // Turning this into a worklet causes timing issues. We want it to run
+-      // just after the finger lifts.
+-      runOnJS(onContainerTouchEnd)();
+-    });
+-
+-  if (dragHitSlop) panGesture.hitSlop(dragHitSlop);
+-  if (activationDistanceProp) {
+-    const activeOffset = [-activationDistanceProp, activationDistanceProp];
+-    if (props.horizontal) {
+-      panGesture.activeOffsetX(activeOffset);
+-    } else {
+-      panGesture.activeOffsetY(activeOffset);
++        propsRef.current.dropAnimationConfig ?? animationConfigRef.value,
++          () => {
++            runOnJS(onDragEnd)({
++              from: activeIndexAnim.value,
++              to: spacerIndexAnim.value,
++            });
++            disabled.value = false;
++          }
++        );
++      })
++      .onTouchesDown(() => {
++        runOnJS(onContainerTouchStart)();
++      })
++      .onTouchesUp(() => {
++        runOnJS(onContainerTouchEnd)();
++      });
++
++    if (dragHitSlop) panGesture.hitSlop(dragHitSlop);
++    if (activationDistanceProp) {
++      const activeOffset = [-activationDistanceProp, activationDistanceProp];
++      if (props.horizontal) {
++        panGesture.activeOffsetX(activeOffset);
++      } else {
++        panGesture.activeOffsetY(activeOffset);
++      }
+     }
+-  }
++
++    return panGesture;
++  }, [
++    activationDistanceProp,
++    dragHitSlop,
++    finishInstantDrag,
++    props.horizontal,
++    onContainerTouchEnd,
++    onContainerTouchStart,
++    onDragEnd,
++    onRelease,
++  ]);
++  const panGesture = useMemo(() => createDragGesture(), [createDragGesture]);
++
++
++  const renderItem: ListRenderItem<T> = useCallback(
++    ({ item, index }) => {
++      const key = keyExtractor(item, index);
++      if (index !== keyToIndexRef.current.get(key)) {
++        keyToIndexRef.current.set(key, index);
++      }
++
++      return (
++        <RowItem
++          item={item}
++          itemKey={key}
++          renderItem={props.renderItem}
++          drag={drag}
++          dragGestureFactory={createDragGesture}
++          extraData={props.extraData}
++        />
++      );
++    },
++    [props.renderItem, props.extraData, drag, keyExtractor, createDragGesture]
++  );
+ 
+   const onScroll = useStableCallback((scrollOffset: number) => {
+     props.onScrollOffsetChange?.(scrollOffset);
+@@ -366,6 +388,53 @@ function DraggableFlatListInner<T>(props: DraggableFlatListProps<T>) {
+     props.onViewableItemsChanged?.(info);
+   });
+ 
++  const listContent = (
++    <Animated.View
++      style={props.containerStyle}
++      ref={containerRef}
++      onLayout={onContainerLayout}
++    >
++      {props.renderPlaceholder && (
++        <PlaceholderItem renderPlaceholder={props.renderPlaceholder} />
++      )}
++      <AnimatedFlatList
++        {...props}
++        data={props.data}
++        onViewableItemsChanged={onViewableItemsChanged}
++        CellRendererComponent={CellRendererComponent}
++        ref={flatlistRef}
++        onContentSizeChange={onListContentSizeChange}
++        scrollEnabled={!activeKey && scrollEnabled}
++        renderItem={renderItem}
++        extraData={extraData}
++        keyExtractor={keyExtractor}
++        onScroll={scrollHandler}
++        scrollEventThrottle={16}
++        simultaneousHandlers={props.simultaneousHandlers}
++        removeClippedSubviews={false}
++      />
++      {!!props.onScrollOffsetChange && (
++        <ScrollOffsetListener
++          onScrollOffsetChange={props.onScrollOffsetChange}
++          scrollOffset={scrollOffset}
++        />
++      )}
++    </Animated.View>
++  );
++
++  if (props.dragGestureDetector === "item") {
++    return (
++      <DraggableFlatListProvider
++        activeKey={activeKey}
++        keyExtractor={keyExtractor}
++        horizontal={!!props.horizontal}
++        layoutAnimationDisabled={layoutAnimationDisabled}
++      >
++        {listContent}
++      </DraggableFlatListProvider>
++    );
++  }
++
+   return (
+     <DraggableFlatListProvider
+       activeKey={activeKey}
+@@ -374,37 +443,7 @@ function DraggableFlatListInner<T>(props: DraggableFlatListProps<T>) {
+       layoutAnimationDisabled={layoutAnimationDisabled}
+     >
+       <GestureDetector gesture={panGesture}>
+-        <Animated.View
+-          style={props.containerStyle}
+-          ref={containerRef}
+-          onLayout={onContainerLayout}
+-        >
+-          {props.renderPlaceholder && (
+-            <PlaceholderItem renderPlaceholder={props.renderPlaceholder} />
+-          )}
+-          <AnimatedFlatList
+-            {...props}
+-            data={props.data}
+-            onViewableItemsChanged={onViewableItemsChanged}
+-            CellRendererComponent={CellRendererComponent}
+-            ref={flatlistRef}
+-            onContentSizeChange={onListContentSizeChange}
+-            scrollEnabled={!activeKey && scrollEnabled}
+-            renderItem={renderItem}
+-            extraData={extraData}
+-            keyExtractor={keyExtractor}
+-            onScroll={scrollHandler}
+-            scrollEventThrottle={16}
+-            simultaneousHandlers={props.simultaneousHandlers}
+-            removeClippedSubviews={false}
+-          />
+-          {!!props.onScrollOffsetChange && (
+-            <ScrollOffsetListener
+-              onScrollOffsetChange={props.onScrollOffsetChange}
+-              scrollOffset={scrollOffset}
+-            />
+-          )}
+-        </Animated.View>
++        {listContent}
+       </GestureDetector>
+     </DraggableFlatListProvider>
+   );
+diff --git a/node_modules/react-native-draggable-flatlist/src/components/NestableDraggableFlatList.tsx b/node_modules/react-native-draggable-flatlist/src/components/NestableDraggableFlatList.tsx
+index 1559352..61178d5 100644
+--- a/node_modules/react-native-draggable-flatlist/src/components/NestableDraggableFlatList.tsx
++++ b/node_modules/react-native-draggable-flatlist/src/components/NestableDraggableFlatList.tsx
+@@ -45,6 +45,9 @@ function NestableDraggableFlatListInner<T>(
+   useNestedAutoScroll({
+     ...animVals,
+     hoverOffset,
++    autoscrollEnabled: props.autoscrollEnabled,
++    autoscrollSpeed: props.autoscrollSpeed,
++    autoscrollThreshold: props.autoscrollThreshold,
+   });
+ 
+   const onListContainerLayout = useStableCallback(async ({ containerRef }) => {
+diff --git a/node_modules/react-native-draggable-flatlist/src/components/RowItem.tsx b/node_modules/react-native-draggable-flatlist/src/components/RowItem.tsx
+index 1639d67..2ce347b 100644
+--- a/node_modules/react-native-draggable-flatlist/src/components/RowItem.tsx
++++ b/node_modules/react-native-draggable-flatlist/src/components/RowItem.tsx
+@@ -1,13 +1,16 @@
+-import React, { useRef } from "react";
++import React, { useMemo, useRef } from "react";
+ import { useDraggableFlatListContext } from "../context/draggableFlatListContext";
+ import { useRefs } from "../context/refContext";
+ import { useStableCallback } from "../hooks/useStableCallback";
+ import { RenderItem } from "../types";
++import type { GestureType } from "react-native-gesture-handler";
+ import { typedMemo } from "../utils";
+ 
+ type Props<T> = {
+   extraData?: any;
+   drag: (itemKey: string) => void;
++  dragGesture?: GestureType;
++  dragGestureFactory?: () => GestureType;
+   item: T;
+   renderItem: RenderItem<T>;
+   itemKey: string;
+@@ -40,11 +43,17 @@ function RowItem<T>(props: Props<T>) {
+   const getIndex = useStableCallback(() => {
+     return keyToIndexRef.current.get(itemKey);
+   });
++  const dragGesture = useMemo(
++    () => props.dragGestureFactory?.(),
++    [props.dragGestureFactory],
++  );
+ 
+   return (
+     <MemoizedInner
+       isActive={activeKey === itemKey}
++      isDragging={!!activeKey}
+       drag={drag}
++      dragGesture={dragGesture}
+       renderItem={renderItem}
+       item={item}
+       getIndex={getIndex}
+@@ -57,9 +66,11 @@ export default typedMemo(RowItem);
+ 
+ type InnerProps<T> = {
+   isActive: boolean;
++  isDragging: boolean;
+   item: T;
+   getIndex: () => number | undefined;
+   drag: () => void;
++  dragGesture?: GestureType;
+   renderItem: RenderItem<T>;
+   extraData?: any;
+ };
+diff --git a/node_modules/react-native-draggable-flatlist/src/hooks/useNestedAutoScroll.tsx b/node_modules/react-native-draggable-flatlist/src/hooks/useNestedAutoScroll.tsx
+index ee098ec..68811ec 100644
+--- a/node_modules/react-native-draggable-flatlist/src/hooks/useNestedAutoScroll.tsx
++++ b/node_modules/react-native-draggable-flatlist/src/hooks/useNestedAutoScroll.tsx
+@@ -17,6 +17,7 @@ import { SCROLL_POSITION_TOLERANCE } from "../constants";
+ 
+ export function useNestedAutoScroll(params: {
+   activeCellSize?: Animated.SharedValue<number>;
++  autoscrollEnabled?: boolean;
+   autoscrollSpeed?: number;
+   autoscrollThreshold?: number;
+   hoverOffset?: Animated.SharedValue<number>;
+@@ -36,6 +37,7 @@ export function useNestedAutoScroll(params: {
+   const {
+     hoverOffset = DUMMY_VAL,
+     activeCellSize = DUMMY_VAL,
++    autoscrollEnabled = true,
+     autoscrollSpeed = 100,
+     autoscrollThreshold = 30,
+     isDraggingCell = DUMMY_VAL,
+@@ -102,6 +104,7 @@ export function useNestedAutoScroll(params: {
+     const scrollInProgress = scrollTargetDiff > SCROLL_POSITION_TOLERANCE;
+ 
+     const shouldScroll =
++      autoscrollEnabled &&
+       isAtEdge &&
+       !isEdgeDisabled &&
+       isDraggingCell.value &&
+@@ -122,7 +125,7 @@ export function useNestedAutoScroll(params: {
+       // scrollTo(scrollViewRef, 0, scrollTarget.value, true)
+       runOnJS(scrollToInternal)(targetOffset);
+     }
+-  }, [autoscrollSpeed, autoscrollThreshold, isDraggingCell]);
++  }, [autoscrollEnabled, autoscrollSpeed, autoscrollThreshold, isDraggingCell]);
+ 
+   return null;
+ }
+diff --git a/node_modules/react-native-draggable-flatlist/src/types.ts b/node_modules/react-native-draggable-flatlist/src/types.ts
+index d6755c8..a75a936 100644
+--- a/node_modules/react-native-draggable-flatlist/src/types.ts
++++ b/node_modules/react-native-draggable-flatlist/src/types.ts
+@@ -7,6 +7,7 @@ import {
+ } from "react-native";
+ import { useAnimatedValues } from "./context/animatedValueContext";
+ import { FlatList } from "react-native-gesture-handler";
++import type { GestureType } from "react-native-gesture-handler";
+ import Animated, {
+   AnimateProps,
+   WithSpringConfig,
+@@ -27,9 +28,13 @@ export type DraggableFlatListProps<T> = Modify<
+   {
+     data: T[];
+     activationDistance?: number;
++    dragGestureDetector?: "container" | "item";
+     animationConfig?: Partial<WithSpringConfig>;
++    autoscrollEnabled?: boolean;
+     autoscrollSpeed?: number;
+     autoscrollThreshold?: number;
++    dropAnimationConfig?: Partial<WithSpringConfig>;
++    dropAnimationMode?: "spring" | "instant";
+     containerStyle?: StyleProp<ViewStyle>;
+     debug?: boolean;
+     dragItemOverflow?: boolean;
+@@ -64,7 +69,9 @@ export type RenderItemParams<T> = {
+   item: T;
+   getIndex: () => number | undefined; // This is technically a "last known index" since cells don't necessarily rerender when their index changes
+   drag: () => void;
++  dragGesture?: GestureType;
+   isActive: boolean;
++  isDragging: boolean;
+ };
+ 
+ export type RenderItem<T> = (params: RenderItemParams<T>) => React.ReactNode;
