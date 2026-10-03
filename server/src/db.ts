@@ -24,6 +24,7 @@ export function createDatabase({ database = 'habitpulse.db' }: DatabaseOptions =
       color TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       sort_order INTEGER NOT NULL DEFAULT 0,
+      custom_group TEXT,
       timer_segments TEXT NOT NULL DEFAULT '[]',
       removed_segment_ids TEXT NOT NULL DEFAULT '[]',
       manual_duration_ms INTEGER NOT NULL DEFAULT 0,
@@ -93,6 +94,7 @@ export function createDatabase({ database = 'habitpulse.db' }: DatabaseOptions =
 
   for (const migration of [
     { column: 'sort_order', sql: 'ALTER TABLE tasks ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0' },
+    { column: 'custom_group', sql: 'ALTER TABLE tasks ADD COLUMN custom_group TEXT' },
     { column: 'timer_segments', sql: "ALTER TABLE tasks ADD COLUMN timer_segments TEXT NOT NULL DEFAULT '[]'" },
     { column: 'removed_segment_ids', sql: "ALTER TABLE tasks ADD COLUMN removed_segment_ids TEXT NOT NULL DEFAULT '[]'" },
     { column: 'manual_duration_ms', sql: 'ALTER TABLE tasks ADD COLUMN manual_duration_ms INTEGER NOT NULL DEFAULT 0' },

@@ -3,6 +3,7 @@ import { Link, Stack } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import { Alert } from 'react-native';
 import { NestableDraggableFlatList } from 'react-native-draggable-flatlist';
 import DailyOverviewCard from '@/components/DailyOverviewCard';
 import GlassCard from '@/components/GlassCard';
@@ -22,6 +23,8 @@ import type { Task } from '@/domain/types';
 export default function HomeScreen() {
   const today = useTodayKey();
   const [dragListKey, setDragListKey] = useState(0);
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
   const {
     activeTasks,
     checkIns,
@@ -35,6 +38,7 @@ export default function HomeScreen() {
   } = useHabitStore();
   const { settings } = useHabitStore();
   const theme = useTheme(settings.appearance);
+  const customGroups = settings.customGroups ?? [];
   const todayCheckIns = useMemo(
     () => checkIns.filter((checkIn) => checkIn.date === today),
     [checkIns, today],
@@ -51,6 +55,50 @@ export default function HomeScreen() {
     () => getTaskGroups(activeTasks, completedIds),
     [activeTasks, completedIds],
   );
+
+  const allTasksFlat = useMemo(
+    () => [...taskGroups.unfinished, ...taskGroups.finished],
+    [taskGroups],
+  );
+
+  const filteredTasks = useMemo(() => {
+    let pool: Task[];
+
+    if (groupFilter === null) {
+      pool = allTasksFlat;
+    } else {
+      pool = allTasksFlat.filter((t) => t.customGroup === groupFilter);
+    }
+
+    if (statusFilter === 'active') {
+      return pool.filter((t) => !completedIds.has(t.id));
+    }
+    if (statusFilter === 'done') {
+      return pool.filter((t) => completedIds.has(t.id));
+    }
+    return pool;
+  }, [allTasksFlat, groupFilter, statusFilter, completedIds]);
+
+  const filteredUnfinished = useMemo(
+    () => filteredTasks.filter((t) => !completedIds.has(t.id)),
+    [filteredTasks, completedIds],
+  );
+  const filteredFinished = useMemo(
+    () => filteredTasks.filter((t) => completedIds.has(t.id)),
+    [filteredTasks, completedIds],
+  );
+
+  const addGroup = useCallback(() => {
+    Alert.prompt(
+      '新建分组',
+      '输入分组名称',
+      (text) => {
+        const name = (text ?? '').trim();
+        if (!name || customGroups.includes(name)) return;
+        updateSettings({ customGroups: [...customGroups, name] });
+      },
+    );
+  }, [customGroups, updateSettings]);
 
   const checkInDatesByTask = useMemo(() => {
     const dates = new Map<string, string[]>();
@@ -88,23 +136,6 @@ export default function HomeScreen() {
       isLight={theme.isLight}
     />
   ), [today, completedIds, theme.isLight, todayCheckInsByTask, statsByTaskId, toggleCheckIn, toggleTimer, deleteTask]);
-  // NOTE: ListEmptyComponent must stay a render function, never a React element.
-  // DFL's pan onEnd worklet serializes propsRef.current, and an element carries
-  // an `_owner` FiberNode, which crashes worklets ("Cannot copy value of type
-  // FiberNode") in dev builds.
-  const renderUnfinishedEmpty = useCallback(
-    () => (
-      <Text style={[styles.groupEmpty, { color: theme.subtleText }]}>今天全部完成啦</Text>
-    ),
-    [theme.subtleText],
-  );
-  const renderFinishedEmpty = useCallback(
-    () => (
-      <Text style={[styles.groupEmpty, { color: theme.subtleText }]}>完成后会自动沉到这里</Text>
-    ),
-    [theme.subtleText],
-  );
-
   const moveId = useCallback((ids: string[], from: number, to: number) => {
     if (from === to || from < 0 || to < 0 || from >= ids.length || to >= ids.length) {
       return ids;
@@ -216,53 +247,110 @@ export default function HomeScreen() {
         </GlassCard>
       ) : (
         <>
-          <Text style={[styles.groupTitle, { color: theme.subtleText }]}>进行中 · 点住图标拖动</Text>
-          <NestableDraggableFlatList
-            key={`unfinished-${dragListKey}`}
-            data={taskGroups.unfinished}
-            keyExtractor={(item) => item.id}
-            renderItem={renderTask}
-            dragGestureDetector="item"
-            onDragEnd={({ from, to }) => handleReorder(
-              taskGroups.unfinished.map((item) => item.id),
-              from,
-              to,
-              'unfinished',
-            )}
-            scrollEnabled={false}
-            activationDistance={8}
-            autoscrollEnabled={false}
-            dropAnimationConfig={DRAG_SNAP_SPRING}
-            dropAnimationMode="instant"
-            dragItemOverflow
-            windowSize={5}
-            contentContainerStyle={styles.taskList}
-            ListEmptyComponent={renderUnfinishedEmpty}
-          />
+          <View style={styles.filterRow}>
+            <PressableScale
+              style={[styles.filterChip, !groupFilter && styles.filterChipActive, { borderColor: theme.surfaceBorder }]}
+              onPress={() => setGroupFilter(null)}
+            >
+              <Text style={[styles.filterChipText, !groupFilter && { color: theme.accentText }]}>全部</Text>
+            </PressableScale>
+            {customGroups.map((group) => (
+              <PressableScale
+                key={group}
+                style={[styles.filterChip, groupFilter === group && styles.filterChipActive, { borderColor: theme.surfaceBorder }]}
+                onPress={() => setGroupFilter(group)}
+                onLongPress={() => {
+                  Alert.alert('删除分组', `确定删除"${group}"？任务不会删除。`, [
+                    { text: '取消', style: 'cancel' },
+                    { text: '删除', style: 'destructive', onPress: () => {
+                      updateSettings({ customGroups: customGroups.filter((g) => g !== group) });
+                      if (groupFilter === group) setGroupFilter(null);
+                    }},
+                  ]);
+                }}
+              >
+                <Text style={[styles.filterChipText, groupFilter === group && { color: theme.accentText }]}>{group}</Text>
+              </PressableScale>
+            ))}
+            <PressableScale
+              style={[styles.filterChip, styles.filterChipAdd, { borderColor: theme.surfaceBorder }]}
+              onPress={addGroup}
+            >
+              <MaterialCommunityIcons name="plus" size={14} color={theme.mutedText} />
+            </PressableScale>
+          </View>
 
-          <Text style={[styles.groupTitle, { color: theme.subtleText }]}>已完成 · 点住图标拖动</Text>
-          <NestableDraggableFlatList
-            key={`finished-${dragListKey}`}
-            data={taskGroups.finished}
-            keyExtractor={(item) => item.id}
-            renderItem={renderTask}
-            dragGestureDetector="item"
-            onDragEnd={({ from, to }) => handleReorder(
-              taskGroups.finished.map((item) => item.id),
-              from,
-              to,
-              'finished',
-            )}
-            scrollEnabled={false}
-            activationDistance={8}
-            autoscrollEnabled={false}
-            dropAnimationConfig={DRAG_SNAP_SPRING}
-            dropAnimationMode="instant"
-            dragItemOverflow
-            windowSize={5}
-            contentContainerStyle={styles.taskList}
-            ListEmptyComponent={renderFinishedEmpty}
-          />
+          <View style={styles.filterRow}>
+            {(['all', 'active', 'done'] as const).map((sf) => (
+              <PressableScale
+                key={sf}
+                style={[styles.filterChip, styles.filterChipSm, statusFilter === sf && styles.filterChipActive, { borderColor: theme.surfaceBorder }]}
+                onPress={() => setStatusFilter(sf)}
+              >
+                <Text style={[styles.filterChipTextSm, statusFilter === sf && { color: theme.accentText }]}>
+                  {sf === 'all' ? '全部' : sf === 'active' ? '进行中' : '已完成'}
+                </Text>
+              </PressableScale>
+            ))}
+          </View>
+
+          {statusFilter !== 'done' && filteredUnfinished.length > 0 && (
+            <>
+              <Text style={[styles.groupTitle, { color: theme.subtleText }]}>进行中 · 点住图标拖动</Text>
+              <NestableDraggableFlatList
+                key={`uf-${dragListKey}-${groupFilter}-${statusFilter}`}
+                data={filteredUnfinished}
+                keyExtractor={(item) => item.id}
+                renderItem={renderTask}
+                dragGestureDetector="item"
+                onDragEnd={({ from, to }) => handleReorder(
+                  filteredUnfinished.map((item) => item.id),
+                  from,
+                  to,
+                  'unfinished',
+                )}
+                scrollEnabled={false}
+                activationDistance={8}
+                autoscrollEnabled={false}
+                dropAnimationConfig={DRAG_SNAP_SPRING}
+                dropAnimationMode="instant"
+                dragItemOverflow
+                windowSize={5}
+                contentContainerStyle={styles.taskList}
+              />
+            </>
+          )}
+
+          {statusFilter !== 'active' && filteredFinished.length > 0 && (
+            <>
+              <Text style={[styles.groupTitle, { color: theme.subtleText }]}>已完成 · 点住图标拖动</Text>
+              <NestableDraggableFlatList
+                key={`fn-${dragListKey}-${groupFilter}-${statusFilter}`}
+                data={filteredFinished}
+                keyExtractor={(item) => item.id}
+                renderItem={renderTask}
+                dragGestureDetector="item"
+                onDragEnd={({ from, to }) => handleReorder(
+                  filteredFinished.map((item) => item.id),
+                  from,
+                  to,
+                  'finished',
+                )}
+                scrollEnabled={false}
+                activationDistance={8}
+                autoscrollEnabled={false}
+                dropAnimationConfig={DRAG_SNAP_SPRING}
+                dropAnimationMode="instant"
+                dragItemOverflow
+                windowSize={5}
+                contentContainerStyle={styles.taskList}
+              />
+            </>
+          )}
+
+          {filteredTasks.length === 0 && (
+            <Text style={[styles.groupEmpty, { color: theme.subtleText }]}>没有符合条件的任务</Text>
+          )}
         </>
       )}
     </ScreenShell>
@@ -324,6 +412,43 @@ const styles = StyleSheet.create({
     color: '#f8fafc',
     fontSize: 20,
     fontWeight: '800',
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  filterChipActive: {
+    backgroundColor: 'rgba(34,211,238,0.12)',
+    borderColor: 'rgba(34,211,238,0.4) !important',
+  },
+  filterChipAdd: {
+    paddingHorizontal: 8,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(148,163,184,0.7)',
+  },
+  filterChipSm: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  filterChipTextSm: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(148,163,184,0.6)',
   },
   groupTitle: {
     color: 'rgba(148,163,184,0.85)',

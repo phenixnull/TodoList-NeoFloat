@@ -13,6 +13,7 @@ export const defaultData: AppData = {
     serverUrl: 'https://habitpulse.vip.cpolar.top',
     lastSyncedAt: null,
     appearance: 'dark',
+    customGroups: [],
   },
 };
 
@@ -22,6 +23,7 @@ function normalizeTask(task: Task, index: number): Task {
     sortOrder: Number.isFinite(task.sortOrder) ? task.sortOrder : index,
     timerSegments: Array.isArray(task.timerSegments) ? task.timerSegments : [],
     removedSegmentIds: Array.isArray(task.removedSegmentIds) ? task.removedSegmentIds : [],
+    customGroup: typeof task.customGroup === 'string' ? task.customGroup : null,
     manualDurationMs: Number.isFinite(task.manualDurationMs) ? task.manualDurationMs : 0,
   };
 }

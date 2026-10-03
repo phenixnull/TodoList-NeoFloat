@@ -29,6 +29,7 @@ type Props = {
     icon: string;
     color: string;
     iconImage: string | null;
+    customGroup: string | null;
   }) => void;
 };
 
@@ -53,6 +54,9 @@ export default function TaskForm({
   const [iconImage, setIconImage] = useState<string | null>(
     initialTask?.iconImage ?? defaultIconImage ?? null,
   );
+  const [customGroup, setCustomGroup] = useState<string | null>(
+    initialTask?.customGroup ?? null,
+  );
   const [error, setError] = useState('');
   const [processingImage, setProcessingImage] = useState(false);
   const save = () => {
@@ -62,7 +66,7 @@ export default function TaskForm({
     }
 
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onSubmit({ name, description, icon, color, iconImage });
+    onSubmit({ name, description, icon, color, iconImage, customGroup });
     if (navigateBackOnSubmit) {
       router.back();
     }
@@ -162,6 +166,29 @@ export default function TaskForm({
             计时中：上方时间段合计会持续增加，总耗时实时相加。
           </Text>
         ) : null}
+
+        {(settings.customGroups?.length ?? 0) > 0 && (
+          <>
+            <Text style={[styles.label, { color: theme.mutedText }]}>分组</Text>
+            <View style={styles.groupRow}>
+              <PressableScale
+                style={[styles.groupChip, !customGroup && styles.groupChipActive, { borderColor: theme.surfaceBorder }]}
+                onPress={() => setCustomGroup(null)}
+              >
+                <Text style={[styles.groupChipText, !customGroup && { color: theme.accentText }]}>未分组</Text>
+              </PressableScale>
+              {(settings.customGroups ?? []).map((g) => (
+                <PressableScale
+                  key={g}
+                  style={[styles.groupChip, customGroup === g && styles.groupChipActive, { borderColor: theme.surfaceBorder }]}
+                  onPress={() => setCustomGroup(g)}
+                >
+                  <Text style={[styles.groupChipText, customGroup === g && { color: theme.accentText }]}>{g}</Text>
+                </PressableScale>
+              ))}
+            </View>
+          </>
+        )}
 
         <Text style={[styles.label, { color: theme.mutedText }]}>图标</Text>
         <View style={styles.customIconRow}>
@@ -291,6 +318,26 @@ const styles = StyleSheet.create({
     marginTop: 7,
     color: '#94a3b8',
     fontSize: 12,
+  },
+  groupRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  groupChip: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  groupChipActive: {
+    backgroundColor: 'rgba(34,211,238,0.12)',
+    borderColor: 'rgba(34,211,238,0.4)',
+  },
+  groupChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(148,163,184,0.7)',
   },
   customIconRow: {
     flexDirection: 'row',

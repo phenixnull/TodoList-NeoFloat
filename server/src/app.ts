@@ -24,6 +24,7 @@ const createTaskSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   description: z.string().max(500).default(''),
   sortOrder: z.number().int().min(0).default(0),
+  customGroup: z.string().max(80).nullable().default(null),
   timerSegments: z.array(timeSegmentSchema).default([]),
   removedSegmentIds: stringIdListSchema.default([]),
   // A negative value is a manual correction that can offset timer segments.
@@ -39,6 +40,7 @@ const updateTaskSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   description: z.string().max(500).optional(),
   sortOrder: z.number().int().min(0).optional(),
+  customGroup: z.string().max(80).nullable().optional(),
   timerSegments: z.array(timeSegmentSchema).optional(),
   removedSegmentIds: stringIdListSchema.optional(),
   manualDurationMs: z.number().int().optional(),
@@ -390,6 +392,7 @@ export function buildApp({
       color: parsed.data.color,
       description: parsed.data.description,
       sortOrder: parsed.data.sortOrder,
+      customGroup: parsed.data.customGroup ?? null,
       timerSegments: parsed.data.timerSegments,
       removedSegmentIds: parsed.data.removedSegmentIds,
       manualDurationMs: parsed.data.manualDurationMs,
@@ -400,18 +403,19 @@ export function buildApp({
 
     db.prepare(`
       INSERT INTO tasks (
-        id, name, icon, icon_image, color, description, sort_order, timer_segments,
+        id, name, icon, icon_image, color, description, sort_order, custom_group, timer_segments,
         removed_segment_ids,
         manual_duration_ms, created_at, updated_at, deleted_at
       )
       VALUES (
-        @id, @name, @icon, @iconImage, @color, @description, @sortOrder, @timerSegmentsJson,
+        @id, @name, @icon, @iconImage, @color, @description, @sortOrder, @customGroup, @timerSegmentsJson,
         @removedSegmentIdsJson,
         @manualDurationMs, @createdAt, @updatedAt, @deletedAt
       )
   `).run({
     ...task,
     timerSegments: undefined,
+    customGroup: parsed.data.customGroup ?? null,
     timerSegmentsJson: JSON.stringify(parsed.data.timerSegments),
     removedSegmentIds: undefined,
     removedSegmentIdsJson: JSON.stringify(parsed.data.removedSegmentIds),
@@ -486,6 +490,7 @@ export function buildApp({
         color = @color,
         description = @description,
         sort_order = @sortOrder,
+        custom_group = @customGroup,
         timer_segments = @timerSegmentsJson,
         removed_segment_ids = @removedSegmentIdsJson,
         manual_duration_ms = @manualDurationMs,
@@ -494,6 +499,7 @@ export function buildApp({
     `).run({
       ...updated,
       iconImage: updated.iconImage ?? null,
+      customGroup: updated.customGroup ?? null,
       timerSegmentsJson: JSON.stringify(updated.timerSegments),
       removedSegmentIdsJson: JSON.stringify(updated.removedSegmentIds),
       deletedAt: undefined,
@@ -803,6 +809,7 @@ function rowFromTask(row: any) {
     color: row.color,
     description: row.description,
     sortOrder: row.sort_order ?? 0,
+    customGroup: row.custom_group ?? null,
     timerSegments: parseTimerSegments(row.timer_segments ?? '[]'),
     removedSegmentIds: parseIdList(row.removed_segment_ids ?? '[]'),
     manualDurationMs: row.manual_duration_ms ?? 0,
