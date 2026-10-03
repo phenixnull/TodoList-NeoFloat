@@ -23,8 +23,8 @@ function pad2(value: number): string {
 export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   const { tasks, checkIns, now, updateTask, deleteTask, undoCheckIn, reorderTasks } = useStore();
   const today = getTodayKey(now);
-  const [groupFilter, setGroupFilter] = useState<string | null>(() => {
-    try { return localStorage.getItem('habitpulse.desktop.selectedGroup'); } catch { return null; }
+  const [groupFilter, setGroupFilter] = useState<string[]>(() => {
+    try { const v = JSON.parse(localStorage.getItem('habitpulse.desktop.selectedGroups') ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
   });
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
   const [ctxMenu, setCtxMenu] = useState<{ taskId: string; x: number; y: number } | null>(null);
@@ -51,7 +51,7 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   const allFlat = useMemo(() => [...groups.unfinished, ...groups.finished], [groups]);
   const filtered = useMemo(() => {
     let pool = allFlat;
-    if (groupFilter !== null) pool = pool.filter((t) => t.customGroups?.includes(groupFilter));
+    if (groupFilter.length > 0) pool = pool.filter((t) => groupFilter.some((g) => t.customGroups?.includes(g)));
     if (statusFilter === 'active') pool = pool.filter((t) => !completedIds.has(t.id));
     if (statusFilter === 'done') pool = pool.filter((t) => completedIds.has(t.id));
     return pool;
@@ -93,7 +93,7 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         .filter((t) => t.customGroups?.includes(oldName))
         .map((t) => updateTask(t.id, { customGroups: (t.customGroups ?? []).map((g) => (g === oldName ? newName.trim() : g)) })),
     );
-    if (groupFilter === oldName) setGroupFilter(newName.trim());
+    if (groupFilter.includes(oldName)) setGroupFilter((prev) => prev.map((g) => (g === oldName ? newName.trim() : g)));
   }, [storedGroups, customGroups, tasks, updateTask, groupFilter]);
 
   const deleteGroup = useCallback((name: string) => {
@@ -105,12 +105,19 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         .filter((t) => t.customGroups?.includes(name))
         .map((t) => updateTask(t.id, { customGroups: (t.customGroups ?? []).filter((g) => g !== name) })),
     );
-    if (groupFilter === name) setGroupFilter(null);
+    if (groupFilter.includes(name)) setGroupFilter((prev) => prev.filter((g) => g !== name));
   }, [storedGroups, tasks, updateTask, groupFilter]);
 
   const selectGroup = useCallback((g: string | null) => {
-    setGroupFilter(g);
-    localStorage.setItem('habitpulse.desktop.selectedGroup', JSON.stringify(g));
+    setGroupFilter((prev) => {
+      if (g === null) {
+        localStorage.setItem('habitpulse.desktop.selectedGroups', '[]');
+        return [];
+      }
+      const next = prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g];
+      localStorage.setItem('habitpulse.desktop.selectedGroups', JSON.stringify(next));
+      return next;
+    });
   }, []);
 
   const moveToGroup = useCallback((taskId: string, groups: string[]) => {
@@ -250,11 +257,11 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
 
       {/* Group tabs — full-width horizontal drawer */}
       <div className="glass flex items-stretch overflow-hidden rounded-2xl">
-        <TabButton active={groupFilter === null} onClick={() => selectGroup(null)}>全部</TabButton>
+        <TabButton active={groupFilter.length === 0} onClick={() => selectGroup(null)}>全部</TabButton>
         {customGroups.map((g) => (
           <TabButton
             key={g}
-            active={groupFilter === g}
+            active={groupFilter.includes(g)}
             color={GROUP_COLORS[customGroups.indexOf(g) % GROUP_COLORS.length]}
             onClick={() => selectGroup(g)}
             onContextMenu={(e: React.MouseEvent) => { e.preventDefault(); setGroupMenu({ group: g, x: e.clientX, y: e.clientY }); }}
