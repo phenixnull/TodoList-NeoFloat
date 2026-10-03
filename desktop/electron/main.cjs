@@ -73,8 +73,8 @@ function createWindow() {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, '..', 'build', 'icon.png');
-  const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+  const iconPath = path.join(__dirname, '..', 'build', 'icon.ico');
+  const icon = nativeImage.createFromPath(iconPath);
 
   tray = new Tray(icon);
   tray.setToolTip('HabitPulse');
