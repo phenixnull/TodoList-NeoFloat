@@ -41,10 +41,6 @@ function extractClipboardImageFiles(dataTransfer: DataTransfer | null | undefine
     }
   }
 
-  for (const file of Array.from(dataTransfer?.files ?? [])) {
-    if (file.type.startsWith('image/') && !files.includes(file)) files.push(file);
-  }
-
   return files;
 }
 
