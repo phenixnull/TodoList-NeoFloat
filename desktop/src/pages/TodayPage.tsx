@@ -23,6 +23,7 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   const today = getTodayKey(now);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
+  const [ctxMenu, setCtxMenu] = useState<{ taskId: string; x: number; y: number } | null>(null);
   const completedIds = useMemo(
     () => new Set(checkIns.filter((c) => c.date === today).map((c) => c.taskId)),
     [checkIns, today],
@@ -56,6 +57,8 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
     localStorage.setItem('habitpulse.desktop.customGroups', JSON.stringify([...existing, trimmed]));
     window.location.reload();
   }, [customGroups]);
+
+  const ctxTask = ctxMenu ? tasks.find((t) => t.id === ctxMenu.taskId) : undefined;
   const ratio = tasks.length ? completedIds.size / tasks.length : 0;
 
   const midnight = new Date(now);
@@ -66,7 +69,13 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   const ss = Math.floor((remaining % 60_000) / 1000);
 
   const renderCard = (task: Task) => (
-    <GroupContextWrapper key={task.id} task={task} customGroups={customGroups} onMoveToGroup={moveToGroup}>
+    <div
+      key={task.id}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setCtxMenu({ taskId: task.id, x: e.clientX, y: e.clientY });
+      }}
+    >
       <TaskCard
         task={task}
         date={today}
@@ -75,7 +84,7 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         onOpenDetail={() => onOpenRecord({ taskId: task.id, date: today })}
         onDropImages={(files) => onOpenRecord({ taskId: task.id, date: today }, files)}
       />
-    </GroupContextWrapper>
+    </div>
   );
 
   return (
@@ -169,6 +178,36 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
       {filtered.length === 0 && (
         <p className="text-sm text-slate-500">没有符合条件的任务</p>
       )}
+
+      {/* Global context menu — rendered once at page level */}
+      {ctxMenu && ctxTask && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setCtxMenu(null)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null); }} />
+          <div
+            className="fixed z-50 min-w-[160px] rounded-xl border border-white/10 bg-slate-900/95 py-1 shadow-2xl backdrop-blur-sm"
+            style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          >
+            <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              移动到分组 · {ctxTask.name}
+            </p>
+            <button
+              className="w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-white/[0.06]"
+              onClick={() => { moveToGroup(ctxTask.id, null); setCtxMenu(null); }}
+            >
+              {ctxTask.customGroup === null ? '✓ ' : ''}未分组
+            </button>
+            {customGroups.map((g) => (
+              <button
+                key={g}
+                className="w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-white/[0.06]"
+                onClick={() => { moveToGroup(ctxTask.id, g); setCtxMenu(null); }}
+              >
+                {ctxTask.customGroup === g ? '✓ ' : ''}{g}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -211,49 +250,5 @@ function TabButton({ active, onClick, children }: {
     >
       {children}
     </button>
-  );
-}
-
-function GroupContextWrapper({ task, customGroups, onMoveToGroup, children }: {
-  task: Task;
-  customGroups: string[];
-  onMoveToGroup: (taskId: string, group: string | null) => void;
-  children: React.ReactNode;
-}) {
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
-
-  return (
-    <div
-      onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}
-      onClick={() => setMenu(null)}
-    >
-      {children}
-      {menu && (
-        <div
-          className="fixed z-50 min-w-[160px] rounded-xl border border-white/10 bg-slate-900/95 py-1 shadow-2xl backdrop-blur-sm"
-          style={{ left: menu.x, top: menu.y }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-            移动到分组
-          </p>
-          <button
-            className="w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-white/[0.06]"
-            onClick={() => { onMoveToGroup(task.id, null); setMenu(null); }}
-          >
-            {task.customGroup === null ? '✓ ' : ''}未分组
-          </button>
-          {customGroups.map((g) => (
-            <button
-              key={g}
-              className="w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-white/[0.06]"
-              onClick={() => { onMoveToGroup(task.id, g); setMenu(null); }}
-            >
-              {task.customGroup === g ? '✓ ' : ''}{g}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
