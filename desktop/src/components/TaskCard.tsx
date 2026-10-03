@@ -13,6 +13,7 @@ type Props = {
   task: Task;
   date: string;
   checked: boolean;
+  checkedAt?: string | null;
   onEdit: () => void;
   onOpenDetail: () => void;
   onDropImages?: (files: File[]) => void;
@@ -23,6 +24,7 @@ export default function TaskCard({
   task,
   date,
   checked,
+  checkedAt,
   onEdit,
   onOpenDetail,
   onDropImages,
@@ -91,6 +93,13 @@ export default function TaskCard({
         <div className={`mt-0.5 font-mono ${compact ? 'text-[11px]' : 'text-xs'} text-slate-400`}>
           {formatDuration(total)}
         </div>
+        {!compact && (
+          <div className={`text-[11px] font-semibold ${checked ? 'text-emerald-400' : 'text-slate-500'}`}>
+            {checked
+              ? `已打卡 ${checkedAt ? new Date(checkedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}`
+              : '未打卡'}
+          </div>
+        )}
         {!compact && (task.customGroups?.length ?? 0) > 0 && (
           <div className="mt-1 flex items-center gap-1 overflow-hidden" style={{ maxHeight: 22 }}>
             {(task.customGroups ?? []).map((g) => (
