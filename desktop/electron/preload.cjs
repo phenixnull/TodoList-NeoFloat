@@ -13,5 +13,6 @@ contextBridge.exposeInMainWorld('hpDesktop', {
   toggleMaximize: () => ipcRenderer.send('window:toggle-maximize'),
   isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
   close: () => ipcRenderer.send('window:close'),
+  hide: () => ipcRenderer.send('window:hide'),
   testCapture: () => ipcRenderer.invoke('test:capture-save'),
 });

@@ -9,6 +9,7 @@ type HpDesktopApi = {
   toggleMaximize: () => void;
   isMaximized: () => Promise<boolean>;
   close: () => void;
+  hide: () => void;
   testCapture: () => Promise<boolean>;
 };
 

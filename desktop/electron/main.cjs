@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, shell, nativeImage } = require('electron');
 const path = require('node:path');
 
 const MODES = {
@@ -9,6 +9,7 @@ const MODES = {
 /** @type {BrowserWindow | null} */
 let mainWindow = null;
 let currentMode = 'full';
+let tray = null;
 
 const isDev = !app.isPackaged && process.env.HP_DEV === '1';
 
@@ -61,6 +62,54 @@ function createWindow() {
     shell.openExternal(url);
     return { action: 'deny' };
   });
+
+  // Hide to tray instead of quitting when the close button is clicked.
+  mainWindow.on('close', (event) => {
+    if (!app.isQuitting) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
+  });
+}
+
+function createTray() {
+  const iconPath = path.join(__dirname, '..', 'build', 'icon.png');
+  const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+
+  tray = new Tray(icon);
+  tray.setToolTip('HabitPulse');
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '显示 HabitPulse',
+      click: () => {
+        if (!mainWindow) {
+          createWindow();
+          return;
+        }
+        mainWindow.show();
+        mainWindow.focus();
+      },
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        app.isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+  tray.on('double-click', () => {
+    if (!mainWindow) {
+      createWindow();
+      return;
+    }
+    mainWindow.show();
+    mainWindow.focus();
+  });
 }
 
 const gotLock =
@@ -77,6 +126,7 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     createWindow();
+    createTray();
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -84,7 +134,7 @@ if (!gotLock) {
   });
 
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit();
+    // Keep running in tray; user must explicitly quit from tray menu.
   });
 }
 
@@ -120,6 +170,10 @@ ipcMain.handle('window:is-maximized', () => Boolean(mainWindow?.isMaximized()));
 
 ipcMain.on('window:close', () => {
   mainWindow?.close();
+});
+
+ipcMain.on('window:hide', () => {
+  mainWindow?.hide();
 });
 
 ipcMain.handle('test:capture-save', async () => {
