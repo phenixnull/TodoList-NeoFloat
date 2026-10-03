@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { AlarmClock, Plus } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import ProgressRing from '../components/ProgressRing';
 import TaskCard from '../components/TaskCard';
 import { getTaskGroups } from '../../../app/src/domain/taskOrdering';
@@ -19,7 +19,7 @@ function pad2(value: number): string {
 }
 
 export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
-  const { tasks, checkIns, now } = useStore();
+  const { tasks, checkIns, now, updateTask } = useStore();
   const today = getTodayKey(now);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
@@ -42,6 +42,20 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   }, [allFlat, groupFilter, statusFilter, completedIds]);
   const filteredUnfinished = useMemo(() => filtered.filter((t) => !completedIds.has(t.id)), [filtered, completedIds]);
   const filteredFinished = useMemo(() => filtered.filter((t) => completedIds.has(t.id)), [filtered, completedIds]);
+
+  const moveToGroup = useCallback((taskId: string, group: string | null) => {
+    void updateTask(taskId, { customGroup: group });
+  }, [updateTask]);
+
+  const addGroup = useCallback(() => {
+    const name = window.prompt('输入分组名称');
+    if (!name?.trim()) return;
+    const trimmed = name.trim();
+    if (customGroups.includes(trimmed)) return;
+    const existing = JSON.parse(localStorage.getItem('habitpulse.desktop.customGroups') ?? '[]') as string[];
+    localStorage.setItem('habitpulse.desktop.customGroups', JSON.stringify([...existing, trimmed]));
+    window.location.reload();
+  }, [customGroups]);
   const ratio = tasks.length ? completedIds.size / tasks.length : 0;
 
   const midnight = new Date(now);
@@ -52,15 +66,16 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   const ss = Math.floor((remaining % 60_000) / 1000);
 
   const renderCard = (task: Task) => (
-    <TaskCard
-      key={task.id}
-      task={task}
-      date={today}
-      checked={completedIds.has(task.id)}
-      onEdit={() => onEditTask(task)}
-      onOpenDetail={() => onOpenRecord({ taskId: task.id, date: today })}
-      onDropImages={(files) => onOpenRecord({ taskId: task.id, date: today }, files)}
-    />
+    <GroupContextWrapper key={task.id} task={task} customGroups={customGroups} onMoveToGroup={moveToGroup}>
+      <TaskCard
+        task={task}
+        date={today}
+        checked={completedIds.has(task.id)}
+        onEdit={() => onEditTask(task)}
+        onOpenDetail={() => onOpenRecord({ taskId: task.id, date: today })}
+        onDropImages={(files) => onOpenRecord({ taskId: task.id, date: today }, files)}
+      />
+    </GroupContextWrapper>
   );
 
   return (
@@ -106,29 +121,17 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
 
       {/* Group tabs — full-width horizontal drawer */}
       <div className="glass flex items-stretch overflow-hidden rounded-2xl">
-        <button
-          onClick={() => setGroupFilter(null)}
-          className={`flex-1 px-4 py-3.5 text-sm font-extrabold transition-all ${
-            groupFilter === null
-              ? 'bg-cyan-400/15 text-cyan-300 shadow-[inset_0_-3px_0_rgba(34,211,238,0.5)]'
-              : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
-          }`}
-        >
-          全部
-        </button>
+        <TabButton active={groupFilter === null} onClick={() => setGroupFilter(null)}>全部</TabButton>
         {customGroups.map((g) => (
-          <button
-            key={g}
-            onClick={() => setGroupFilter(g)}
-            className={`flex-1 border-l border-white/[0.06] px-4 py-3.5 text-sm font-extrabold transition-all ${
-              groupFilter === g
-                ? 'bg-cyan-400/15 text-cyan-300 shadow-[inset_0_-3px_0_rgba(34,211,238,0.5)]'
-                : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
-            }`}
-          >
-            {g}
-          </button>
+          <TabButton key={g} active={groupFilter === g} onClick={() => setGroupFilter(g)}>{g}</TabButton>
         ))}
+        <button
+          onClick={addGroup}
+          className="border-l border-white/[0.06] px-3 text-slate-500 hover:bg-white/[0.03] hover:text-cyan-300"
+          title="新建分组"
+        >
+          <Plus size={15} />
+        </button>
       </div>
 
       {/* Status sub-filter */}
@@ -189,5 +192,68 @@ function FilterChip({ active, small, onClick, children }: {
     >
       {children}
     </button>
+  );
+}
+
+function TabButton({ active, onClick, children }: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 px-4 py-3.5 text-sm font-extrabold transition-all ${
+        active
+          ? 'bg-cyan-400/15 text-cyan-300 shadow-[inset_0_-3px_0_rgba(34,211,238,0.5)]'
+          : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function GroupContextWrapper({ task, customGroups, onMoveToGroup, children }: {
+  task: Task;
+  customGroups: string[];
+  onMoveToGroup: (taskId: string, group: string | null) => void;
+  children: React.ReactNode;
+}) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+
+  return (
+    <div
+      onContextMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY }); }}
+      onClick={() => setMenu(null)}
+    >
+      {children}
+      {menu && (
+        <div
+          className="fixed z-50 min-w-[160px] rounded-xl border border-white/10 bg-slate-900/95 py-1 shadow-2xl backdrop-blur-sm"
+          style={{ left: menu.x, top: menu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            移动到分组
+          </p>
+          <button
+            className="w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-white/[0.06]"
+            onClick={() => { onMoveToGroup(task.id, null); setMenu(null); }}
+          >
+            {task.customGroup === null ? '✓ ' : ''}未分组
+          </button>
+          {customGroups.map((g) => (
+            <button
+              key={g}
+              className="w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-white/[0.06]"
+              onClick={() => { onMoveToGroup(task.id, g); setMenu(null); }}
+            >
+              {task.customGroup === g ? '✓ ' : ''}{g}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

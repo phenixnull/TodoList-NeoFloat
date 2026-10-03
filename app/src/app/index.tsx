@@ -33,6 +33,7 @@ export default function HomeScreen() {
     toggleCheckIn,
     toggleTimer,
     deleteTask,
+    updateTask,
     reorderTasks,
     updateSettings,
   } = useHabitStore();
@@ -100,6 +101,10 @@ export default function HomeScreen() {
     );
   }, [customGroups, updateSettings]);
 
+  const moveToGroup = useCallback((taskId: string, group: string | null) => {
+    updateTask(taskId, { customGroup: group });
+  }, [updateTask]);
+
   const checkInDatesByTask = useMemo(() => {
     const dates = new Map<string, string[]>();
 
@@ -133,9 +138,11 @@ export default function HomeScreen() {
       onToggle={toggleCheckIn}
       onToggleTimer={toggleTimer}
       onDelete={deleteTask}
+      customGroups={customGroups}
+      onMoveToGroup={moveToGroup}
       isLight={theme.isLight}
     />
-  ), [today, completedIds, theme.isLight, todayCheckInsByTask, statsByTaskId, toggleCheckIn, toggleTimer, deleteTask]);
+  ), [today, completedIds, theme.isLight, todayCheckInsByTask, statsByTaskId, toggleCheckIn, toggleTimer, deleteTask, customGroups, moveToGroup]);
   const moveId = useCallback((ids: string[], from: number, to: number) => {
     if (from === to || from < 0 || to < 0 || from >= ids.length || to >= ids.length) {
       return ids;

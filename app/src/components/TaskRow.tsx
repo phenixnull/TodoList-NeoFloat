@@ -38,6 +38,8 @@ type Props = {
   onToggle: (taskId: string) => boolean;
   onToggleTimer: (taskId: string) => void;
   onDelete: (taskId: string) => void;
+  customGroups?: string[];
+  onMoveToGroup?: (taskId: string, group: string | null) => void;
   isLight?: boolean;
 };
 
@@ -82,6 +84,8 @@ function TaskRow({
   onToggle,
   onToggleTimer,
   onDelete,
+  customGroups = [],
+  onMoveToGroup,
   isLight = false,
 }: Props) {
   const aura = useSharedValue(0);
@@ -118,6 +122,29 @@ function TaskRow({
     } else {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
+  };
+
+  const showGroupMenu = () => {
+    if (!onMoveToGroup) return;
+    const buttons: { text: string; onPress: () => void; style?: 'default' | 'cancel' | 'destructive' }[] = [];
+
+    buttons.push({
+      text: '未分组',
+      onPress: () => onMoveToGroup(task.id, null),
+    });
+    for (const g of customGroups) {
+      buttons.push({
+        text: `${task.customGroup === g ? '✓ ' : ''}${g}`,
+        onPress: () => onMoveToGroup(task.id, g),
+      });
+    }
+    buttons.push({ text: '取消', style: 'cancel', onPress: () => {} });
+
+    Alert.alert(
+      `移动「${task.name}」到分组`,
+      `当前：${task.customGroup ?? '未分组'}`,
+      buttons,
+    );
   };
 
   const confirmDelete = () => {
@@ -234,6 +261,7 @@ function TaskRow({
             accessibilityState={{ checked: checkedInToday }}
             accessibilityRole="checkbox"
             onPress={toggle}
+            onLongPress={showGroupMenu}
             style={styles.mainRow}
           >
             {handleGesture ? (
