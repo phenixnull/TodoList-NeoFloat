@@ -9,6 +9,8 @@ import type { Task } from '../../../app/src/domain/types';
 import { useStore } from '../data/store';
 import type { RecordTarget } from '../components/DayRecordModal';
 
+const GROUP_COLORS = ['#22d3ee', '#a78bfa', '#f472b6', '#fb923c', '#34d399', '#facc15', '#60a5fa', '#f87171', '#2dd4bf', '#c084fc'];
+
 type Props = {
   onEditTask: (task: Task | null) => void;
   onOpenRecord: (target: RecordTarget, files?: File[]) => void;
@@ -222,6 +224,7 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
           <TabButton
             key={g}
             active={groupFilter === g}
+            color={GROUP_COLORS[customGroups.indexOf(g) % GROUP_COLORS.length]}
             onClick={() => setGroupFilter(g)}
             onContextMenu={(e: React.MouseEvent) => { e.preventDefault(); setGroupMenu({ group: g, x: e.clientX, y: e.clientY }); }}
           >
@@ -389,21 +392,20 @@ function FilterChip({ active, small, onClick, children }: {
   );
 }
 
-function TabButton({ active, onClick, onContextMenu, children }: {
+function TabButton({ active, onClick, onContextMenu, color, children }: {
   active: boolean;
   onClick: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
+  color?: string;
   children: React.ReactNode;
 }) {
+  const c = color ?? '#22d3ee';
   return (
     <button
       onClick={onClick}
       onContextMenu={onContextMenu}
-      className={`flex-1 px-4 py-3.5 text-sm font-extrabold transition-all ${
-        active
-          ? 'bg-cyan-400/15 text-cyan-300 shadow-[inset_0_-3px_0_rgba(34,211,238,0.5)]'
-          : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
-      }`}
+      style={active ? { backgroundColor: c + '1a', color: c, boxShadow: 'inset 0 -3px 0 ' + c + '80' } : undefined}
+      className={'flex-1 px-4 py-3.5 text-sm font-extrabold transition-all ' + (active ? '' : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200')}
     >
       {children}
     </button>
