@@ -21,7 +21,7 @@ import TodayPage from './pages/TodayPage';
 export type PageKey = 'today' | 'stats' | 'settings';
 
 const PAGE_TITLES: Record<PageKey, string> = {
-  today: '今日打卡',
+  today: '打卡主页',
   stats: '数据统计',
   settings: '设置',
 };

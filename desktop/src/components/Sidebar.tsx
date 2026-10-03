@@ -9,7 +9,7 @@ import {
 import type { PageKey } from '../App';
 
 const NAV: { key: PageKey; label: string; icon: typeof ListTodo }[] = [
-  { key: 'today', label: '今日打卡', icon: CalendarCheck2 },
+  { key: 'today', label: '打卡主页', icon: CalendarCheck2 },
   { key: 'stats', label: '数据统计', icon: ChartNoAxesCombined },
   { key: 'settings', label: '设置', icon: Settings },
 ];
