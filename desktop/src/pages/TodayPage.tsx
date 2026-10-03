@@ -24,14 +24,23 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
   const [ctxMenu, setCtxMenu] = useState<{ taskId: string; x: number; y: number } | null>(null);
+  const [addModal, setAddModal] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
   const completedIds = useMemo(
     () => new Set(checkIns.filter((c) => c.date === today).map((c) => c.taskId)),
     [checkIns, today],
   );
   const groups = useMemo(() => getTaskGroups(tasks, completedIds), [tasks, completedIds]);
+  const [storedGroups, setStoredGroups] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('habitpulse.desktop.customGroups') ?? '[]') as string[];
+    } catch {
+      return [];
+    }
+  });
   const customGroups = useMemo(
-    () => [...new Set(tasks.map((t) => t.customGroup).filter((g): g is string => Boolean(g)))],
-    [tasks],
+    () => [...new Set([...storedGroups, ...tasks.map((t) => t.customGroup).filter((g): g is string => Boolean(g))])],
+    [storedGroups, tasks],
   );
   const allFlat = useMemo(() => [...groups.unfinished, ...groups.finished], [groups]);
   const filtered = useMemo(() => {
@@ -48,15 +57,15 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
     void updateTask(taskId, { customGroup: group });
   }, [updateTask]);
 
-  const addGroup = useCallback(() => {
-    const name = window.prompt('输入分组名称');
-    if (!name?.trim()) return;
-    const trimmed = name.trim();
-    if (customGroups.includes(trimmed)) return;
-    const existing = JSON.parse(localStorage.getItem('habitpulse.desktop.customGroups') ?? '[]') as string[];
-    localStorage.setItem('habitpulse.desktop.customGroups', JSON.stringify([...existing, trimmed]));
-    window.location.reload();
-  }, [customGroups]);
+  const confirmAddGroup = useCallback(() => {
+    const trimmed = newGroupName.trim();
+    if (!trimmed || customGroups.includes(trimmed)) return;
+    const next = [...storedGroups, trimmed];
+    setStoredGroups(next);
+    localStorage.setItem('habitpulse.desktop.customGroups', JSON.stringify(next));
+    setNewGroupName('');
+    setAddModal(false);
+  }, [newGroupName, customGroups, storedGroups]);
 
   const ctxTask = ctxMenu ? tasks.find((t) => t.id === ctxMenu.taskId) : undefined;
   const ratio = tasks.length ? completedIds.size / tasks.length : 0;
@@ -135,7 +144,7 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
           <TabButton key={g} active={groupFilter === g} onClick={() => setGroupFilter(g)}>{g}</TabButton>
         ))}
         <button
-          onClick={addGroup}
+          onClick={() => setAddModal(true)}
           className="border-l border-white/[0.06] px-3 text-slate-500 hover:bg-white/[0.03] hover:text-cyan-300"
           title="新建分组"
         >
@@ -177,6 +186,27 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
 
       {filtered.length === 0 && (
         <p className="text-sm text-slate-500">没有符合条件的任务</p>
+      )}
+
+      {/* Add group modal */}
+      {addModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setAddModal(false)}>
+          <div className="glass-strong w-[360px] p-5" onClick={(e) => e.stopPropagation()}>
+            <p className="mb-3 text-sm font-extrabold text-slate-100">新建分组</p>
+            <input
+              autoFocus
+              className="input w-full"
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirmAddGroup(); }}
+              placeholder="输入分组名称"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button className="btn-ghost px-3 py-1.5 text-xs" onClick={() => setAddModal(false)}>取消</button>
+              <button className="btn-accent px-3 py-1.5 text-xs" onClick={confirmAddGroup} disabled={!newGroupName.trim()}>创建</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Global context menu — rendered once at page level */}
