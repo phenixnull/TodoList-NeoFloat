@@ -9,6 +9,14 @@ import { extractImageFiles } from '../hooks/useImageCapture';
 import { useStore } from '../data/store';
 import TaskIcon from './TaskIcon';
 
+const GROUP_COLORS = ['#22d3ee', '#a78bfa', '#f472b6', '#fb923c', '#34d399', '#facc15', '#60a5fa', '#f87171', '#2dd4bf', '#c084fc'];
+
+function getGroupColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return GROUP_COLORS[Math.abs(hash) % GROUP_COLORS.length];
+}
+
 type Props = {
   task: Task;
   date: string;
@@ -105,8 +113,9 @@ export default function TaskCard({
             {(task.customGroups ?? []).map((g) => (
               <span
                 key={g}
-                className="inline-flex shrink-0 items-center rounded-full border border-white/[0.08] bg-white/[0.04] px-1.5 py-0 text-[10px] font-semibold text-slate-400"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] px-1.5 py-0 text-[10px] font-semibold text-slate-400"
               >
+                <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: getGroupColor(g) }} />
                 {g}
               </span>
             ))}
