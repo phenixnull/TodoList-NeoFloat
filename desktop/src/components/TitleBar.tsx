@@ -11,7 +11,7 @@ export default function TitleBar({ title, mode }: Props) {
   return (
     <div className="app-drag flex h-11 shrink-0 items-center justify-between pl-4 pr-2">
       <div className="flex items-center gap-2.5">
-        <img src="../../../build/icon-256.png" alt="HabitPulse" className="h-6 w-6 rounded-lg" />
+        <img src="/icon-256.png" alt="HabitPulse" className="h-6 w-6 rounded-lg" />
         <span className="text-sm font-bold tracking-wide text-slate-100">HabitPulse</span>
         <span className="text-xs font-medium text-slate-500">· {title}</span>
       </div>
