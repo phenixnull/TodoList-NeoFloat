@@ -15,6 +15,7 @@ export default function HeatmapBlock() {
   const [selectedId, setSelectedId] = useState('');
   const task = selectedId ? activeTasks.find((t) => t.id === selectedId) : undefined;
   const today = getTodayKey(now);
+  const [hovered, setHovered] = useState<{ date: string; x: number; y: number } | null>(null);
 
   const grid = useMemo(() => {
     if (!activeTasks.length) return [];
@@ -66,6 +67,32 @@ export default function HeatmapBlock() {
     return labels;
   }, [grid]);
 
+  const hoverInfo = useMemo(() => {
+    if (!hovered) return null;
+    const cell = grid.flat().find((c) => c.date === hovered.date);
+    if (!cell) return null;
+
+    const dayCheckins = task
+      ? checkIns.filter((c) => c.taskId === task.id && c.date === hovered.date)
+      : checkIns.filter((c) => c.date === hovered.date);
+
+    const checkinCount = dayCheckins.length;
+    const checkinTime = dayCheckins[0]?.createdAt
+      ? new Date(dayCheckins[0].createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+      : null;
+
+    return {
+      date: hovered.date,
+      weekday: new Date(`${hovered.date}T00:00:00`).toLocaleDateString('zh-CN', { weekday: 'short' }),
+      completed: cell.status === 'complete',
+      partial: cell.status === 'partial',
+      durationMs: cell.durationMs,
+      checkinCount,
+      checkinTime,
+      taskName: task?.name,
+    };
+  }, [hovered, grid, checkIns, task]);
+
   return (
     <div className="glass p-5">
       <div className="mb-4 flex items-center justify-between">
@@ -105,13 +132,11 @@ export default function HeatmapBlock() {
                   return (
                     <div
                       key={cell.date}
-                      title={`${cell.date}${
-                        cell.status === 'complete'
-                          ? ' · 已完成'
-                          : cell.durationMs > 0
-                            ? ` · ${formatMs(cell.durationMs)}`
-                            : ''
-                      }`}
+                      onMouseEnter={(e) => {
+                        const rect = (e.target as HTMLElement).getBoundingClientRect();
+                        setHovered({ date: cell.date, x: rect.left, y: rect.top });
+                      }}
+                      onMouseLeave={() => setHovered(null)}
                       className="h-[14px] w-[14px] rounded-[3px] transition-transform hover:scale-125"
                       style={style}
                     />
@@ -123,7 +148,7 @@ export default function HeatmapBlock() {
         </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-slate-500">
+          <div className="mt-3 flex items-center justify-end gap-1.5 text-[10px] text-slate-500">
         <span>少</span>
         {[0, 1, 2, 3, 4].map((level) => (
           <span
@@ -134,6 +159,44 @@ export default function HeatmapBlock() {
         ))}
         <span>多</span>
       </div>
+
+      {hoverInfo && (
+        <div
+          className="pointer-events-none fixed z-50 w-max rounded-xl border border-white/10 bg-slate-900/95 px-3.5 py-2.5 shadow-2xl backdrop-blur-md"
+          style={{
+            left: Math.min(hovered!.x, window.innerWidth - 200),
+            top: hovered!.y - 8,
+            transform: 'translateY(-100%)',
+          }}
+        >
+          <p className="text-xs font-bold text-slate-100">
+            {hoverInfo.date} {hoverInfo.weekday}
+          </p>
+          <div className="mt-1 space-y-0.5">
+            {hoverInfo.taskName && (
+              <p className="text-[11px] text-cyan-300">{hoverInfo.taskName}</p>
+            )}
+            <p className="text-[11px] text-slate-300">
+              {hoverInfo.completed
+                ? '✅ 已完成打卡'
+                : hoverInfo.partial
+                  ? '⏱ 有计时记录'
+                  : '无记录'}
+            </p>
+            {hoverInfo.checkinCount > 0 && hoverInfo.checkinTime && (
+              <p className="text-[11px] text-slate-400">
+                打卡时间 {hoverInfo.checkinTime}
+                {hoverInfo.checkinCount > 1 ? ` · ${hoverInfo.checkinCount} 个任务` : ''}
+              </p>
+            )}
+            {hoverInfo.durationMs > 0 && (
+              <p className="font-mono text-[11px] text-emerald-400">
+                ⏱ {formatMs(hoverInfo.durationMs)}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
