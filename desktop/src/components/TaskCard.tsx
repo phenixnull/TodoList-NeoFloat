@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Check, Pencil, Play, Square, StickyNote } from 'lucide-react';
 import {
-  calculateTaskDurationMs,
+  calculateTimeSegmentsDurationForDate,
   formatDuration,
   isTimerRunning,
 } from '../../../app/src/domain/timeTracking';
@@ -30,7 +30,7 @@ export default function TaskCard({
   compact = false,
 }: Props) {
   const { now, toggleCheckIn, toggleTimer, busy } = useStore();
-  const total = calculateTaskDurationMs(task, now.getTime());
+  const total = calculateTimeSegmentsDurationForDate(task, date, now.getTime());
   const running = isTimerRunning(task);
 
   return (

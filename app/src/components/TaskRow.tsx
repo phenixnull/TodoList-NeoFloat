@@ -21,7 +21,7 @@ import { getPulseColors } from '../domain/color';
 import { formatCheckInTime } from '../domain/format';
 import { HabitStats } from '../domain/streak';
 import { Task } from '../domain/types';
-import { calculateTaskDurationMs, formatDuration, isTimerRunning } from '../domain/timeTracking';
+import { calculateTimeSegmentsDurationForDate, formatDuration, isTimerRunning } from '../domain/timeTracking';
 import { resolveTheme } from '../theme/theme';
 
 type Props = {
@@ -63,7 +63,7 @@ function TaskDuration({ task, today, isLight = false }: { task: Task; today: str
         color={running ? task.color : theme.subtleText}
       />
       <Text style={[styles.durationText, { color: theme.mutedText }, running && { color: task.color }]}>
-        {formatDuration(calculateTaskDurationMs(task, nowMs))}
+        {formatDuration(calculateTimeSegmentsDurationForDate(task, today, nowMs))}
       </Text>
     </View>
   );
