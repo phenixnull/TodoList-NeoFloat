@@ -104,13 +104,34 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         </div>
       </motion.div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <FilterChip active={groupFilter === null} onClick={() => setGroupFilter(null)}>全部</FilterChip>
+      {/* Group tabs — full-width horizontal drawer */}
+      <div className="glass flex items-stretch overflow-hidden rounded-2xl">
+        <button
+          onClick={() => setGroupFilter(null)}
+          className={`flex-1 px-4 py-3.5 text-sm font-extrabold transition-all ${
+            groupFilter === null
+              ? 'bg-cyan-400/15 text-cyan-300 shadow-[inset_0_-3px_0_rgba(34,211,238,0.5)]'
+              : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
+          }`}
+        >
+          全部
+        </button>
         {customGroups.map((g) => (
-          <FilterChip key={g} active={groupFilter === g} onClick={() => setGroupFilter(g)}>{g}</FilterChip>
+          <button
+            key={g}
+            onClick={() => setGroupFilter(g)}
+            className={`flex-1 border-l border-white/[0.06] px-4 py-3.5 text-sm font-extrabold transition-all ${
+              groupFilter === g
+                ? 'bg-cyan-400/15 text-cyan-300 shadow-[inset_0_-3px_0_rgba(34,211,238,0.5)]'
+                : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
+            }`}
+          >
+            {g}
+          </button>
         ))}
       </div>
+
+      {/* Status sub-filter */}
       <div className="flex flex-wrap items-center gap-1.5">
         <FilterChip small active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>全部</FilterChip>
         <FilterChip small active={statusFilter === 'active'} onClick={() => setStatusFilter('active')}>进行中</FilterChip>
