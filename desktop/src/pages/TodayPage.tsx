@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { AlarmClock, Plus } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import ProgressRing from '../components/ProgressRing';
 import TaskCard from '../components/TaskCard';
 import { getTaskGroups } from '../../../app/src/domain/taskOrdering';
@@ -21,11 +21,27 @@ function pad2(value: number): string {
 export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   const { tasks, checkIns, now } = useStore();
   const today = getTodayKey(now);
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
   const completedIds = useMemo(
     () => new Set(checkIns.filter((c) => c.date === today).map((c) => c.taskId)),
     [checkIns, today],
   );
   const groups = useMemo(() => getTaskGroups(tasks, completedIds), [tasks, completedIds]);
+  const customGroups = useMemo(
+    () => [...new Set(tasks.map((t) => t.customGroup).filter((g): g is string => Boolean(g)))],
+    [tasks],
+  );
+  const allFlat = useMemo(() => [...groups.unfinished, ...groups.finished], [groups]);
+  const filtered = useMemo(() => {
+    let pool = allFlat;
+    if (groupFilter !== null) pool = pool.filter((t) => t.customGroup === groupFilter);
+    if (statusFilter === 'active') pool = pool.filter((t) => !completedIds.has(t.id));
+    if (statusFilter === 'done') pool = pool.filter((t) => completedIds.has(t.id));
+    return pool;
+  }, [allFlat, groupFilter, statusFilter, completedIds]);
+  const filteredUnfinished = useMemo(() => filtered.filter((t) => !completedIds.has(t.id)), [filtered, completedIds]);
+  const filteredFinished = useMemo(() => filtered.filter((t) => completedIds.has(t.id)), [filtered, completedIds]);
   const ratio = tasks.length ? completedIds.size / tasks.length : 0;
 
   const midnight = new Date(now);
@@ -88,26 +104,69 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         </div>
       </motion.div>
 
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <FilterChip active={groupFilter === null} onClick={() => setGroupFilter(null)}>全部</FilterChip>
+        {customGroups.map((g) => (
+          <FilterChip key={g} active={groupFilter === g} onClick={() => setGroupFilter(g)}>{g}</FilterChip>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <FilterChip small active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>全部</FilterChip>
+        <FilterChip small active={statusFilter === 'active'} onClick={() => setStatusFilter('active')}>进行中</FilterChip>
+        <FilterChip small active={statusFilter === 'done'} onClick={() => setStatusFilter('done')}>已完成</FilterChip>
+      </div>
+
       {/* Unfinished */}
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-extrabold text-slate-200">
-            进行中 <span className="ml-1 text-slate-500">{groups.unfinished.length}</span>
-          </h3>
+      {statusFilter !== 'done' && filteredUnfinished.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-extrabold text-slate-200">
+              进行中 <span className="ml-1 text-slate-500">{filteredUnfinished.length}</span>
+            </h3>
           <button onClick={() => onEditTask(null)} className="btn-ghost px-3 py-1.5 text-xs">
             <Plus size={13} /> 新建任务
           </button>
         </div>
-        <div className="flex flex-col gap-2.5">{groups.unfinished.map(renderCard)}</div>
-      </section>
+          <div className="flex flex-col gap-2.5">{filteredUnfinished.map(renderCard)}</div>
+        </section>
+      )}
 
       {/* Finished */}
-      <section>
-        <h3 className="mb-3 text-sm font-extrabold text-slate-200">
-          已完成 <span className="ml-1 text-slate-500">{groups.finished.length}</span>
-        </h3>
-        <div className="flex flex-col gap-2.5">{groups.finished.map(renderCard)}</div>
-      </section>
+      {statusFilter !== 'active' && filteredFinished.length > 0 && (
+        <section>
+          <h3 className="mb-3 text-sm font-extrabold text-slate-200">
+            已完成 <span className="ml-1 text-slate-500">{filteredFinished.length}</span>
+          </h3>
+          <div className="flex flex-col gap-2.5">{filteredFinished.map(renderCard)}</div>
+        </section>
+      )}
+
+      {filtered.length === 0 && (
+        <p className="text-sm text-slate-500">没有符合条件的任务</p>
+      )}
     </div>
+  );
+}
+
+function FilterChip({ active, small, onClick, children }: {
+  active: boolean;
+  small?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-full border transition-all ${
+        small ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'
+      } font-bold ${
+        active
+          ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300'
+          : 'border-white/10 bg-white/[0.03] text-slate-400 hover:text-slate-200'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
