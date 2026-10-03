@@ -29,7 +29,7 @@ type Props = {
     icon: string;
     color: string;
     iconImage: string | null;
-    customGroup: string | null;
+    customGroups: string[];
   }) => void;
 };
 
@@ -54,9 +54,7 @@ export default function TaskForm({
   const [iconImage, setIconImage] = useState<string | null>(
     initialTask?.iconImage ?? defaultIconImage ?? null,
   );
-  const [customGroup, setCustomGroup] = useState<string | null>(
-    initialTask?.customGroup ?? null,
-  );
+  const [customGroups, setCustomGroups] = useState<string[]>(initialTask?.customGroups ?? []);
   const [error, setError] = useState('');
   const [processingImage, setProcessingImage] = useState(false);
   const save = () => {
@@ -66,7 +64,7 @@ export default function TaskForm({
     }
 
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onSubmit({ name, description, icon, color, iconImage, customGroup });
+    onSubmit({ name, description, icon, color, iconImage, customGroups });
     if (navigateBackOnSubmit) {
       router.back();
     }
@@ -172,18 +170,18 @@ export default function TaskForm({
             <Text style={[styles.label, { color: theme.mutedText }]}>分组</Text>
             <View style={styles.groupRow}>
               <PressableScale
-                style={[styles.groupChip, !customGroup && styles.groupChipActive, { borderColor: theme.surfaceBorder }]}
-                onPress={() => setCustomGroup(null)}
+                style={[styles.groupChip, !customGroups.length && styles.groupChipActive, { borderColor: theme.surfaceBorder }]}
+                onPress={() => setCustomGroups([])}
               >
-                <Text style={[styles.groupChipText, !customGroup && { color: theme.accentText }]}>未分组</Text>
+                <Text style={[styles.groupChipText, !customGroups.length && { color: theme.accentText }]}>未分组</Text>
               </PressableScale>
               {(settings.customGroups ?? []).map((g) => (
                 <PressableScale
                   key={g}
-                  style={[styles.groupChip, customGroup === g && styles.groupChipActive, { borderColor: theme.surfaceBorder }]}
-                  onPress={() => setCustomGroup(g)}
+                  style={[styles.groupChip, customGroups.includes(g) && styles.groupChipActive, { borderColor: theme.surfaceBorder }]}
+                  onPress={() => setCustomGroups((prev) => prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g])}
                 >
-                  <Text style={[styles.groupChipText, customGroup === g && { color: theme.accentText }]}>{g}</Text>
+                  <Text style={[styles.groupChipText, customGroups.includes(g) && { color: theme.accentText }]}>{g}</Text>
                 </PressableScale>
               ))}
             </View>
@@ -434,3 +432,4 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
+

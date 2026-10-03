@@ -68,7 +68,7 @@ export default function HomeScreen() {
     if (groupFilter === null) {
       pool = allTasksFlat;
     } else {
-      pool = allTasksFlat.filter((t) => t.customGroup === groupFilter);
+      pool = allTasksFlat.filter((t) => t.customGroups?.includes(groupFilter));
     }
 
     if (statusFilter === 'active') {
@@ -101,8 +101,8 @@ export default function HomeScreen() {
     );
   }, [customGroups, updateSettings]);
 
-  const moveToGroup = useCallback((taskId: string, group: string | null) => {
-    updateTask(taskId, { customGroup: group });
+  const moveToGroup = useCallback((taskId: string, groups: string[]) => {
+    updateTask(taskId, { customGroups: groups });
   }, [updateTask]);
 
   const checkInDatesByTask = useMemo(() => {
@@ -527,3 +527,4 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
+

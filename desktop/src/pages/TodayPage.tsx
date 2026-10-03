@@ -39,13 +39,13 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
     }
   });
   const customGroups = useMemo(
-    () => [...new Set([...storedGroups, ...tasks.map((t) => t.customGroup).filter((g): g is string => Boolean(g))])],
+    () => [...new Set([...storedGroups, ...tasks.flatMap((t) => t.customGroups ?? []).filter((g): g is string => Boolean(g))])],
     [storedGroups, tasks],
   );
   const allFlat = useMemo(() => [...groups.unfinished, ...groups.finished], [groups]);
   const filtered = useMemo(() => {
     let pool = allFlat;
-    if (groupFilter !== null) pool = pool.filter((t) => t.customGroup === groupFilter);
+    if (groupFilter !== null) pool = pool.filter((t) => t.customGroups?.includes(groupFilter));
     if (statusFilter === 'active') pool = pool.filter((t) => !completedIds.has(t.id));
     if (statusFilter === 'done') pool = pool.filter((t) => completedIds.has(t.id));
     return pool;
@@ -53,8 +53,8 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   const filteredUnfinished = useMemo(() => filtered.filter((t) => !completedIds.has(t.id)), [filtered, completedIds]);
   const filteredFinished = useMemo(() => filtered.filter((t) => completedIds.has(t.id)), [filtered, completedIds]);
 
-  const moveToGroup = useCallback((taskId: string, group: string | null) => {
-    void updateTask(taskId, { customGroup: group });
+  const moveToGroup = useCallback((taskId: string, groups: string[]) => {
+    void updateTask(taskId, { customGroups: groups });
   }, [updateTask]);
 
   const confirmAddGroup = useCallback(() => {
@@ -222,17 +222,17 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
             </p>
             <button
               className="w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-white/[0.06]"
-              onClick={() => { moveToGroup(ctxTask.id, null); setCtxMenu(null); }}
+              onClick={() => { moveToGroup(ctxTask.id, []); setCtxMenu(null); }}
             >
-              {ctxTask.customGroup === null ? '✓ ' : ''}未分组
+              {(ctxTask.customGroups ?? []).length === 0 ? '✓ ' : ''}未分组
             </button>
             {customGroups.map((g) => (
               <button
                 key={g}
                 className="w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-white/[0.06]"
-                onClick={() => { moveToGroup(ctxTask.id, g); setCtxMenu(null); }}
+                onClick={() => { moveToGroup(ctxTask.id, (ctxTask.customGroups ?? []).includes(g) ? (ctxTask.customGroups ?? []).filter((x) => x !== g) : [...(ctxTask.customGroups ?? []), g]); setCtxMenu(null); }}
               >
-                {ctxTask.customGroup === g ? '✓ ' : ''}{g}
+                {(ctxTask.customGroups ?? []).includes(g) ? '✓ ' : ''}{g}
               </button>
             ))}
           </div>

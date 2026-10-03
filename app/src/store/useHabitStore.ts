@@ -199,7 +199,7 @@ function useHabitStoreInstance() {
             color: task.color,
             description: task.description,
             sortOrder: task.sortOrder,
-            customGroup: task.customGroup ?? null,
+            customGroups: task.customGroups ?? [],
             timerSegments: task.timerSegments,
             removedSegmentIds: task.removedSegmentIds ?? [],
             manualDurationMs: task.manualDurationMs,
@@ -300,7 +300,7 @@ function useHabitStoreInstance() {
           body: JSON.stringify({
             name: task.name, icon: task.icon, iconImage: task.iconImage ?? null,
             color: task.color, description: task.description, sortOrder: task.sortOrder,
-            customGroup: task.customGroup ?? null,
+            customGroups: task.customGroups ?? [],
             timerSegments: task.timerSegments, removedSegmentIds: task.removedSegmentIds ?? [],
             manualDurationMs: task.manualDurationMs,
           }),
@@ -417,7 +417,7 @@ function useHabitStoreInstance() {
     void pushTask(task);
   }, [commit, pushTask]);
 
-  const updateTask = useCallback((id: string, input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs' | 'timerSegments' | 'removedSegmentIds' | 'customGroup'>>) => {
+  const updateTask = useCallback((id: string, input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs' | 'timerSegments' | 'removedSegmentIds' | 'customGroups'>>) => {
     const tasks = dataRef.current.tasks.map((task) => (task.id === id
       ? { ...task, ...input, updatedAt: new Date().toISOString() }
       : task));
@@ -644,3 +644,4 @@ export function useHabitStore(): HabitStore {
 
   return store;
 }
+

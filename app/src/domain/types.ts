@@ -6,7 +6,7 @@ export type Task = {
   color: string;
   description: string;
   sortOrder: number;
-  customGroup?: string | null;
+  customGroups?: string[];
   timerSegments: TimeSegment[];
   /** IDs intentionally deleted on any device. Used to stop server-side union sync from resurrecting them. */
   removedSegmentIds?: string[];

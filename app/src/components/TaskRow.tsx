@@ -39,7 +39,7 @@ type Props = {
   onToggleTimer: (taskId: string) => void;
   onDelete: (taskId: string) => void;
   customGroups?: string[];
-  onMoveToGroup?: (taskId: string, group: string | null) => void;
+  onMoveToGroup?: (taskId: string, groups: string[]) => void;
   isLight?: boolean;
 };
 
@@ -130,19 +130,19 @@ function TaskRow({
 
     buttons.push({
       text: '未分组',
-      onPress: () => onMoveToGroup(task.id, null),
+      onPress: () => onMoveToGroup(task.id, []),
     });
     for (const g of customGroups) {
       buttons.push({
-        text: `${task.customGroup === g ? '✓ ' : ''}${g}`,
-        onPress: () => onMoveToGroup(task.id, g),
+        text: `${(task.customGroups ?? []).includes(g) ? '✓ ' : ''}${g}`,
+        onPress: () => onMoveToGroup(task.id, (task.customGroups ?? []).includes(g) ? (task.customGroups ?? []).filter((x) => x !== g) : [...(task.customGroups ?? []), g]),
       });
     }
     buttons.push({ text: '取消', style: 'cancel', onPress: () => {} });
 
     Alert.alert(
       `移动「${task.name}」到分组`,
-      `当前：${task.customGroup ?? '未分组'}`,
+      `当前：${task.customGroups?.join(', ') ?? '未分组'}`,
       buttons,
     );
   };
@@ -466,3 +466,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+
