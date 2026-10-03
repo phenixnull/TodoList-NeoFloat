@@ -143,6 +143,8 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
 
   const dragTaskId = useRef<string | null>(null);
   const tabBarRef = useRef<HTMLDivElement>(null);
+  const tabDragRef = useRef<string | null>(null);
+  const tabDragOverRef = useRef<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   // Ctrl+Z undo for check-in only (max 8 steps).
