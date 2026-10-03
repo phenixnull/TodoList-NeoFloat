@@ -7,6 +7,7 @@ export type Task = {
   description: string;
   sortOrder: number;
   customGroups?: string[];
+  selectedGroup?: string | null;
   timerSegments: TimeSegment[];
   /** IDs intentionally deleted on any device. Used to stop server-side union sync from resurrecting them. */
   removedSegmentIds?: string[];
@@ -61,6 +62,7 @@ export type HabitSettings = {
   lastSyncedAt?: string | null;
   appearance?: 'light' | 'dark' | 'system';
   customGroups?: string[];
+  selectedGroup?: string | null;
 };
 
 export type AppData = {

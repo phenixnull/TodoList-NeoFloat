@@ -23,7 +23,9 @@ function pad2(value: number): string {
 export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   const { tasks, checkIns, now, updateTask, deleteTask, undoCheckIn, reorderTasks } = useStore();
   const today = getTodayKey(now);
-  const [groupFilter, setGroupFilter] = useState<string | null>(null);
+  const [groupFilter, setGroupFilter] = useState<string | null>(() => {
+    try { return localStorage.getItem('habitpulse.desktop.selectedGroup'); } catch { return null; }
+  });
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
   const [ctxMenu, setCtxMenu] = useState<{ taskId: string; x: number; y: number } | null>(null);
   const [groupMenu, setGroupMenu] = useState<{ group: string; x: number; y: number } | null>(null);
@@ -83,6 +85,11 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
     );
     if (groupFilter === name) setGroupFilter(null);
   }, [storedGroups, tasks, updateTask, groupFilter]);
+
+  const selectGroup = useCallback((g: string | null) => {
+    setGroupFilter(g);
+    localStorage.setItem('habitpulse.desktop.selectedGroup', JSON.stringify(g));
+  }, []);
 
   const moveToGroup = useCallback((taskId: string, groups: string[]) => {
     void updateTask(taskId, { customGroups: groups });
@@ -221,13 +228,13 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
 
       {/* Group tabs — full-width horizontal drawer */}
       <div className="glass flex items-stretch overflow-hidden rounded-2xl">
-        <TabButton active={groupFilter === null} onClick={() => setGroupFilter(null)}>全部</TabButton>
+        <TabButton active={groupFilter === null} onClick={() => selectGroup(null)}>全部</TabButton>
         {customGroups.map((g) => (
           <TabButton
             key={g}
             active={groupFilter === g}
             color={GROUP_COLORS[customGroups.indexOf(g) % GROUP_COLORS.length]}
-            onClick={() => setGroupFilter(g)}
+            onClick={() => selectGroup(g)}
             onContextMenu={(e: React.MouseEvent) => { e.preventDefault(); setGroupMenu({ group: g, x: e.clientX, y: e.clientY }); }}
           >
             {g}

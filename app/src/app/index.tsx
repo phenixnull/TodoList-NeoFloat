@@ -23,7 +23,6 @@ import type { Task } from '@/domain/types';
 export default function HomeScreen() {
   const today = useTodayKey();
   const [dragListKey, setDragListKey] = useState(0);
-  const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
   const {
     activeTasks,
@@ -39,6 +38,11 @@ export default function HomeScreen() {
   } = useHabitStore();
   const { settings } = useHabitStore();
   const theme = useTheme(settings.appearance);
+  const [groupFilter, setGroupFilter] = useState<string | null>(settings.selectedGroup ?? null);
+  const selectGroup = useCallback((g: string | null) => {
+    setGroupFilter(g);
+    updateSettings({ selectedGroup: g });
+  }, [updateSettings]);
   const customGroups = settings.customGroups ?? [];
   const todayCheckIns = useMemo(
     () => checkIns.filter((checkIn) => checkIn.date === today),
@@ -257,7 +261,7 @@ export default function HomeScreen() {
           <View style={styles.filterRow}>
             <PressableScale
               style={[styles.filterChip, !groupFilter && styles.filterChipActive, { borderColor: theme.surfaceBorder }]}
-              onPress={() => setGroupFilter(null)}
+              onPress={() => selectGroup(null)}
             >
               <Text style={[styles.filterChipText, !groupFilter && { color: theme.accentText }]}>全部</Text>
             </PressableScale>
@@ -265,13 +269,13 @@ export default function HomeScreen() {
               <PressableScale
                 key={group}
                 style={[styles.filterChip, groupFilter === group && styles.filterChipActive, { borderColor: theme.surfaceBorder }]}
-                onPress={() => setGroupFilter(group)}
+                onPress={() => selectGroup(group)}
                 onLongPress={() => {
                   Alert.alert('删除分组', `确定删除"${group}"？任务不会删除。`, [
                     { text: '取消', style: 'cancel' },
                     { text: '删除', style: 'destructive', onPress: () => {
                       updateSettings({ customGroups: customGroups.filter((g) => g !== group) });
-                      if (groupFilter === group) setGroupFilter(null);
+                      if (groupFilter === group) selectGroup(null);
                     }},
                   ]);
                 }}
