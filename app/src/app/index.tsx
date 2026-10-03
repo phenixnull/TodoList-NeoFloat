@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Link, Stack } from 'expo-router';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { NestableDraggableFlatList } from 'react-native-draggable-flatlist';
@@ -21,6 +21,7 @@ import type { Task } from '@/domain/types';
 
 export default function HomeScreen() {
   const today = useTodayKey();
+  const [dragListKey, setDragListKey] = useState(0);
   const {
     activeTasks,
     checkIns,
@@ -119,6 +120,18 @@ export default function HomeScreen() {
     return next;
   }, []);
 
+  // Remount DraggableFlatList after each reorder to clear stale pan
+  // transforms that can block parent scroll and button taps.
+  const handleReorder = useCallback((
+    ids: string[],
+    from: number,
+    to: number,
+    group: 'unfinished' | 'finished',
+  ) => {
+    reorderTasks(moveId(ids, from, to), group);
+    setDragListKey((prev) => prev + 1);
+  }, [reorderTasks, moveId]);
+
   return (
     <ScreenShell style={styles.homeContent}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -205,16 +218,19 @@ export default function HomeScreen() {
         <>
           <Text style={[styles.groupTitle, { color: theme.subtleText }]}>进行中 · 点住图标拖动</Text>
           <NestableDraggableFlatList
+            key={`unfinished-${dragListKey}`}
             data={taskGroups.unfinished}
             keyExtractor={(item) => item.id}
             renderItem={renderTask}
             dragGestureDetector="item"
-            onDragEnd={({ from, to }) => reorderTasks(
-              moveId(taskGroups.unfinished.map((item) => item.id), from, to),
+            onDragEnd={({ from, to }) => handleReorder(
+              taskGroups.unfinished.map((item) => item.id),
+              from,
+              to,
               'unfinished',
             )}
             scrollEnabled={false}
-            activationDistance={1}
+            activationDistance={8}
             autoscrollEnabled={false}
             dropAnimationConfig={DRAG_SNAP_SPRING}
             dropAnimationMode="instant"
@@ -226,16 +242,19 @@ export default function HomeScreen() {
 
           <Text style={[styles.groupTitle, { color: theme.subtleText }]}>已完成 · 点住图标拖动</Text>
           <NestableDraggableFlatList
+            key={`finished-${dragListKey}`}
             data={taskGroups.finished}
             keyExtractor={(item) => item.id}
             renderItem={renderTask}
             dragGestureDetector="item"
-            onDragEnd={({ from, to }) => reorderTasks(
-              moveId(taskGroups.finished.map((item) => item.id), from, to),
+            onDragEnd={({ from, to }) => handleReorder(
+              taskGroups.finished.map((item) => item.id),
+              from,
+              to,
               'finished',
             )}
             scrollEnabled={false}
-            activationDistance={1}
+            activationDistance={8}
             autoscrollEnabled={false}
             dropAnimationConfig={DRAG_SNAP_SPRING}
             dropAnimationMode="instant"
