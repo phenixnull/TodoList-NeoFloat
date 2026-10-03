@@ -73,7 +73,15 @@ export default function TaskCard({
         <TaskIcon task={task} color={task.color} size={compact ? 28 : 38} />
       </div>
 
-      <div className="min-w-0 flex-1">
+      <div
+        className="min-w-0 flex-1 cursor-pointer select-none"
+        onClick={() => void toggleCheckIn(task.id, date)}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/plain', task.id);
+          e.dataTransfer.effectAllowed = 'move';
+        }}
+      >
         <div className="flex items-center gap-2">
           <span className={`truncate font-bold ${compact ? 'text-[13px]' : 'text-sm'} text-slate-100`}>
             {task.name}

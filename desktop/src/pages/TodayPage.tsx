@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { AlarmClock, Plus } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ProgressRing from '../components/ProgressRing';
 import TaskCard from '../components/TaskCard';
 import { getTaskGroups } from '../../../app/src/domain/taskOrdering';
@@ -19,7 +19,7 @@ function pad2(value: number): string {
 }
 
 export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
-  const { tasks, checkIns, now, updateTask, deleteTask } = useStore();
+  const { tasks, checkIns, now, updateTask, deleteTask, undoCheckIn, reorderTasks } = useStore();
   const today = getTodayKey(now);
   const [groupFilter, setGroupFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
@@ -70,6 +70,20 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   const ctxTask = ctxMenu ? tasks.find((t) => t.id === ctxMenu.taskId) : undefined;
   const ratio = tasks.length ? completedIds.size / tasks.length : 0;
 
+  const dragTaskId = useRef<string | null>(null);
+
+  // Ctrl+Z undo for check-in only (max 8 steps).
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        void undoCheckIn();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undoCheckIn]);
+
   const midnight = new Date(now);
   midnight.setHours(24, 0, 0, 0);
   const remaining = midnight.getTime() - now.getTime();
@@ -83,6 +97,23 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
       onContextMenu={(e) => {
         e.preventDefault();
         setCtxMenu({ taskId: task.id, x: e.clientX, y: e.clientY });
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        const draggedId = e.dataTransfer.getData('text/plain');
+        if (!draggedId || draggedId === task.id) return;
+        const ids = filtered.map((t) => t.id);
+        const from = ids.indexOf(draggedId);
+        const to = ids.indexOf(task.id);
+        if (from < 0 || to < 0 || from === to) return;
+        const next = [...ids];
+        const [moved] = next.splice(from, 1);
+        if (moved) next.splice(to, 0, moved);
+        void reorderTasks(next);
       }}
     >
       <TaskCard
