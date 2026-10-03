@@ -30,6 +30,7 @@ export type NewTaskInput = {
   icon?: string;
   color?: string;
   description?: string;
+  customGroups?: string[];
   manualDurationMs?: number;
 };
 

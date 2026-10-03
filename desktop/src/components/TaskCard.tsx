@@ -91,6 +91,18 @@ export default function TaskCard({
         <div className={`mt-0.5 font-mono ${compact ? 'text-[11px]' : 'text-xs'} text-slate-400`}>
           {formatDuration(total)}
         </div>
+        {!compact && (task.customGroups?.length ?? 0) > 0 && (
+          <div className="mt-1 flex items-center gap-1 overflow-hidden" style={{ maxHeight: 22 }}>
+            {(task.customGroups ?? []).map((g) => (
+              <span
+                key={g}
+                className="inline-flex shrink-0 items-center rounded-full border border-white/[0.08] bg-white/[0.04] px-1.5 py-0 text-[10px] font-semibold text-slate-400"
+              >
+                {g}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">

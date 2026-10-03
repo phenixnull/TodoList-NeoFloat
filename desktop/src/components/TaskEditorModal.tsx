@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Trash2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { isTimerRunning } from '../../../app/src/domain/timeTracking';
 import type { Task } from '../../../app/src/domain/types';
 import { useStore } from '../data/store';
@@ -23,7 +23,12 @@ type Props = {
 };
 
 export default function TaskEditorModal({ task, onClose }: Props) {
-  const { createTask, updateTask, deleteTask } = useStore();
+  const { createTask, updateTask, deleteTask, tasks } = useStore();
+  const availableGroups = useMemo(
+    () => [...new Set([...(JSON.parse(localStorage.getItem('habitpulse.desktop.customGroups') ?? '[]') as string[]), ...tasks.flatMap((t) => t.customGroups ?? [])])],
+    [tasks],
+  );
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [color, setColor] = useState(PRESET_COLORS[0]);
@@ -35,6 +40,7 @@ export default function TaskEditorModal({ task, onClose }: Props) {
     setDescription(task?.description ?? '');
     setColor(task?.color ?? PRESET_COLORS[0]);
     setIcon(task?.icon ?? 'flag-variant-outline');
+    setSelectedGroups(task?.customGroups ?? []);
     setError('');
   }, [task]);
 
@@ -50,10 +56,11 @@ export default function TaskEditorModal({ task, onClose }: Props) {
         description,
         color,
         icon,
+        customGroups: selectedGroups,
         manualDurationMs: 0,
       });
     } else {
-      await createTask({ name, description, color, icon, manualDurationMs: 0 });
+      await createTask({ name, description, color, icon, manualDurationMs: 0, customGroups: selectedGroups });
     }
 
     onClose();
@@ -132,6 +139,27 @@ export default function TaskEditorModal({ task, onClose }: Props) {
                   placeholder="任务说明、目标或备注"
                 />
               </div>
+
+              {availableGroups.length > 0 && (
+                <div>
+                  <label className="label">分组</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {availableGroups.map((g) => (
+                      <button
+                        key={g}
+                        onClick={() => setSelectedGroups((prev) => prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g])}
+                        className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition-all ${
+                          selectedGroups.includes(g)
+                            ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300'
+                            : 'border-white/10 bg-white/[0.03] text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {error && <p className="text-sm font-medium text-rose-400">{error}</p>}
 

@@ -354,25 +354,6 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
               ✏️ 编辑
             </button>
             <div className="my-1 border-t border-white/[0.06]" />
-            <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-              分组
-            </p>
-            <button
-              className="w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-white/[0.06]"
-              onClick={() => { moveToGroup(ctxTask.id, []); setCtxMenu(null); }}
-            >
-              {(ctxTask.customGroups ?? []).length === 0 ? '✓ ' : ''}未分组
-            </button>
-            {customGroups.map((g) => (
-              <button
-                key={g}
-                className="w-full px-3 py-1.5 text-left text-xs text-slate-300 hover:bg-white/[0.06]"
-                onClick={() => { moveToGroup(ctxTask.id, (ctxTask.customGroups ?? []).includes(g) ? (ctxTask.customGroups ?? []).filter((x) => x !== g) : [...(ctxTask.customGroups ?? []), g]); setCtxMenu(null); }}
-              >
-                {(ctxTask.customGroups ?? []).includes(g) ? '✓ ' : ''}{g}
-              </button>
-            ))}
-            <div className="my-1 border-t border-white/[0.06]" />
             <button
               className="w-full px-3 py-1.5 text-left text-xs text-rose-400 hover:bg-rose-500/10"
               onClick={() => { void deleteTask(ctxTask.id); setCtxMenu(null); }}
