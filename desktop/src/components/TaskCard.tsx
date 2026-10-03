@@ -112,11 +112,11 @@ export default function TaskCard({
       </div>
 
       {!compact && (task.customGroups?.length ?? 0) > 0 && (
-        <div className="flex shrink-0 flex-col items-end justify-center gap-0.5 overflow-hidden" style={{ maxHeight: 40 }}>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1 overflow-hidden px-2">
           {(task.customGroups ?? []).map((g) => (
             <span
               key={g}
-              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] px-1.5 py-0 text-[10px] font-semibold text-slate-400"
+              className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-semibold text-slate-400"
             >
               <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ backgroundColor: getGroupColor(g) }} />
               {g}
