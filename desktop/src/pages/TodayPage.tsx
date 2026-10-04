@@ -68,22 +68,35 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
     }
     return map;
   }, [checkIns]);
-  const sortedUnfinished = useMemo(() => {
-    return [...filteredUnfinished].sort((a, b) => {
+  // Manual order is authoritative: dragging updates sortOrder and must stick.
+  const byManualOrder = useCallback((a: Task, b: Task) =>
+    (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+    || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(), []);
+  const sortedUnfinished = useMemo(
+    () => [...filteredUnfinished].sort(byManualOrder),
+    [filteredUnfinished, byManualOrder],
+  );
+  const sortedFinished = useMemo(
+    () => [...filteredFinished].sort(byManualOrder),
+    [filteredFinished, byManualOrder],
+  );
+  // Recency ordering used only when the user taps the sort button; it is then
+  // persisted into sortOrder so it survives refresh and syncs to other devices.
+  const recencyIds = useCallback((list: Task[], desc: boolean) =>
+    [...list].sort((a, b) => {
       const ta = checkInTimeMap.get(a.id) ?? '';
       const tb = checkInTimeMap.get(b.id) ?? '';
-      if (ta !== tb) return sortDesc ? tb.localeCompare(ta) : ta.localeCompare(tb);
+      if (ta !== tb) return desc ? tb.localeCompare(ta) : ta.localeCompare(tb);
       return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
-    });
-  }, [filteredUnfinished, checkInTimeMap, sortDesc]);
-  const sortedFinished = useMemo(() => {
-    return [...filteredFinished].sort((a, b) => {
-      const ta = checkInTimeMap.get(a.id) ?? '';
-      const tb = checkInTimeMap.get(b.id) ?? '';
-      if (ta !== tb) return sortDesc ? tb.localeCompare(ta) : ta.localeCompare(tb);
-      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
-    });
-  }, [filteredFinished, checkInTimeMap, sortDesc]);
+    }).map((t) => t.id), [checkInTimeMap]);
+  const onSortPress = useCallback(() => {
+    const next = !sortDesc;
+    setSortDesc(next);
+    void reorderTasks([
+      ...recencyIds(groups.unfinished, next),
+      ...recencyIds(groups.finished, next),
+    ]);
+  }, [sortDesc, recencyIds, groups, reorderTasks]);
   const filteredCompletedCount = useMemo(() => filtered.filter((t) => completedIds.has(t.id)).length, [filtered, completedIds]);
   const filteredRatio = filtered.length ? filteredCompletedCount / filtered.length : 0;
 
@@ -272,12 +285,23 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
           if (!el) return;
           const startX = e.clientX;
           const startScroll = el.scrollLeft;
+          let moved = false;
           const onMove = (ev: MouseEvent) => {
+            if (Math.abs(ev.clientX - startX) > 5) moved = true;
             el.scrollLeft = startScroll - (ev.clientX - startX);
           };
           const onUp = () => {
             window.removeEventListener('mousemove', onMove);
             window.removeEventListener('mouseup', onUp);
+            // A drag must not also select the tab under the cursor.
+            if (moved) {
+              const swallow = (ce: MouseEvent) => {
+                ce.preventDefault();
+                ce.stopPropagation();
+              };
+              el.addEventListener('click', swallow, { capture: true, once: true });
+              window.setTimeout(() => el.removeEventListener('click', swallow), 120);
+            }
           };
           window.addEventListener('mousemove', onMove);
           window.addEventListener('mouseup', onUp);
@@ -305,11 +329,15 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
       </div>
 
       <div className="flex flex-wrap items-center gap-1.5">
-        <FilterChip small active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>全部</FilterChip>
-        <FilterChip small active={statusFilter === 'active'} onClick={() => setStatusFilter('active')}>进行中</FilterChip>
-        <FilterChip small active={statusFilter === 'done'} onClick={() => setStatusFilter('done')}>已完成</FilterChip>
+        <FilterChip
+          small
+          active={statusFilter !== 'all'}
+          onClick={() => setStatusFilter((prev) => (prev === 'all' ? 'active' : prev === 'active' ? 'done' : 'all'))}
+        >
+          {statusFilter === 'all' ? '全部' : statusFilter === 'active' ? '进行中' : '已完成'}
+        </FilterChip>
         <button
-          onClick={() => setSortDesc((prev) => !prev)}
+          onClick={onSortPress}
           className="ml-1 flex h-7 items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2.5 text-[11px] font-bold text-slate-400 transition-all hover:text-slate-200"
           title={sortDesc ? '按打卡时间倒序' : '按打卡时间正序'}
         >
@@ -477,7 +505,7 @@ function TabButton({ active, onClick, onContextMenu, color, children }: {
       onClick={onClick}
       onContextMenu={onContextMenu}
       style={active ? { backgroundColor: c + '1a', color: c, boxShadow: 'inset 0 -3px 0 ' + c + '80' } : undefined}
-      className={'flex-1 px-4 py-3.5 text-sm font-extrabold transition-all ' + (active ? '' : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200')}
+      className={'flex-1 min-w-max px-4 py-3.5 text-sm font-extrabold transition-all ' + (active ? '' : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200')}
     >
       {children}
     </button>

@@ -220,8 +220,12 @@ function useHabitStoreInstance() {
     const base = settingsReady();
     if (!base) return;
     const k = keyOf(taskId, date);
-    if (adding) pendingCheckInsRef.current.add(k);
-    else pendingCheckInDeletionsRef.current.add(k);
+    if (adding) {
+      pendingCheckInsRef.current.add(k);
+      pendingCheckInDeletionsRef.current.delete(k);
+    } else {
+      pendingCheckInDeletionsRef.current.add(k);
+    }
     try {
       if (adding) {
         await apiRequest(base, '/api/checkins/toggle', {
