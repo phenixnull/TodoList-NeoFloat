@@ -7,6 +7,14 @@ export type TaskGroups = {
   finished: Task[];
 };
 
+export function matchesGroupFilter(task: Task, selectedGroups: string[]): boolean {
+  if (selectedGroups.length === 0) return true;
+
+  // Multiple selected groups form an intersection: a task must belong to
+  // every selected drawer before it is shown.
+  return selectedGroups.every((group) => task.customGroups?.includes(group));
+}
+
 function compareTasks(a: Task, b: Task): number {
   if (a.sortOrder !== b.sortOrder) {
     return a.sortOrder - b.sortOrder;

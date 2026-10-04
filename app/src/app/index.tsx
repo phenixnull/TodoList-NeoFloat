@@ -12,7 +12,7 @@ import ScreenShell from '@/components/ScreenShell';
 import TaskRow from '@/components/TaskRow';
 import ThemeQuickToggle from '@/components/ThemeQuickToggle';
 import { computeStats } from '@/domain/streak';
-import { getTaskGroups } from '@/domain/taskOrdering';
+import { getTaskGroups, matchesGroupFilter } from '@/domain/taskOrdering';
 import { DRAG_SNAP_SPRING } from '@/domain/dropInteraction';
 import { useTodayKey } from '@/hooks/useTodayKey';
 import { useHabitStore } from '@/store/useHabitStore';
@@ -94,7 +94,7 @@ export default function HomeScreen() {
     if (groupFilter === null) {
       pool = allTasksFlat;
     } else {
-      pool = allTasksFlat.filter((t) => groupFilter.some((g) => t.customGroups?.includes(g)));
+      pool = allTasksFlat.filter((t) => matchesGroupFilter(t, groupFilter));
     }
 
     if (statusFilter === 'active') {

@@ -3,7 +3,7 @@ import { AlarmClock, ArrowUpDown, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ProgressRing from '../components/ProgressRing';
 import TaskCard from '../components/TaskCard';
-import { getTaskGroups } from '../../../app/src/domain/taskOrdering';
+import { getTaskGroups, matchesGroupFilter } from '../../../app/src/domain/taskOrdering';
 import { getTodayKey } from '../../../app/src/domain/streak';
 import type { Task } from '../../../app/src/domain/types';
 import { useStore } from '../data/store';
@@ -53,7 +53,7 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   const allFlat = useMemo(() => [...groups.unfinished, ...groups.finished], [groups]);
   const filtered = useMemo(() => {
     let pool = allFlat;
-    if (groupFilter.length > 0) pool = pool.filter((t) => groupFilter.some((g) => t.customGroups?.includes(g)));
+    if (groupFilter.length > 0) pool = pool.filter((t) => matchesGroupFilter(t, groupFilter));
     if (statusFilter === 'active') pool = pool.filter((t) => !completedIds.has(t.id));
     if (statusFilter === 'done') pool = pool.filter((t) => completedIds.has(t.id));
     return pool;

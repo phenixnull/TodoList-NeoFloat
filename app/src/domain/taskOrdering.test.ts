@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getTaskGroups, reorderTaskGroup } from './taskOrdering';
+import { getTaskGroups, matchesGroupFilter, reorderTaskGroup } from './taskOrdering';
 import { Task } from './types';
 
 function task(id: string, sortOrder: number): Task {
@@ -64,5 +64,18 @@ describe('task ordering', () => {
       ['done-b', 1],
       ['done-a', 2],
     ]);
+  });
+
+  it('uses intersection semantics when multiple drawer groups are selected', () => {
+    const both = { ...task('both', 0), customGroups: ['日常打卡', '学习打卡'] };
+    const dailyOnly = { ...task('daily', 1), customGroups: ['日常打卡'] };
+    const studyOnly = { ...task('study', 2), customGroups: ['学习打卡'] };
+    const none = task('none', 3);
+
+    expect(matchesGroupFilter(both, ['日常打卡', '学习打卡'])).toBe(true);
+    expect(matchesGroupFilter(dailyOnly, ['日常打卡', '学习打卡'])).toBe(false);
+    expect(matchesGroupFilter(studyOnly, ['日常打卡', '学习打卡'])).toBe(false);
+    expect(matchesGroupFilter(none, ['日常打卡', '学习打卡'])).toBe(false);
+    expect(matchesGroupFilter(dailyOnly, [])).toBe(true);
   });
 });
