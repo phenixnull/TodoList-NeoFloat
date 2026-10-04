@@ -156,13 +156,28 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
     setAddModal(false);
   }, [newGroupName, customGroups, storedGroups]);
 
+  const reorderGroups = useCallback((draggedGroup: string, targetGroup: string) => {
+    if (draggedGroup === targetGroup) return;
+    const order = [...customGroups];
+    const from = order.indexOf(draggedGroup);
+    const to = order.indexOf(targetGroup);
+    if (from < 0 || to < 0) return;
+
+    const [moved] = order.splice(from, 1);
+    if (!moved) return;
+    order.splice(to, 0, moved);
+
+    setStoredGroups(order);
+    localStorage.setItem('habitpulse.desktop.customGroups', JSON.stringify(order));
+  }, [customGroups]);
+
   const ctxTask = ctxMenu ? tasks.find((t) => t.id === ctxMenu.taskId) : undefined;
   const ratio = filteredRatio;
 
   const dragTaskId = useRef<string | null>(null);
   const tabBarRef = useRef<HTMLDivElement>(null);
-  const tabDragRef = useRef<string | null>(null);
-  const tabDragOverRef = useRef<string | null>(null);
+  const [tabDragGroup, setTabDragGroup] = useState<string | null>(null);
+  const [tabOverGroup, setTabOverGroup] = useState<string | null>(null);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   // Ctrl+Z undo for check-in only (max 8 steps).
@@ -287,6 +302,9 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         onMouseDown={(e) => {
           const el = tabBarRef.current;
           if (!el) return;
+          // Native tab dragging has its own reorder gesture. Keep container
+          // drag-to-scroll for empty space, the fixed "全部" tab and overflow.
+          if ((e.target as HTMLElement).closest('[data-group-tab="draggable"]')) return;
           const startX = e.clientX;
           const startScroll = el.scrollLeft;
           let moved = false;
@@ -319,6 +337,35 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
             color={GROUP_COLORS[customGroups.indexOf(g) % GROUP_COLORS.length]}
             onClick={() => selectGroup(g)}
             onContextMenu={(e: React.MouseEvent) => { e.preventDefault(); setGroupMenu({ group: g, x: e.clientX, y: e.clientY }); }}
+            draggable
+            dragging={tabDragGroup === g}
+            dropTarget={tabOverGroup === g && tabDragGroup !== g}
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = 'move';
+              event.dataTransfer.setData('text/plain', g);
+              setTabDragGroup(g);
+            }}
+            onDragEnter={() => { if (tabDragGroup && tabDragGroup !== g) setTabOverGroup(g); }}
+            onDragOver={(event) => {
+              if (tabDragGroup && tabDragGroup !== g) {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                setTabOverGroup(g);
+              }
+            }}
+            onDragLeave={() => { setTabOverGroup((current) => (current === g ? null : current)); }}
+            onDrop={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const dragged = event.dataTransfer.getData('text/plain') || tabDragGroup;
+              if (dragged && dragged !== g) reorderGroups(dragged, g);
+              setTabDragGroup(null);
+              setTabOverGroup(null);
+            }}
+            onDragEnd={() => {
+              setTabDragGroup(null);
+              setTabOverGroup(null);
+            }}
           >
             {g}
           </TabButton>
@@ -479,22 +526,56 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   );
 }
 
-function TabButton({ active, onClick, onContextMenu, color, children }: {
+function TabButton({ active, onClick, onContextMenu, color, children, draggable, dragging, dropTarget, onDragStart, onDragEnter, onDragOver, onDragLeave, onDrop, onDragEnd }: {
   active: boolean;
   onClick: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   color?: string;
   children: React.ReactNode;
+  draggable?: boolean;
+  dragging?: boolean;
+  dropTarget?: boolean;
+  onDragStart?: (event: React.DragEvent<HTMLButtonElement>) => void;
+  onDragEnter?: () => void;
+  onDragOver?: (event: React.DragEvent<HTMLButtonElement>) => void;
+  onDragLeave?: () => void;
+  onDrop?: (event: React.DragEvent<HTMLButtonElement>) => void;
+  onDragEnd?: () => void;
 }) {
   const c = color ?? '#22d3ee';
   return (
-    <button
+    <motion.button
+      layout
+      type="button"
+      draggable={draggable}
+      onDragStartCapture={onDragStart}
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
       onClick={onClick}
       onContextMenu={onContextMenu}
-      style={active ? { backgroundColor: c + '1a', color: c, boxShadow: 'inset 0 -3px 0 ' + c + '80' } : undefined}
-      className={'flex-1 min-w-max px-4 py-3.5 text-sm font-extrabold transition-all ' + (active ? '' : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200')}
+      animate={{
+        scale: dragging ? 0.93 : dropTarget ? 1.05 : 1,
+        opacity: dragging ? 0.38 : 1,
+      }}
+      transition={{ type: 'spring', stiffness: 520, damping: 34 }}
+      style={{
+        backgroundColor: active ? c + '1a' : dropTarget ? 'rgba(34,211,238,0.10)' : undefined,
+        color: active ? c : dropTarget ? '#67e8f9' : undefined,
+        boxShadow: active
+          ? `inset 0 -3px 0 ${c}80`
+          : dropTarget
+            ? 'inset 0 0 0 2px rgba(34,211,238,0.55), 0 12px 30px rgba(34,211,238,0.16)'
+            : undefined,
+      }}
+      data-group-tab={draggable ? 'draggable' : undefined}
+      className={`relative z-0 flex-1 min-w-max cursor-grab px-4 py-3.5 text-sm font-extrabold transition-colors duration-300 ${
+        active || dropTarget ? '' : 'text-slate-400 hover:bg-white/[0.03] hover:text-slate-200'
+      } ${dragging ? 'z-20' : dropTarget ? 'z-10' : ''}`}
     >
-      {children}
-    </button>
+      <span className="relative z-10">{children}</span>
+    </motion.button>
   );
 }
