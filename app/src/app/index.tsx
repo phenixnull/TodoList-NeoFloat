@@ -446,27 +446,24 @@ export default function HomeScreen() {
                   contentContainerStyle={styles.taskList}
                 />
               ) : (
-                <NestableDraggableFlatList
-                  key={`fn-${dragListKey}-${groupFilter}-${statusFilter}-${completedIds.size}`}
-                  data={sortedFinished}
-                  keyExtractor={(item) => item.id}
-                  renderItem={renderTask}
-                  dragGestureDetector="item"
-                  onDragEnd={({ from, to }) => handleReorder(
-                    sortedFinished.map((item) => item.id),
-                    from,
-                    to,
-                    'finished',
-                  )}
-                  scrollEnabled={false}
-                  activationDistance={8}
-                  autoscrollEnabled={false}
-                  dropAnimationConfig={DRAG_SNAP_SPRING}
-                  dropAnimationMode="instant"
-                  dragItemOverflow
-                  windowSize={5}
-                  contentContainerStyle={styles.taskList}
-                />
+                <View style={styles.taskList}>
+                  {sortedFinished.map((item) => (
+                    <TaskRow
+                      key={item.id}
+                      task={item}
+                      today={today}
+                      checkedInToday={completedIds.has(item.id)}
+                      checkedInAt={todayCheckInsByTask.get(item.id)?.createdAt}
+                      stats={statsByTaskId.get(item.id)}
+                      onToggle={toggleCheckIn}
+                      onToggleTimer={toggleTimer}
+                      onDelete={deleteTask}
+                      customGroups={customGroups}
+                      onMoveToGroup={moveToGroup}
+                      isLight={theme.isLight}
+                    />
+                  ))}
+                </View>
               )}
             </>
           )}
