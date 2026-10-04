@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Link, Stack } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, FlatList, Platform, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { NestableDraggableFlatList } from 'react-native-draggable-flatlist';
@@ -12,7 +12,7 @@ import ScreenShell from '@/components/ScreenShell';
 import TaskRow from '@/components/TaskRow';
 import ThemeQuickToggle from '@/components/ThemeQuickToggle';
 import { computeStats } from '@/domain/streak';
-import { getTaskGroups, matchesGroupFilter } from '@/domain/taskOrdering';
+import { getTaskGroups, matchesGroupFilter, mergeVisibleReorder } from '@/domain/taskOrdering';
 import { DRAG_SNAP_SPRING } from '@/domain/dropInteraction';
 import { useTodayKey } from '@/hooks/useTodayKey';
 import { useHabitStore } from '@/store/useHabitStore';
@@ -89,13 +89,9 @@ export default function HomeScreen() {
   }, [allTasksFlat, customGroups]);
 
   const filteredTasks = useMemo(() => {
-    let pool: Task[];
-
-    if (groupFilter === null) {
-      pool = allTasksFlat;
-    } else {
-      pool = allTasksFlat.filter((t) => matchesGroupFilter(t, groupFilter));
-    }
+    const pool = groupFilter === null
+      ? allTasksFlat
+      : allTasksFlat.filter((t) => matchesGroupFilter(t, groupFilter));
 
     if (statusFilter === 'active') {
       return pool.filter((t) => !completedIds.has(t.id));
@@ -114,16 +110,34 @@ export default function HomeScreen() {
     () => filteredTasks.filter((t) => completedIds.has(t.id)),
     [filteredTasks, completedIds],
   );
+  // The overview answers "how is this drawer doing today"; status filtering is
+  // for the list below and must not turn the denominator into a tautology.
+  const groupFilteredTasks = useMemo(
+    () => (groupFilter === null
+      ? allTasksFlat
+      : allTasksFlat.filter((task) => matchesGroupFilter(task, groupFilter))),
+    [allTasksFlat, groupFilter],
+  );
   const overviewStats = useMemo(() => {
-    const completedCount = filteredTasks.filter((task) => completedIds.has(task.id)).length;
-    const totalCount = filteredTasks.length;
+    const completedCount = groupFilteredTasks.filter((task) => completedIds.has(task.id)).length;
+    const totalCount = groupFilteredTasks.length;
 
     return {
       completedCount: Math.min(completedCount, totalCount),
       totalCount,
       progress: totalCount === 0 ? 0 : Math.min(completedCount / totalCount, 1),
     };
-  }, [filteredTasks, completedIds]);
+  }, [groupFilteredTasks, completedIds]);
+
+  useEffect(() => {
+    if (loading) return;
+
+    const persisted = settings.selectedGroups
+      ?? (settings.selectedGroup ? [settings.selectedGroup] : null);
+    const valid = (persisted ?? []).filter((group) => availableGroups.includes(group));
+    const timer = setTimeout(() => setGroupFilter(valid.length ? valid : null), 0);
+    return () => clearTimeout(timer);
+  }, [availableGroups, loading, settings.selectedGroup, settings.selectedGroups]);
   const checkInTimeMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const c of checkIns) {
@@ -175,7 +189,7 @@ export default function HomeScreen() {
     const name = rawName.trim();
     if (!name) return;
     if (customGroups.includes(name)) {
-      changeGroupFilter([...(groupFilter ?? []), name]);
+      changeGroupFilter([...new Set([...(groupFilter ?? []), name])]);
       return;
     }
     updateSettings({ customGroups: [...customGroups, name] });
@@ -186,11 +200,17 @@ export default function HomeScreen() {
     Alert.alert('删除分组', `确定删除"${group}"？任务不会删除。`, [
       { text: '取消', style: 'cancel' },
       { text: '删除', style: 'destructive', onPress: () => {
+        // Deleting a drawer removes its bindings; otherwise every task that
+        // still carries the group would resurrect it on the next render.
+        for (const task of activeTasks) {
+          if (!task.customGroups?.includes(group)) continue;
+          updateTask(task.id, { customGroups: task.customGroups.filter((g) => g !== group) });
+        }
         updateSettings({ customGroups: customGroups.filter((g) => g !== group) });
         if (groupFilter?.includes(group)) changeGroupFilter(groupFilter.filter((g) => g !== group));
       }},
     ]);
-  }, [changeGroupFilter, customGroups, groupFilter, updateSettings]);
+  }, [activeTasks, changeGroupFilter, customGroups, groupFilter, updateTask, updateSettings]);
 
   const moveToGroup = useCallback((taskId: string, groups: string[]) => {
     updateTask(taskId, { customGroups: groups });
@@ -229,11 +249,11 @@ export default function HomeScreen() {
       onToggle={toggleCheckIn}
       onToggleTimer={toggleTimer}
       onDelete={deleteTask}
-      customGroups={customGroups}
+      customGroups={availableGroups}
       onMoveToGroup={moveToGroup}
       isLight={theme.isLight}
     />
-  ), [today, completedIds, theme.isLight, todayCheckInsByTask, statsByTaskId, toggleCheckIn, toggleTimer, deleteTask, customGroups, moveToGroup]);
+  ), [availableGroups, today, completedIds, theme.isLight, todayCheckInsByTask, statsByTaskId, toggleCheckIn, toggleTimer, deleteTask, moveToGroup]);
 
   // Web build: react-native-draggable-flatlist is not web-compatible (it calls
   // findNodeHandle on layout, which throws on react-native-web). Render the same
@@ -247,21 +267,6 @@ export default function HomeScreen() {
     isActive: false,
     isDragging: false,
   } as unknown as RenderItemParams<Task>), [renderTask]);
-  const moveId = useCallback((ids: string[], from: number, to: number) => {
-    if (from === to || from < 0 || to < 0 || from >= ids.length || to >= ids.length) {
-      return ids;
-    }
-
-    const next = [...ids];
-    const [moved] = next.splice(from, 1);
-
-    if (moved) {
-      next.splice(to, 0, moved);
-    }
-
-    return next;
-  }, []);
-
   // Remount DraggableFlatList after each reorder to clear stale pan
   // transforms that can block parent scroll and button taps.
   const handleReorder = useCallback((
@@ -270,9 +275,10 @@ export default function HomeScreen() {
     to: number,
     group: 'unfinished' | 'finished',
   ) => {
-    reorderTasks(moveId(ids, from, to), group);
+    const fullTasks = group === 'unfinished' ? taskGroups.unfinished : taskGroups.finished;
+    reorderTasks(mergeVisibleReorder(fullTasks.map((task) => task.id), ids, from, to), group);
     setDragListKey((prev) => prev + 1);
-  }, [reorderTasks, moveId]);
+  }, [reorderTasks, taskGroups]);
 
   return (
     <ScreenShell style={styles.homeContent}>
@@ -468,7 +474,7 @@ export default function HomeScreen() {
                       onToggle={toggleCheckIn}
                       onToggleTimer={toggleTimer}
                       onDelete={deleteTask}
-                      customGroups={customGroups}
+                      customGroups={availableGroups}
                       onMoveToGroup={moveToGroup}
                       isLight={theme.isLight}
                     />

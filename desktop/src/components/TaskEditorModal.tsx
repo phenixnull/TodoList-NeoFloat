@@ -47,7 +47,7 @@ export default function TaskEditorModal({ task, onClose }: Props) {
     setIcon(task?.icon ?? 'flag-variant-outline');
     setSelectedGroups(task?.customGroups ?? []);
     setError('');
-  }, [task]);
+  }, [task?.id]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -62,7 +62,6 @@ export default function TaskEditorModal({ task, onClose }: Props) {
         color,
         icon,
         customGroups: selectedGroups,
-        manualDurationMs: 0,
       });
     } else {
       await createTask({ name, description, color, icon, manualDurationMs: 0, customGroups: selectedGroups });

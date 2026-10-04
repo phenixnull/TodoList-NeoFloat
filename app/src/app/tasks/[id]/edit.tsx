@@ -26,7 +26,6 @@ export default function EditTaskScreen() {
           initialTask={task}
           onSubmit={(input) => updateTask(task.id, {
             ...input,
-            manualDurationMs: 0,
           })}
           footer={(
             <DayRecordEditor

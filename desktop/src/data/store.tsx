@@ -114,6 +114,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<LoadedData>(() =>
     readCache() ?? { tasks: [], checkIns: [], dayRecords: [] },
   );
+  const dataRef = useRef(data);
+  dataRef.current = data;
   const [online, setOnline] = useState(true);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -122,6 +124,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const serverUrlRef = useRef(settings.serverUrl);
   serverUrlRef.current = settings.serverUrl;
   const checkInHistoryRef = useRef<Array<{ taskId: string; date: string; wasChecked: boolean }>>([]);
+  const checkInQueueRef = useRef<Map<string, Promise<void>>>(new Map());
+  const latestCheckInIntentRef = useRef<Map<string, { seq: number; adding: boolean }>>(new Map());
+  const checkInSeqRef = useRef(0);
 
   const jsonFetch = useCallback(
     async <T,>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T | null> => {
@@ -142,6 +147,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const refreshSeqRef = useRef(0);
+  const lastServerRevisionRef = useRef(0);
+  const lastServerInstanceRef = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     // Monotonic guard: refreshes are triggered concurrently by SSE messages,
@@ -152,6 +159,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const seq = ++refreshSeqRef.current;
     try {
       const remote = await fetchServerData(serverUrlRef.current);
+      if (remote.instanceId && remote.instanceId !== lastServerInstanceRef.current) {
+        lastServerInstanceRef.current = remote.instanceId;
+        lastServerRevisionRef.current = 0;
+      }
+      if (typeof remote.revision === 'number' && remote.revision < lastServerRevisionRef.current) return;
       if (seq !== refreshSeqRef.current) return;
       const next = {
         tasks: remote.tasks,
@@ -162,6 +174,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(CACHE_KEY, JSON.stringify(next));
       setOnline(true);
       setLastSyncedAt(new Date());
+      if (typeof remote.revision === 'number') lastServerRevisionRef.current = remote.revision;
     } catch {
       if (seq === refreshSeqRef.current) setOnline(false);
     } finally {
@@ -235,24 +248,48 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
   const toggleCheckIn = useCallback(
     (taskId: string, date: string) => {
-      const exists = data.checkIns.some((c) => c.taskId === taskId && c.date === date);
+      const exists = dataRef.current.checkIns.some((c) => c.taskId === taskId && c.date === date);
+      const adding = !exists;
+      const k = `${taskId}:${date}`;
+      const seq = ++checkInSeqRef.current;
+      latestCheckInIntentRef.current.set(k, { seq, adding });
       checkInHistoryRef.current.push({ taskId, date, wasChecked: exists });
       if (checkInHistoryRef.current.length > 8) checkInHistoryRef.current.shift();
 
-      const prevData = data;
-      const nextCheckIns = exists
-        ? data.checkIns.filter((c) => !(c.taskId === taskId && c.date === date))
-        : [...data.checkIns, { id: `${taskId}:${date}`, taskId, date, createdAt: new Date().toISOString() }];
-      setData({ ...data, checkIns: nextCheckIns });
-
-      const push = exists
-        ? jsonFetch(`/api/checkins/${encodeURIComponent(taskId)}/${date}`, { method: 'DELETE' })
-        : jsonFetch('/api/checkins/toggle', { method: 'POST', body: { taskId, date } });
-      push.catch(() => {
-        setData(prevData);
+      const prevData = dataRef.current;
+      setData((prev) => {
+        const currentExists = prev.checkIns.some((c) => c.taskId === taskId && c.date === date);
+        const nextCheckIns = currentExists
+          ? prev.checkIns.filter((c) => !(c.taskId === taskId && c.date === date))
+          : [...prev.checkIns, { id: `${taskId}:${date}`, taskId, date, createdAt: new Date().toISOString() }];
+        return { ...prev, checkIns: nextCheckIns };
       });
+
+      const historyEntry = checkInHistoryRef.current[checkInHistoryRef.current.length - 1];
+      const previous = checkInQueueRef.current.get(k) ?? Promise.resolve();
+      const operation = previous.then(async () => {
+        const latestIntent = latestCheckInIntentRef.current.get(k);
+        if (!latestIntent || latestIntent.seq !== seq) return;
+
+        try {
+          if (adding) {
+            await jsonFetch('/api/checkins/toggle', { method: 'POST', body: { taskId, date } });
+          } else {
+            await jsonFetch(`/api/checkins/${encodeURIComponent(taskId)}/${date}`, { method: 'DELETE' });
+          }
+        } catch (error) {
+          // A failed operation may only roll itself back. A newer click has a
+          // newer sequence and must never be reverted by this old response.
+          const currentIntent = latestCheckInIntentRef.current.get(k);
+          if (currentIntent?.seq === seq) setData(prevData);
+          const historyIndex = checkInHistoryRef.current.lastIndexOf(historyEntry);
+          if (historyIndex >= 0) checkInHistoryRef.current.splice(historyIndex, 1);
+          throw error;
+        }
+      });
+      checkInQueueRef.current.set(k, operation.catch(() => {}));
     },
-    [data, jsonFetch],
+    [jsonFetch],
   );
 
   const undoCheckIn = useCallback(

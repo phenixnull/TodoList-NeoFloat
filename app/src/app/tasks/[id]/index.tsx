@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import GlassCard from '@/components/GlassCard';
 import HeatmapGrid from '@/components/HeatmapGrid';
@@ -17,6 +17,7 @@ import { buildHeatmap } from '@/domain/heatmap';
 import { formatCheckInTime } from '@/domain/format';
 import {
   calculateTimeSegmentsDurationForDate,
+  isTimerRunning,
 } from '@/domain/timeTracking';
 import { computeStats, toLocalDateKey } from '@/domain/streak';
 import { useTodayKey } from '@/hooks/useTodayKey';
@@ -29,7 +30,7 @@ export default function TaskDetailScreen() {
   const today = useTodayKey();
   const [selectedDate, setSelectedDate] = useState(today);
   const [mode, setMode] = useState<'stats' | 'edit'>('stats');
-  const [heatmapNowMs] = useState(() => Date.now());
+  const [heatmapNowMs, setHeatmapNowMs] = useState(() => Date.now());
   const heatmapScrollRef = useRef<ScrollView>(null);
   const {
     activeTasks,
@@ -45,6 +46,7 @@ export default function TaskDetailScreen() {
   const theme = useTheme(settings.appearance);
   const taskId = params.id;
   const task = activeTasks.find((item) => item.id === taskId);
+  const running = useMemo(() => (task ? isTimerRunning(task) : false), [task]);
   const taskCheckIns = useMemo(
     () => checkIns.filter((checkIn) => checkIn.taskId === taskId),
     [checkIns, taskId],
@@ -83,6 +85,13 @@ export default function TaskDetailScreen() {
     taskDates,
     taskId,
   ]);
+
+  useEffect(() => {
+    if (!running) return;
+    const immediate = setTimeout(() => setHeatmapNowMs(Date.now()), 0);
+    const timer = setInterval(() => setHeatmapNowMs(Date.now()), 1000);
+    return () => { clearTimeout(immediate); clearInterval(timer); };
+  }, [running]);
 
   if (!task) {
     return (
@@ -261,14 +270,13 @@ export default function TaskDetailScreen() {
         </>
       ) : (
         <TaskForm
-          key={task.updatedAt}
+          key={task.id}
           title="编辑任务"
           submitLabel="保存任务"
           initialTask={task}
           navigateBackOnSubmit={false}
           onSubmit={(input) => updateTask(task.id, {
             ...input,
-            manualDurationMs: 0,
           })}
           footer={(
             <>

@@ -251,6 +251,15 @@ function useHabitStoreInstance() {
     const base = settingsReady();
     if (!base) return;
     const k = keyOf(taskId, date);
+    // Register intent before a queued request can start. Otherwise a rapid
+    // add/remove sequence can let a pull treat the first request as confirmed.
+    if (adding) {
+      pendingCheckInsRef.current.add(k);
+      pendingCheckInDeletionsRef.current.delete(k);
+    } else {
+      pendingCheckInDeletionsRef.current.add(k);
+      pendingCheckInsRef.current.delete(k);
+    }
     const previous = checkInQueueRef.current.get(k) ?? Promise.resolve();
     const operation = previous.then(async () => {
       const latestIntent = latestCheckInIntentRef.current.get(k);
@@ -277,11 +286,8 @@ function useHabitStoreInstance() {
         }
         schedulePull();
       } catch (error) {
-        const currentIntent = latestCheckInIntentRef.current.get(k);
-        if (currentIntent?.seq === seq) {
-          if (adding) pendingCheckInsRef.current.delete(k);
-          else pendingCheckInDeletionsRef.current.delete(k);
-        }
+        // Keep the pending marker after a network failure. Clearing it here
+        // would let flush replay an old cache and resurrect a remote deletion.
         setSyncState({ status: 'error', message: error instanceof Error ? error.message : '打卡同步失败' });
         throw error;
       }
@@ -366,9 +372,11 @@ function useHabitStoreInstance() {
       const pendingDeletions = pendingCheckInDeletionsRef.current;
 
       // Never replay a stale source array. Re-read the user's latest active
-      // set; otherwise a check-in removed during this flush can be revived.
+      // set, and only replay additions that this device still knows are
+      // unsynced. Otherwise a client that missed a remote DELETE will revive it.
       for (const checkIn of Array.from(dataRef.current.checkIns)) {
         const k = keyOf(checkIn.taskId, checkIn.date);
+        if (!pendingCheckInsRef.current.has(k)) continue;
         if (pendingDeletions.has(k)) continue;
         if (!remoteCheckInKeys.has(k)) {
           await apiRequest(base, '/api/checkins', {
@@ -408,6 +416,9 @@ function useHabitStoreInstance() {
   const syncEnabled = data.settings.syncEnabled;
   const serverUrl = data.settings.serverUrl;
   useEffect(() => {
+    // AsyncStorage settings have not hydrated yet. Do not let a fast SSE open
+    // start a flush against defaultData/default server settings.
+    if (loading) return;
     if (!syncEnabled || !serverUrl.trim()) return;
     let connection: { close: () => void } | null = null;
     let active = true;
@@ -444,7 +455,7 @@ function useHabitStoreInstance() {
       connection?.close();
       connection = null;
     };
-  }, [enqueueFlush, schedulePull, serverUrl, syncEnabled]);
+  }, [enqueueFlush, loading, schedulePull, serverUrl, syncEnabled]);
 
   // ---- initial load ----
   useEffect(() => {
@@ -460,6 +471,7 @@ function useHabitStoreInstance() {
     })();
     return () => {
       mounted = false;
+      setLoading(false);
     };
     // pullFromServer is intentionally read once after local hydration; its
     // identity is stable and re-running hydration would overwrite fresh state.
@@ -467,7 +479,7 @@ function useHabitStoreInstance() {
   }, [commit]);
 
   // ---- mutations (optimistic local + direct push) ----
-  const createTask = useCallback((input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs'>>) => {
+  const createTask = useCallback((input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs' | 'customGroups'>>) => {
     const now = new Date().toISOString();
     const suggested = getNextTaskAppearance(dataRef.current.tasks);
     const nextSortOrder = dataRef.current.tasks
@@ -481,6 +493,7 @@ function useHabitStoreInstance() {
       iconImage: input.iconImage ?? null,
       description: input.description?.trim() ?? '',
       sortOrder: nextSortOrder,
+      customGroups: input.customGroups ?? [],
       timerSegments: [],
       removedSegmentIds: [],
       manualDurationMs: input.manualDurationMs ?? 0,

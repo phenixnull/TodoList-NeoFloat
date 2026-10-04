@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAvailableTaskGroups, getTaskGroups, matchesGroupFilter, reorderTaskGroup } from './taskOrdering';
+import { getAvailableTaskGroups, getTaskGroups, matchesGroupFilter, mergeVisibleReorder, reorderTaskGroup } from './taskOrdering';
 import { Task } from './types';
 
 function task(id: string, sortOrder: number): Task {
@@ -90,5 +90,12 @@ describe('task ordering', () => {
     );
 
     expect(groups).toEqual(['学习打卡', '日常打卡']);
+  });
+
+  it('preserves hidden tasks when reordering a filtered drawer', () => {
+    const fullIds = ['A', 'B', 'C', 'D'];
+    const visibleIds = ['B', 'D'];
+
+    expect(mergeVisibleReorder(fullIds, visibleIds, 1, 0)).toEqual(['A', 'D', 'C', 'B']);
   });
 });

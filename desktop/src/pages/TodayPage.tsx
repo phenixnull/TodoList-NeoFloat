@@ -3,7 +3,7 @@ import { AlarmClock, ArrowUpDown, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ProgressRing from '../components/ProgressRing';
 import TaskCard from '../components/TaskCard';
-import { getTaskGroups, matchesGroupFilter } from '../../../app/src/domain/taskOrdering';
+import { getTaskGroups, matchesGroupFilter, mergeVisibleReorder } from '../../../app/src/domain/taskOrdering';
 import { getTodayKey } from '../../../app/src/domain/streak';
 import type { Task } from '../../../app/src/domain/types';
 import { useStore } from '../data/store';
@@ -52,14 +52,19 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   );
   const allFlat = useMemo(() => [...groups.unfinished, ...groups.finished], [groups]);
   const filtered = useMemo(() => {
-    let pool = allFlat;
-    if (groupFilter.length > 0) pool = pool.filter((t) => matchesGroupFilter(t, groupFilter));
+    const groupPool = groupFilter.length === 0
+      ? allFlat
+      : allFlat.filter((t) => matchesGroupFilter(t, groupFilter));
+    let pool = groupPool;
     if (statusFilter === 'active') pool = pool.filter((t) => !completedIds.has(t.id));
     if (statusFilter === 'done') pool = pool.filter((t) => completedIds.has(t.id));
     return pool;
   }, [allFlat, groupFilter, statusFilter, completedIds]);
   const filteredUnfinished = useMemo(() => filtered.filter((t) => !completedIds.has(t.id)), [filtered, completedIds]);
   const filteredFinished = useMemo(() => filtered.filter((t) => completedIds.has(t.id)), [filtered, completedIds]);
+  const groupFiltered = useMemo(() => (groupFilter.length === 0
+    ? allFlat
+    : allFlat.filter((t) => matchesGroupFilter(t, groupFilter))), [allFlat, groupFilter]);
   const [sortDesc, setSortDesc] = useState(true);
   const checkInTimeMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -97,8 +102,8 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
       ...recencyIds(groups.finished, next),
     ]);
   }, [sortDesc, recencyIds, groups, reorderTasks]);
-  const filteredCompletedCount = useMemo(() => filtered.filter((t) => completedIds.has(t.id)).length, [filtered, completedIds]);
-  const filteredRatio = filtered.length ? filteredCompletedCount / filtered.length : 0;
+  const groupFilteredCompletedCount = useMemo(() => groupFiltered.filter((t) => completedIds.has(t.id)).length, [groupFiltered, completedIds]);
+  const filteredRatio = groupFiltered.length ? groupFilteredCompletedCount / groupFiltered.length : 0;
 
   const renameGroup = useCallback((oldName: string, newName: string) => {
     if (!newName.trim() || customGroups.includes(newName.trim())) return;
@@ -210,14 +215,13 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         setDragOverId(null);
         dragTaskId.current = null;
         if (!draggedId || draggedId === task.id) return;
-        const ids = filtered.map((t) => t.id);
-        const from = ids.indexOf(draggedId);
-        const to = ids.indexOf(task.id);
+        const group = completedIds.has(draggedId) ? 'finished' : 'unfinished';
+        const visibleIds = filtered.filter((t) => (completedIds.has(t.id) ? group === 'finished' : group === 'unfinished')).map((t) => t.id);
+        const from = visibleIds.indexOf(draggedId);
+        const to = visibleIds.indexOf(task.id);
         if (from < 0 || to < 0 || from === to) return;
-        const next = [...ids];
-        const [moved] = next.splice(from, 1);
-        if (moved) next.splice(to, 0, moved);
-        void reorderTasks(next);
+        const fullIds = (group === 'finished' ? groups.finished : groups.unfinished).map((t) => t.id);
+        void reorderTasks(mergeVisibleReorder(fullIds, visibleIds, from, to));
       }}
     >
       <div style={{ opacity: dragTaskId.current === task.id ? 0.35 : 1, transform: dragTaskId.current === task.id ? 'scale(0.96)' : 'scale(1)', transition: 'opacity 0.2s, transform 0.2s' }}>
@@ -251,8 +255,8 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
               今日进度 · {today}
             </p>
             <div className="mt-3 flex items-end gap-2">
-              <span className="text-6xl font-black leading-none text-slate-50">{Math.min(filteredCompletedCount, filtered.length)}</span>
-              <span className="mb-1 text-2xl font-bold text-slate-500">/ {filtered.length}</span>
+              <span className="text-6xl font-black leading-none text-slate-50">{Math.min(groupFilteredCompletedCount, groupFiltered.length)}</span>
+              <span className="mb-1 text-2xl font-bold text-slate-500">/ {groupFiltered.length}</span>
             </div>
             <p className="mt-3 text-sm font-semibold text-slate-400">
               {ratio === 1 ? '今日全部完成，状态拉满' : '保持节奏，继续推进'}

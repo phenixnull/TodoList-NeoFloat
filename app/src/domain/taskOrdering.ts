@@ -33,6 +33,26 @@ export function getAvailableTaskGroups(
   return [...groups];
 }
 
+/**
+ * Drag operations show a filtered subset, but sortOrder is global within the
+ * completion group. Put hidden tasks back into the positions they occupied
+ * before applying the order visible to the user.
+ */
+export function mergeVisibleReorder(fullIds: string[], visibleIds: string[], from: number, to: number): string[] {
+  if (from < 0 || to < 0 || from >= visibleIds.length || to >= visibleIds.length || from === to) return fullIds;
+
+  const visibleSet = new Set(visibleIds);
+  if (visibleIds.length !== visibleSet.size || visibleIds.some((id) => !fullIds.includes(id))) return fullIds;
+
+  const movedVisible = [...visibleIds];
+  const [moved] = movedVisible.splice(from, 1);
+  if (!moved) return fullIds;
+  movedVisible.splice(to, 0, moved);
+
+  let cursor = 0;
+  return fullIds.map((id) => (visibleSet.has(id) ? movedVisible[cursor++] : id));
+}
+
 function compareTasks(a: Task, b: Task): number {
   if (a.sortOrder !== b.sortOrder) {
     return a.sortOrder - b.sortOrder;

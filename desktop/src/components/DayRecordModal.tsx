@@ -55,7 +55,7 @@ function shiftDate(dateKey: string, amount: number): string {
 
 function segmentDuration(segment: TimeSegment): number {
   const start = new Date(segment.startAt).getTime();
-  const stop = segment.stopAt ? new Date(segment.stopAt).getTime() : start;
+  const stop = segment.stopAt ? new Date(segment.stopAt).getTime() : Date.now();
   return Math.max(0, stop - start);
 }
 
@@ -106,7 +106,9 @@ export default function DayRecordModal({ target, initialFiles, onClose }: Props)
       })),
     );
     setHint('');
-  }, [task, record, date, imageUrl]);
+    // Only target/date and a server write should reinitialize local editing.
+    // Object identity changes on every SSE refresh must not wipe unsaved input.
+  }, [date, imageUrl, record?.updatedAt, task?.id]);
 
   const addFiles = useCallback((filesToAdd: File[]) => {
     setImages((current) => [
@@ -152,7 +154,12 @@ export default function DayRecordModal({ target, initialFiles, onClose }: Props)
   ) => {
     setSegments((current) =>
       current.map((segment) =>
-        segment.id === id ? { ...segment, [field]: new Date(value).toISOString() } : segment,
+        segment.id === id
+          ? (() => {
+            const parsed = new Date(value);
+            return Number.isFinite(parsed.getTime()) ? { ...segment, [field]: parsed.toISOString() } : segment;
+          })()
+          : segment,
       ),
     );
   };
@@ -163,7 +170,7 @@ export default function DayRecordModal({ target, initialFiles, onClose }: Props)
     const segment = createTimeSegment(
       date,
       `${pad2(start.getHours())}:${pad2(start.getMinutes())}`,
-      date,
+      stop.getDate() !== start.getDate() ? shiftDate(date, 1) : date,
       `${pad2(stop.getHours())}:${pad2(stop.getMinutes())}`,
     );
     if (segment) setSegments((current) => [...current, segment]);
@@ -182,11 +189,12 @@ export default function DayRecordModal({ target, initialFiles, onClose }: Props)
       const cleared = clearTimeSegmentsForDate(task, date);
       const outside = cleared.timerSegments;
       const validSegments = segments.filter(
-        (segment) => segment.stopAt && new Date(segment.stopAt) > new Date(segment.startAt),
+        (segment) => !segment.stopAt || new Date(segment.stopAt) > new Date(segment.startAt),
       );
+      const submittedIds = new Set(validSegments.map((segment) => segment.id));
       await updateTask(task.id, {
         timerSegments: [...outside, ...validSegments],
-        removedSegmentIds: cleared.removedSegmentIds,
+        removedSegmentIds: (cleared.removedSegmentIds ?? []).filter((id) => !submittedIds.has(id)),
       });
 
       // 2. Save note + images.
@@ -206,7 +214,9 @@ export default function DayRecordModal({ target, initialFiles, onClose }: Props)
       });
 
       onClose();
-    } finally {
+      } catch (error) {
+        setHint(error instanceof Error ? error.message : '保存失败，请重试');
+      } finally {
       setSaving(false);
     }
   };
