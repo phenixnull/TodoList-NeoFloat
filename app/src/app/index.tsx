@@ -114,6 +114,16 @@ export default function HomeScreen() {
     () => filteredTasks.filter((t) => completedIds.has(t.id)),
     [filteredTasks, completedIds],
   );
+  const overviewStats = useMemo(() => {
+    const completedCount = filteredTasks.filter((task) => completedIds.has(task.id)).length;
+    const totalCount = filteredTasks.length;
+
+    return {
+      completedCount: Math.min(completedCount, totalCount),
+      totalCount,
+      progress: totalCount === 0 ? 0 : Math.min(completedCount / totalCount, 1),
+    };
+  }, [filteredTasks, completedIds]);
   const checkInTimeMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const c of checkIns) {
@@ -317,8 +327,8 @@ export default function HomeScreen() {
       <Animated.View entering={FadeInDown.springify().damping(17)}>
         <DailyOverviewCard
           today={today}
-          completedCount={Math.min(completedIds.size, activeTasks.length)}
-          totalCount={activeTasks.length}
+          completedCount={overviewStats.completedCount}
+          totalCount={overviewStats.totalCount}
         />
       </Animated.View>
 
