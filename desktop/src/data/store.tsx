@@ -51,7 +51,7 @@ type StoreValue = LoadedData & {
   lastSyncedAt: Date | null;
   setServerUrl: (url: string) => void;
   refresh: () => Promise<void>;
-  toggleCheckIn: (taskId: string, date: string) => Promise<void>;
+  toggleCheckIn: (taskId: string, date: string) => void;
   undoCheckIn: () => Promise<void>;
   toggleTimer: (taskId: string) => Promise<void>;
   createTask: (input: NewTaskInput) => Promise<void>;
@@ -234,34 +234,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [refresh],
   );
   const toggleCheckIn = useCallback(
-    (taskId: string, date: string) =>
-      runWithBusy(async () => {
-        const exists = data.checkIns.some((c) => c.taskId === taskId && c.date === date);
-        checkInHistoryRef.current.push({ taskId, date, wasChecked: exists });
-        if (checkInHistoryRef.current.length > 8) checkInHistoryRef.current.shift();
+    (taskId: string, date: string) => {
+      const exists = data.checkIns.some((c) => c.taskId === taskId && c.date === date);
+      checkInHistoryRef.current.push({ taskId, date, wasChecked: exists });
+      if (checkInHistoryRef.current.length > 8) checkInHistoryRef.current.shift();
 
-        // Optimistic update: immediately toggle locally
-        const nextCheckIns = exists
-          ? data.checkIns.filter((c) => !(c.taskId === taskId && c.date === date))
-          : [...data.checkIns, { id: `${taskId}:${date}`, taskId, date, createdAt: new Date().toISOString() }];
-        setData({ ...data, checkIns: nextCheckIns });
+      const prevData = data;
+      const nextCheckIns = exists
+        ? data.checkIns.filter((c) => !(c.taskId === taskId && c.date === date))
+        : [...data.checkIns, { id: `${taskId}:${date}`, taskId, date, createdAt: new Date().toISOString() }];
+      setData({ ...data, checkIns: nextCheckIns });
 
-        try {
-          if (exists) {
-            await jsonFetch(`/api/checkins/${encodeURIComponent(taskId)}/${date}`, {
-              method: 'DELETE',
-            });
-          } else {
-            await jsonFetch('/api/checkins/toggle', {
-              method: 'POST',
-              body: { taskId, date },
-            });
-          }
-        } catch {
-          // Rollback on failure
-          setData(data);
-        }
-      }),
+      const push = exists
+        ? jsonFetch(`/api/checkins/${encodeURIComponent(taskId)}/${date}`, { method: 'DELETE' })
+        : jsonFetch('/api/checkins/toggle', { method: 'POST', body: { taskId, date } });
+      push.catch(() => {
+        setData(prevData);
+      });
+    },
     [data, jsonFetch],
   );
 
