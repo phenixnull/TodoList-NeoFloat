@@ -409,7 +409,7 @@ export default function HomeScreen() {
                 />
               ) : (
                 <NestableDraggableFlatList
-                  key={`uf-${dragListKey}-${groupFilter}-${statusFilter}`}
+                  key={`uf-${dragListKey}-${groupFilter}-${statusFilter}-${completedIds.size}`}
                   data={sortedUnfinished}
                   keyExtractor={(item) => item.id}
                   renderItem={renderTask}
@@ -447,7 +447,7 @@ export default function HomeScreen() {
                 />
               ) : (
                 <NestableDraggableFlatList
-                  key={`fn-${dragListKey}-${groupFilter}-${statusFilter}`}
+                  key={`fn-${dragListKey}-${groupFilter}-${statusFilter}-${completedIds.size}`}
                   data={sortedFinished}
                   keyExtractor={(item) => item.id}
                   renderItem={renderTask}
