@@ -103,14 +103,25 @@ function useHabitStoreInstance() {
     }
 
     // Check-ins: server active set; keep only pending local additions.
+    // Tombstones are only cleaned HERE when server data confirms the change.
     const checkIns: CheckIn[] = [];
     const seen = new Set<string>();
+    const serverCheckInKeys = new Set<string>();
     for (const remote of snapshot.checkIns) {
       const k = keyOf(remote.taskId, remote.date);
+      serverCheckInKeys.add(k);
       if (pendingDeletions.has(k)) continue;
       if (seen.has(k)) continue;
       seen.add(k);
       checkIns.push(remote);
+      // Server confirmed this addition — safe to clean the tombstone
+      pendingCheckIns.delete(k);
+    }
+    // Server confirmed deletions — clean tombstones for keys not on server
+    for (const k of pendingDeletions) {
+      if (!serverCheckInKeys.has(k)) {
+        pendingDeletions.delete(k);
+      }
     }
     for (const localCheckIn of local.checkIns) {
       const k = keyOf(localCheckIn.taskId, localCheckIn.date);
@@ -121,7 +132,6 @@ function useHabitStoreInstance() {
       }
       // else: un-checked on another device (tombstone), drop.
     }
-
     return {
       ...local,
       tasks,
@@ -232,12 +242,14 @@ function useHabitStoreInstance() {
           method: 'POST',
           body: JSON.stringify({ taskId, date }),
         });
-        pendingCheckInsRef.current.delete(k);
+        // NOTE: Do NOT delete from pendingCheckInsRef here.
+        // The tombstone is cleaned in applySnapshot when server data confirms it.
       } else {
         await apiRequest(base, `/api/checkins/${encodeURIComponent(taskId)}/${date}`, {
           method: 'DELETE',
         });
-        pendingCheckInDeletionsRef.current.delete(k);
+        // NOTE: Do NOT delete from pendingCheckInDeletionsRef here.
+        // The tombstone is cleaned in applySnapshot when server data confirms it.
       }
       schedulePull();
     } catch (error) {
