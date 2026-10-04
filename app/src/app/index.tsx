@@ -212,6 +212,22 @@ export default function HomeScreen() {
     ]);
   }, [activeTasks, changeGroupFilter, customGroups, groupFilter, updateTask, updateSettings]);
 
+  const renameGroup = useCallback((oldName: string, rawNewName: string) => {
+    const newName = rawNewName.trim();
+    if (!oldName || !newName || oldName === newName || customGroups.includes(newName)) return;
+
+    updateSettings({ customGroups: customGroups.map((group) => (group === oldName ? newName : group)) });
+    for (const task of activeTasks) {
+      if (!task.customGroups?.includes(oldName)) continue;
+      updateTask(task.id, {
+        customGroups: task.customGroups.map((group) => (group === oldName ? newName : group)),
+      });
+    }
+    if (groupFilter?.includes(oldName)) {
+      changeGroupFilter(groupFilter.map((group) => (group === oldName ? newName : group)));
+    }
+  }, [activeTasks, changeGroupFilter, customGroups, groupFilter, updateTask, updateSettings]);
+
   const moveToGroup = useCallback((taskId: string, groups: string[]) => {
     updateTask(taskId, { customGroups: groups });
   }, [updateTask]);
@@ -371,7 +387,8 @@ export default function HomeScreen() {
             allLabel="全部"
             onChange={changeGroupFilter}
             onCreateGroup={createGroup}
-            onGroupLongPress={deleteGroup}
+            onRenameGroup={renameGroup}
+            onDeleteGroup={deleteGroup}
           />
 
           <View style={styles.controlRow}>
