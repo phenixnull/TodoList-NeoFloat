@@ -8,6 +8,7 @@ import PressableScale from '@/components/PressableScale';
 import ScreenShell from '@/components/ScreenShell';
 import {
   downloadUpdate,
+  getDownloadedApk,
   fetchUpdateManifest,
   getCurrentVersionCode,
   getCurrentVersionName,
@@ -21,7 +22,7 @@ type UpdateUiState =
   | { phase: 'idle' }
   | { phase: 'checking' }
   | { phase: 'uptodate' }
-  | { phase: 'available'; manifest: UpdateManifest }
+  | { phase: 'available'; manifest: UpdateManifest; alreadyDownloaded?: boolean }
   | { phase: 'downloading'; progress: number; manifest: UpdateManifest }
   | { phase: 'error'; message: string };
 
@@ -45,7 +46,8 @@ export default function SettingsScreen() {
       const manifest = await fetchUpdateManifest(settings.serverUrl);
 
       if (isNewer(manifest, currentVersionCode)) {
-        setUpdateState({ phase: 'available', manifest });
+        const downloaded = await getDownloadedApk(manifest);
+        setUpdateState({ phase: 'available', manifest, alreadyDownloaded: !!downloaded });
       } else {
         setUpdateState({ phase: 'uptodate' });
       }
@@ -61,6 +63,14 @@ export default function SettingsScreen() {
     setUpdateState({ phase: 'downloading', progress: 0, manifest });
 
     try {
+      // Check if already downloaded
+      const downloaded = await getDownloadedApk(manifest);
+      if (downloaded) {
+        await installApk(downloaded.localUri);
+        setUpdateState({ phase: 'available', manifest });
+        return;
+      }
+
       const uri = await downloadUpdate(settings.serverUrl, manifest, (progress) => {
         setUpdateState({ phase: 'downloading', progress, manifest });
       });

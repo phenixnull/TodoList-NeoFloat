@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
@@ -10,6 +11,14 @@ export type UpdateManifest = {
   mandatory: boolean;
   releaseNotes: string[];
   publishedAt: string;
+};
+
+const DOWNLOADED_APK_KEY = 'habitpulse.downloadedApk';
+
+export type DownloadedApkInfo = {
+  versionName: string;
+  versionCode: number;
+  localUri: string;
 };
 
 export function getCurrentVersionCode(): number {
@@ -34,6 +43,60 @@ export async function fetchUpdateManifest(serverUrl: string): Promise<UpdateMani
 
 export function isNewer(manifest: UpdateManifest, currentVersionCode: number): boolean {
   return Number(manifest.versionCode) > currentVersionCode;
+}
+
+/** Check if the target version has already been downloaded locally. */
+export async function getDownloadedApk(
+  manifest: UpdateManifest,
+): Promise<DownloadedApkInfo | null> {
+  try {
+    const raw = await AsyncStorage.getItem(DOWNLOADED_APK_KEY);
+    if (!raw) return null;
+
+    const info = JSON.parse(raw) as DownloadedApkInfo;
+
+    // Must match target version AND file must still exist
+    if (info.versionCode !== manifest.versionCode || info.versionName !== manifest.versionName) {
+      return null;
+    }
+
+    const info2 = await FileSystem.getInfoAsync(info.localUri);
+    if (!info2.exists) {
+      await AsyncStorage.removeItem(DOWNLOADED_APK_KEY);
+      return null;
+    }
+
+    return info;
+  } catch {
+    return null;
+  }
+}
+
+async function saveDownloadedApk(manifest: UpdateManifest, uri: string): Promise<void> {
+  await AsyncStorage.setItem(
+    DOWNLOADED_APK_KEY,
+    JSON.stringify({
+      versionName: manifest.versionName,
+      versionCode: manifest.versionCode,
+      localUri: uri,
+    } as DownloadedApkInfo),
+  );
+}
+
+/** Clean up old APK files to save storage */
+async function cleanupOldApks(currentFileName: string): Promise<void> {
+  try {
+    const dir = FileSystem.documentDirectory ?? '';
+    const files = await FileSystem.readDirectoryAsync(dir);
+    for (const file of files) {
+      if (file.endsWith('.apk') && file !== currentFileName) {
+        await FileSystem.deleteAsync(`${dir}${file}`, { idempotent: true });
+      }
+    }
+    await AsyncStorage.removeItem(DOWNLOADED_APK_KEY);
+  } catch {
+    // ignore cleanup errors
+  }
 }
 
 export async function downloadUpdate(
@@ -65,6 +128,12 @@ export async function downloadUpdate(
   if (!result?.uri) {
     throw new Error('下载失败');
   }
+
+  // Save download info for future install without re-download
+  await saveDownloadedApk(manifest, result.uri);
+
+  // Clean up old APKs
+  await cleanupOldApks(manifest.fileName);
 
   return result.uri;
 }
