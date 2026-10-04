@@ -237,6 +237,7 @@ function useHabitStoreInstance() {
         await apiRequest(base, `/api/checkins/${encodeURIComponent(taskId)}/${date}`, {
           method: 'DELETE',
         });
+        pendingCheckInDeletionsRef.current.delete(k);
       }
       schedulePull();
     } catch (error) {
