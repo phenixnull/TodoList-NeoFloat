@@ -144,9 +144,17 @@ const INSTALL_FLAGS = 1 | 268_435_456;
 export async function installApk(localUri: string): Promise<void> {
   const contentUri = await FileSystem.getContentUriAsync(localUri);
 
-  await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
-    data: contentUri,
-    type: 'application/vnd.android.package-archive',
-    flags: INSTALL_FLAGS,
-  });
+  try {
+    await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+      data: contentUri,
+      type: 'application/vnd.android.package-archive',
+      flags: INSTALL_FLAGS,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('already started')) {
+      throw new Error('请先关闭之前的安装对话框，再重试');
+    }
+    throw error;
+  }
 }
