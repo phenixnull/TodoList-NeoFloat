@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Link, Stack } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { FlatList, Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { Alert } from 'react-native';
 import { NestableDraggableFlatList } from 'react-native-draggable-flatlist';
@@ -39,19 +39,22 @@ export default function HomeScreen() {
   } = useHabitStore();
   const { settings } = useHabitStore();
   const theme = useTheme(settings.appearance);
-  const [groupFilter, setGroupFilter] = useState<string[]>(() => {
+  const { width: winWidth, height: winHeight } = useWindowDimensions();
+  const isLandscape = winWidth > winHeight;
+  const [groupFilter, setGroupFilter] = useState<string[] | null>(() => {
     const s = settings.selectedGroup;
-    return s ? [s] : [];
+    return s ? [s] : null;
   });
   const selectGroup = useCallback((g: string | null) => {
     setGroupFilter((prev) => {
       if (g === null) {
         updateSettings({ selectedGroup: null });
-        return [];
+        return null;
       }
-      const next = prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g];
+      const base = prev ?? [];
+      const next = base.includes(g) ? base.filter((x) => x !== g) : [...base, g];
       updateSettings({ selectedGroup: next.length === 1 ? next[0] : null });
-      return next;
+      return next.length ? next : null;
     });
   }, [updateSettings]);
   const customGroups = settings.customGroups ?? [];
@@ -110,22 +113,37 @@ export default function HomeScreen() {
     }
     return map;
   }, [checkIns]);
-  const sortedUnfinished = useMemo(() => {
-    return [...filteredUnfinished].sort((a, b) => {
+  // Manual order is authoritative: dragging updates sortOrder and must stick.
+  const sortedUnfinished = useMemo(
+    () => [...filteredUnfinished].sort(
+      (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+        || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    ),
+    [filteredUnfinished],
+  );
+  const sortedFinished = useMemo(
+    () => [...filteredFinished].sort(
+      (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+        || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    ),
+    [filteredFinished],
+  );
+
+  // Recency ordering used only when the user taps the sort button; it is then
+  // persisted into sortOrder so it survives reload and syncs to other devices.
+  const recencyIds = useCallback((list: Task[], desc: boolean) =>
+    [...list].sort((a, b) => {
       const ta = checkInTimeMap.get(a.id) ?? '';
       const tb = checkInTimeMap.get(b.id) ?? '';
-      if (ta !== tb) return sortDesc ? tb.localeCompare(ta) : ta.localeCompare(tb);
+      if (ta !== tb) return desc ? tb.localeCompare(ta) : ta.localeCompare(tb);
       return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
-    });
-  }, [filteredUnfinished, checkInTimeMap, sortDesc]);
-  const sortedFinished = useMemo(() => {
-    return [...filteredFinished].sort((a, b) => {
-      const ta = checkInTimeMap.get(a.id) ?? '';
-      const tb = checkInTimeMap.get(b.id) ?? '';
-      if (ta !== tb) return sortDesc ? tb.localeCompare(ta) : ta.localeCompare(tb);
-      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
-    });
-  }, [filteredFinished, checkInTimeMap, sortDesc]);
+    }).map((t) => t.id), [checkInTimeMap]);
+  const onSortPress = useCallback(() => {
+    const next = !sortDesc;
+    setSortDesc(next);
+    reorderTasks(recencyIds(taskGroups.unfinished, next), 'unfinished');
+    reorderTasks(recencyIds(taskGroups.finished, next), 'finished');
+  }, [sortDesc, recencyIds, taskGroups, reorderTasks]);
 
   const addGroup = useCallback(() => {
     Alert.prompt(
@@ -181,6 +199,19 @@ export default function HomeScreen() {
       isLight={theme.isLight}
     />
   ), [today, completedIds, theme.isLight, todayCheckInsByTask, statsByTaskId, toggleCheckIn, toggleTimer, deleteTask, customGroups, moveToGroup]);
+
+  // Web build: react-native-draggable-flatlist is not web-compatible (it calls
+  // findNodeHandle on layout, which throws on react-native-web). Render the same
+  // rows through a plain FlatList; drag stays a native-only capability.
+  const renderTaskWeb = useCallback(({ item, index }: { item: Task; index: number }) => renderTask({
+    item,
+    index,
+    drag: undefined,
+    dragGesture: undefined,
+    getIndex: () => index,
+    isActive: false,
+    isDragging: false,
+  } as unknown as RenderItemParams<Task>), [renderTask]);
   const moveId = useCallback((ids: string[], from: number, to: number) => {
     if (from === to || from < 0 || to < 0 || from >= ids.length || to >= ids.length) {
       return ids;
@@ -302,19 +333,19 @@ export default function HomeScreen() {
             {customGroups.map((group) => (
               <PressableScale
                 key={group}
-                style={[styles.filterChip, groupFilter.includes(group) && styles.filterChipActive, { borderColor: theme.surfaceBorder }]}
+                style={[styles.filterChip, groupFilter?.includes(group) && styles.filterChipActive, { borderColor: theme.surfaceBorder }]}
                 onPress={() => selectGroup(group)}
                 onLongPress={() => {
                   Alert.alert('删除分组', `确定删除"${group}"？任务不会删除。`, [
                     { text: '取消', style: 'cancel' },
                     { text: '删除', style: 'destructive', onPress: () => {
                       updateSettings({ customGroups: customGroups.filter((g) => g !== group) });
-                      if (groupFilter.includes(group)) selectGroup(null);
+                      if (groupFilter?.includes(group)) selectGroup(null);
                     }},
                   ]);
                 }}
               >
-                <Text style={[styles.filterChipText, groupFilter.includes(group) && { color: theme.accentText }]}>{group}</Text>
+                <Text style={[styles.filterChipText, groupFilter?.includes(group) && { color: theme.accentText }]}>{group}</Text>
               </PressableScale>
             ))}
             <PressableScale
@@ -325,78 +356,118 @@ export default function HomeScreen() {
             </PressableScale>
           </View>
 
-          <View style={styles.filterRow}>
-            {(['all', 'active', 'done'] as const).map((sf) => (
-              <PressableScale
-                key={sf}
-                style={[styles.filterChip, styles.filterChipSm, statusFilter === sf && styles.filterChipActive, { borderColor: theme.surfaceBorder }]}
-                onPress={() => setStatusFilter(sf)}
-              >
-                <Text style={[styles.filterChipTextSm, statusFilter === sf && { color: theme.accentText }]}>
-                  {sf === 'all' ? '全部' : sf === 'active' ? '进行中' : '已完成'}
-                </Text>
-              </PressableScale>
-            ))}
+          <View style={[styles.filterRow, isLandscape && styles.filterRowLandscape]}>
             <PressableScale
-              style={[styles.filterChip, styles.filterChipSm, { borderColor: theme.surfaceBorder }]}
-              onPress={() => setSortDesc((prev) => !prev)}
+              style={[
+                styles.filterChip,
+                isLandscape ? styles.filterBtnLandscape : styles.filterChipSm,
+                statusFilter !== 'all' && styles.filterChipActive,
+                { borderColor: theme.surfaceBorder },
+              ]}
+              onPress={() => setStatusFilter((prev) => (prev === 'all' ? 'active' : prev === 'active' ? 'done' : 'all'))}
             >
-              <MaterialCommunityIcons name="arrow-up-down" size={12} color={theme.mutedText} />
-              <Text style={[styles.filterChipTextSm, { color: theme.mutedText }]}>{sortDesc ? '最新在上' : '最早在上'}</Text>
+              <MaterialCommunityIcons
+                name={statusFilter === 'all' ? 'filter-variant' : statusFilter === 'active' ? 'progress-clock' : 'check-circle-outline'}
+                size={isLandscape ? 18 : 12}
+                color={statusFilter === 'all' ? theme.mutedText : theme.accent}
+              />
+              <Text
+                style={[
+                  isLandscape ? styles.filterBtnLandscapeText : styles.filterChipTextSm,
+                  { color: statusFilter === 'all' ? theme.mutedText : theme.accentText },
+                ]}
+              >
+                {statusFilter === 'all' ? '全部' : statusFilter === 'active' ? '进行中' : '已完成'}
+              </Text>
+            </PressableScale>
+            <PressableScale
+              style={[
+                styles.filterChip,
+                isLandscape ? styles.filterBtnLandscape : styles.filterChipSm,
+                { borderColor: theme.surfaceBorder },
+              ]}
+              onPress={onSortPress}
+            >
+              <MaterialCommunityIcons name="arrow-up-down" size={isLandscape ? 18 : 12} color={theme.mutedText} />
+              <Text style={[isLandscape ? styles.filterBtnLandscapeText : styles.filterChipTextSm, { color: theme.mutedText }]}>
+                {sortDesc ? '最新在上' : '最早在上'}
+              </Text>
             </PressableScale>
           </View>
 
           {statusFilter !== 'done' && sortedUnfinished.length > 0 && (
             <>
               <Text style={[styles.groupTitle, { color: theme.subtleText }]}>进行中 · 点住图标拖动</Text>
-              <NestableDraggableFlatList
-                key={`uf-${dragListKey}-${groupFilter}-${statusFilter}`}
-                data={sortedUnfinished}
-                keyExtractor={(item) => item.id}
-                renderItem={renderTask}
-                dragGestureDetector="item"
-                onDragEnd={({ from, to }) => handleReorder(
-                  sortedUnfinished.map((item) => item.id),
-                  from,
-                  to,
-                  'unfinished',
-                )}
-                scrollEnabled={false}
-                activationDistance={8}
-                autoscrollEnabled={false}
-                dropAnimationConfig={DRAG_SNAP_SPRING}
-                dropAnimationMode="instant"
-                dragItemOverflow
-                windowSize={5}
-                contentContainerStyle={styles.taskList}
-              />
+              {Platform.OS === 'web' ? (
+                <FlatList
+                  data={sortedUnfinished}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderTaskWeb}
+                  scrollEnabled={false}
+                  windowSize={5}
+                  contentContainerStyle={styles.taskList}
+                />
+              ) : (
+                <NestableDraggableFlatList
+                  key={`uf-${dragListKey}-${groupFilter}-${statusFilter}`}
+                  data={sortedUnfinished}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderTask}
+                  dragGestureDetector="item"
+                  onDragEnd={({ from, to }) => handleReorder(
+                    sortedUnfinished.map((item) => item.id),
+                    from,
+                    to,
+                    'unfinished',
+                  )}
+                  scrollEnabled={false}
+                  activationDistance={8}
+                  autoscrollEnabled={false}
+                  dropAnimationConfig={DRAG_SNAP_SPRING}
+                  dropAnimationMode="instant"
+                  dragItemOverflow
+                  windowSize={5}
+                  contentContainerStyle={styles.taskList}
+                />
+              )}
             </>
           )}
 
           {statusFilter !== 'active' && sortedFinished.length > 0 && (
             <>
               <Text style={[styles.groupTitle, { color: theme.subtleText }]}>已完成 · 点住图标拖动</Text>
-              <NestableDraggableFlatList
-                key={`fn-${dragListKey}-${groupFilter}-${statusFilter}`}
-                data={sortedFinished}
-                keyExtractor={(item) => item.id}
-                renderItem={renderTask}
-                dragGestureDetector="item"
-                onDragEnd={({ from, to }) => handleReorder(
-                  sortedFinished.map((item) => item.id),
-                  from,
-                  to,
-                  'finished',
-                )}
-                scrollEnabled={false}
-                activationDistance={8}
-                autoscrollEnabled={false}
-                dropAnimationConfig={DRAG_SNAP_SPRING}
-                dropAnimationMode="instant"
-                dragItemOverflow
-                windowSize={5}
-                contentContainerStyle={styles.taskList}
-              />
+              {Platform.OS === 'web' ? (
+                <FlatList
+                  data={sortedFinished}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderTaskWeb}
+                  scrollEnabled={false}
+                  windowSize={5}
+                  contentContainerStyle={styles.taskList}
+                />
+              ) : (
+                <NestableDraggableFlatList
+                  key={`fn-${dragListKey}-${groupFilter}-${statusFilter}`}
+                  data={sortedFinished}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderTask}
+                  dragGestureDetector="item"
+                  onDragEnd={({ from, to }) => handleReorder(
+                    sortedFinished.map((item) => item.id),
+                    from,
+                    to,
+                    'finished',
+                  )}
+                  scrollEnabled={false}
+                  activationDistance={8}
+                  autoscrollEnabled={false}
+                  dropAnimationConfig={DRAG_SNAP_SPRING}
+                  dropAnimationMode="instant"
+                  dragItemOverflow
+                  windowSize={5}
+                  contentContainerStyle={styles.taskList}
+                />
+              )}
             </>
           )}
 
@@ -483,7 +554,7 @@ const styles = StyleSheet.create({
   },
   filterChipActive: {
     backgroundColor: 'rgba(34,211,238,0.12)',
-    borderColor: 'rgba(34,211,238,0.4) !important',
+    borderColor: 'rgba(34,211,238,0.4)',
   },
   filterChipAdd: {
     paddingHorizontal: 8,
@@ -501,6 +572,24 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: 'rgba(148,163,184,0.6)',
+  },
+  // Landscape: two big square-ish buttons split evenly, half width each.
+  filterRowLandscape: {
+    flexWrap: 'nowrap',
+    gap: 12,
+  },
+  filterBtnLandscape: {
+    flex: 1,
+    minHeight: 56,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  filterBtnLandscapeText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: 'rgba(148,163,184,0.85)',
   },
   groupTitle: {
     color: 'rgba(148,163,184,0.85)',

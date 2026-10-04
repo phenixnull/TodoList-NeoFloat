@@ -8,6 +8,7 @@ import type { Task } from '../../../app/src/domain/types';
 import { extractImageFiles } from '../hooks/useImageCapture';
 import { useStore } from '../data/store';
 import TaskIcon from './TaskIcon';
+import { useRef } from 'react';
 
 const GROUP_COLORS = ['#22d3ee', '#a78bfa', '#f472b6', '#fb923c', '#34d399', '#facc15', '#60a5fa', '#f87171', '#2dd4bf', '#c084fc'];
 
@@ -41,6 +42,22 @@ export default function TaskCard({
   const { now, toggleCheckIn, toggleTimer, busy } = useStore();
   const total = calculateTimeSegmentsDurationForDate(task, date, now.getTime());
   const running = isTimerRunning(task);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  // A reorder drag and the toggle click share the same element. Some browsers
+  // synthesize a click on the source right after a native drag ends, which would
+  // flip the check-in unexpectedly. Swallow only that immediate click; a genuine
+  // later click is a separate gesture and is left intact.
+  const suppressNextClick = () => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const swallow = (ce: MouseEvent) => {
+      ce.preventDefault();
+      ce.stopPropagation();
+    };
+    el.addEventListener('click', swallow, { capture: true, once: true });
+    window.setTimeout(() => el.removeEventListener('click', swallow), 120);
+  };
 
   return (
     <div
@@ -79,6 +96,7 @@ export default function TaskCard({
       </div>
 
       <div
+        ref={bodyRef}
         className="min-w-0 flex-1 cursor-pointer select-none"
         onClick={() => void toggleCheckIn(task.id, date)}
         draggable
@@ -86,6 +104,7 @@ export default function TaskCard({
           e.dataTransfer.setData('text/plain', task.id);
           e.dataTransfer.effectAllowed = 'move';
         }}
+        onDragEnd={() => suppressNextClick()}
       >
         <div className="flex items-center gap-2">
           <span className={`truncate font-bold ${compact ? 'text-[13px]' : 'text-sm'} text-slate-100`}>
