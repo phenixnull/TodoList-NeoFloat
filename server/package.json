@@ -1,6 +1,6 @@
 {
   "name": "habitpulse-server",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "private": true,
   "type": "module",
   "main": "src/server.ts",
@@ -13,6 +13,7 @@
   "dependencies": {
     "better-sqlite3": "^13.0.3",
     "fastify": "^5.12.5",
+    "habitpulse": "file:..",
     "zod": "^4.6.5"
   },
   "devDependencies": {

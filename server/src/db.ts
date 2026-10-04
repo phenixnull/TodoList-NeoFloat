@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 export type DatabaseOptions = {
   database?: string;
@@ -84,7 +85,16 @@ export function createDatabase({ database = 'habitpulse.db' }: DatabaseOptions =
     );
 
     CREATE INDEX IF NOT EXISTS idx_feedback_images_feedback ON feedback_images(feedback_id);
+
+    CREATE TABLE IF NOT EXISTS sync_state (
+      id INTEGER PRIMARY KEY CHECK(id = 1),
+      instance_id TEXT NOT NULL,
+      revision INTEGER NOT NULL
+    );
   `);
+
+  db.prepare('INSERT OR IGNORE INTO sync_state (id, instance_id, revision) VALUES (1, ?, 0)')
+    .run(randomUUID());
 
   const taskColumns = db.prepare('PRAGMA table_info(tasks)').all() as Array<{ name: string }>;
 

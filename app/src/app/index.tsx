@@ -409,7 +409,7 @@ export default function HomeScreen() {
                 />
               ) : (
                 <NestableDraggableFlatList
-                  key={`uf-${dragListKey}-${groupFilter}-${statusFilter}-${completedIds.size}`}
+                  key={`uf-${dragListKey}-${groupFilter?.join('\u0000') ?? 'all'}-${statusFilter}`}
                   data={sortedUnfinished}
                   keyExtractor={(item) => item.id}
                   renderItem={renderTask}
@@ -658,4 +658,3 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
-

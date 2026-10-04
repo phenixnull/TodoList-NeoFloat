@@ -1,7 +1,7 @@
 {
   "name": "habitpulse-desktop",
   "productName": "HabitPulse Desktop",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "private": true,
   "description": "HabitPulse 桌面端：习惯打卡、计时、统计与数据管理",
   "author": "Sagittarius",
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "framer-motion": "^12.23.12",
+    "habitpulse": "file:..",
     "lucide-react": "^1.50.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",

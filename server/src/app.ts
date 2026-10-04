@@ -142,13 +142,47 @@ export function buildApp({
 }: AppConfig = {}) {
   const resolvedImageRoot = path.resolve(imageRoot);
   fs.mkdirSync(resolvedImageRoot, { recursive: true });
-  const app = Fastify({ logger: false, bodyLimit: 24_000_000 });
+  const app = Fastify({ logger: process.env.LOG_REQUESTS === '1', bodyLimit: 24_000_000 });
   const db = createDatabase({ database });
   const changeEvents = new EventEmitter();
   changeEvents.setMaxListeners(100);
 
+  function currentSyncState() {
+    return db.prepare('SELECT instance_id, revision FROM sync_state WHERE id = 1').get() as {
+      instance_id: string;
+      revision: number;
+    };
+  }
+
+  function readSnapshot() {
+    return db.transaction(() => {
+      const state = currentSyncState();
+      const tasks = db.prepare('SELECT * FROM tasks WHERE deleted_at IS NULL ORDER BY created_at').all() as Array<any>;
+      const checkIns = db.prepare('SELECT * FROM check_ins WHERE deleted_at IS NULL ORDER BY date, created_at').all() as Array<any>;
+      const dayRecords = db.prepare('SELECT * FROM day_records ORDER BY date DESC, updated_at').all() as Array<any>;
+
+      return {
+        revision: state.revision,
+        instanceId: state.instance_id,
+        tasks: tasks.map(rowFromTask),
+        checkIns: checkIns.map(rowFromCheckIn),
+        dayRecords: dayRecords.map(rowFromDayRecord),
+      };
+    })();
+  }
+
   function broadcast(event: string, data: Record<string, unknown>) {
-    changeEvents.emit('change', { event, data, at: new Date().toISOString() });
+    // Every externally visible mutation gets one monotonic revision. Clients
+    // use this to reject an old response that arrives after a newer snapshot.
+    db.prepare('UPDATE sync_state SET revision = revision + 1 WHERE id = 1').run();
+    const state = currentSyncState();
+    changeEvents.emit('change', {
+      event,
+      data,
+      at: new Date().toISOString(),
+      revision: state.revision,
+      instanceId: state.instance_id,
+    });
   }
 
   // Server-Sent Events: every write is pushed to connected clients so all
@@ -272,6 +306,11 @@ export function buildApp({
   }
 
   app.get('/api/health', async () => ({ ok: true }));
+
+  // A snapshot must represent one database generation. Fetching tasks,
+  // check-ins and records through separate endpoints can otherwise combine
+  // data from before and after a check-in write.
+  app.get('/api/snapshot', async () => readSnapshot());
 
   app.post('/api/feedback', async (request, reply) => {
     const parsed = createFeedbackSchema.safeParse(request.body);
@@ -568,7 +607,9 @@ export function buildApp({
     const existing = db.prepare('SELECT * FROM check_ins WHERE task_id = ? AND date = ?').get(parsed.data.taskId, parsed.data.date) as any;
 
     if (existing && !existing.deleted_at) {
-      return reply.code(409).send({ error: 'Already checked in for this date', checkIn: rowFromCheckIn(existing) });
+      // The mobile client sends an explicit "add" operation, not a UI toggle.
+      // A retry after an ambiguous network result must be idempotent.
+      return reply.code(200).send({ checkedIn: true, checkIn: rowFromCheckIn(existing) });
     }
 
     const id = randomUUID();

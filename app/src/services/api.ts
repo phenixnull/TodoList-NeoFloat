@@ -13,7 +13,9 @@ export async function apiRequest<T>(serverUrl: string, path: string, init: Reque
       ...init,
       signal: controller.signal,
       headers: {
-        'Content-Type': 'application/json',
+        // Fastify rejects an empty request body when this header is JSON.
+        // DELETE has no body, so the header must be conditional.
+        ...(init.body != null ? { 'Content-Type': 'application/json' } : {}),
         ...(init.headers ?? {}),
       },
     });
@@ -30,14 +32,31 @@ export async function apiRequest<T>(serverUrl: string, path: string, init: Reque
 
 export async function fetchServerData(
   serverUrl: string,
-): Promise<Pick<AppData, 'tasks' | 'checkIns' | 'dayRecords'>> {
-  const [tasks, checkIns, dayRecords] = await Promise.all([
-    apiRequest<Task[]>(serverUrl, '/api/tasks'),
-    apiRequest<CheckIn[]>(serverUrl, '/api/checkins'),
-    apiRequest<DayRecord[]>(serverUrl, '/api/day-records'),
-  ]);
+): Promise<Pick<AppData, 'tasks' | 'checkIns' | 'dayRecords'> & {
+  revision?: number;
+  instanceId?: string;
+}> {
+  try {
+    // Prefer one transactionally consistent snapshot. Separate GETs can span
+    // a check-in write and create a mixed generation that flips local UI.
+    const snapshot = await apiRequest<Pick<AppData, 'tasks' | 'checkIns' | 'dayRecords'> & {
+      revision?: number;
+      instanceId?: string;
+    }>(serverUrl, '/api/snapshot');
+    if (Array.isArray(snapshot?.tasks) && Array.isArray(snapshot?.checkIns) && Array.isArray(snapshot?.dayRecords)) {
+      return snapshot;
+    }
+    throw new Error('Invalid snapshot');
+  } catch {
+    // Compatibility with an older server that has not been restarted yet.
+    const [tasks, checkIns, dayRecords] = await Promise.all([
+      apiRequest<Task[]>(serverUrl, '/api/tasks'),
+      apiRequest<CheckIn[]>(serverUrl, '/api/checkins'),
+      apiRequest<DayRecord[]>(serverUrl, '/api/day-records'),
+    ]);
 
-  return { tasks, checkIns, dayRecords };
+    return { tasks, checkIns, dayRecords };
+  }
 }
 
 export async function requestError(response: Response): Promise<Error> {

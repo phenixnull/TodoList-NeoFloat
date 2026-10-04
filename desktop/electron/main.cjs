@@ -51,7 +51,7 @@ function createWindow() {
   const testHash = process.env.HP_TEST_HASH;
 
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5217');
+    mainWindow.loadURL(process.env.HP_DEV_URL || 'http://localhost:5217');
   } else if (testHash) {
     mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), {
       hash: testHash,

@@ -51,11 +51,19 @@ function useHabitStoreInstance() {
   const pendingCheckInsRef = useRef<Set<string>>(new Set());
   const pendingCheckInDeletionsRef = useRef<Set<string>>(new Set());
   const pullTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const flushChainRef = useRef<Promise<void>>(Promise.resolve());
+  const syncChainRef = useRef<Promise<void>>(Promise.resolve());
+  const lastServerRevisionRef = useRef(0);
+  const lastServerInstanceRef = useRef<string | null>(null);
+  const checkInQueueRef = useRef<Map<string, Promise<void>>>(new Map());
+  const latestCheckInIntentRef = useRef<Map<string, { seq: number; adding: boolean }>>(new Map());
+  const checkInSeqRef = useRef(0);
+  const initialLoadStartedRef = useRef(false);
+  const hydratedRef = useRef(false);
 
   useEffect(() => () => dropFollowUpScheduler.cancel(), [dropFollowUpScheduler]);
 
   const commit = useCallback(async (nextData: AppData, persist = true) => {
+    hydratedRef.current = true;
     dataRef.current = nextData;
     setData(nextData);
 
@@ -144,42 +152,55 @@ function useHabitStoreInstance() {
     };
   }, []);
 
+  const enqueueSyncOperation = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
+    const run = syncChainRef.current.then(operation, operation);
+    syncChainRef.current = run.then(() => {}, () => {});
+    return run;
+  }, []);
+
   const pullFromServer = useCallback(async () => {
-    const base = settingsReady();
-    if (!base) return;
-    const snapshot = await fetchServerData(base);
-    let merged = applySnapshot(snapshot);
-    merged = { ...merged, settings: { ...merged.settings, lastSyncedAt: new Date().toISOString() } };
+    return enqueueSyncOperation(async () => {
+      const base = settingsReady();
+      if (!base) return;
 
-    // Download day-record images not yet cached on this device.
-    const dayRecords = merged.dayRecords;
-    let nextRecords = dayRecords;
-    for (const record of dayRecords) {
-      const images = record.images ?? (record.image ? [record.image] : []);
-      if (images.every((image) => image.localUri)) continue;
-      const downloaded = await downloadDayRecordImages(base, record);
-      if (downloaded) {
-        nextRecords = nextRecords.map((item) => (
-          item.taskId === downloaded.taskId && item.date === downloaded.date ? downloaded : item
-        ));
+      const snapshot = await fetchServerData(base);
+      if (snapshot.instanceId && snapshot.instanceId !== lastServerInstanceRef.current) {
+        // A server restore/recreate can legitimately restart revisions.
+        lastServerInstanceRef.current = snapshot.instanceId;
+        lastServerRevisionRef.current = 0;
       }
-    }
+      const revision = snapshot.revision;
+      if (typeof revision === 'number' && revision < lastServerRevisionRef.current) {
+        return;
+      }
 
-    const latest = dataRef.current;
-    // Re-apply against anything committed while fetching.
-    const reMerged = applySnapshot({
-      tasks: merged.tasks,
-      checkIns: merged.checkIns,
-      dayRecords: nextRecords,
+      // Commit the data generation first. Image caching is a local-only patch
+      // and must not keep a stale remote snapshot alive over a user mutation.
+      let merged = applySnapshot(snapshot);
+      merged = { ...merged, settings: { ...merged.settings, lastSyncedAt: new Date().toISOString() } };
+      await commit(merged);
+      if (typeof revision === 'number' && revision >= lastServerRevisionRef.current) {
+        lastServerRevisionRef.current = revision;
+      }
+
+      // Download missing images after the generation is applied.
+      for (const record of merged.dayRecords) {
+        const images = record.images ?? (record.image ? [record.image] : []);
+        if (images.every((image) => image.localUri)) continue;
+        const downloaded = await downloadDayRecordImages(base, record);
+        if (!downloaded) continue;
+        const latest = dataRef.current;
+        await commit({
+          ...latest,
+          dayRecords: latest.dayRecords.map((item) => (
+            item.taskId === downloaded.taskId && item.date === downloaded.date ? downloaded : item
+          )),
+        });
+      }
+
+      setSyncState({ status: 'ok', message: '已同步' });
     });
-    await commit({
-      ...reMerged,
-      // local mutations during the fetch win back their pending state
-      tasks: reconcileLatestTasks(latest, reMerged.tasks, pendingTasksRef.current),
-      settings: latest.settings,
-    });
-    setSyncState({ status: 'ok', message: '已同步' });
-  }, [applySnapshot, commit, settingsReady]);
+  }, [applySnapshot, commit, enqueueSyncOperation, settingsReady]);
 
   const schedulePull = useCallback(() => {
     if (pullTimerRef.current) clearTimeout(pullTimerRef.current);
@@ -226,38 +247,47 @@ function useHabitStoreInstance() {
     }
   }, [schedulePull, settingsReady]);
 
-  const pushCheckIn = useCallback(async (taskId: string, date: string, adding: boolean) => {
+  const pushCheckIn = useCallback(async (taskId: string, date: string, adding: boolean, seq: number) => {
     const base = settingsReady();
     if (!base) return;
     const k = keyOf(taskId, date);
-    if (adding) {
-      pendingCheckInsRef.current.add(k);
-      pendingCheckInDeletionsRef.current.delete(k);
-    } else {
-      pendingCheckInDeletionsRef.current.add(k);
-    }
-    try {
+    const previous = checkInQueueRef.current.get(k) ?? Promise.resolve();
+    const operation = previous.then(async () => {
+      const latestIntent = latestCheckInIntentRef.current.get(k);
+      if (!latestIntent || latestIntent.seq !== seq || latestIntent.adding !== adding) return;
+
       if (adding) {
-        await apiRequest(base, '/api/checkins/toggle', {
-          method: 'POST',
-          body: JSON.stringify({ taskId, date }),
-        });
-        // NOTE: Do NOT delete from pendingCheckInsRef here.
-        // The tombstone is cleaned in applySnapshot when server data confirms it.
+        pendingCheckInsRef.current.add(k);
+        pendingCheckInDeletionsRef.current.delete(k);
       } else {
-        await apiRequest(base, `/api/checkins/${encodeURIComponent(taskId)}/${date}`, {
-          method: 'DELETE',
-        });
-        // NOTE: Do NOT delete from pendingCheckInDeletionsRef here.
-        // The tombstone is cleaned in applySnapshot when server data confirms it.
+        pendingCheckInDeletionsRef.current.add(k);
+        pendingCheckInsRef.current.delete(k);
       }
-      schedulePull();
-    } catch (error) {
-      if (adding) pendingCheckInsRef.current.delete(k);
-      else pendingCheckInDeletionsRef.current.delete(k);
-      setSyncState({ status: 'error', message: error instanceof Error ? error.message : '打卡同步失败' });
-      throw error;
-    }
+
+      try {
+        if (adding) {
+          await apiRequest(base, '/api/checkins/toggle', {
+            method: 'POST',
+            body: JSON.stringify({ taskId, date }),
+          });
+        } else {
+          await apiRequest(base, `/api/checkins/${encodeURIComponent(taskId)}/${date}`, {
+            method: 'DELETE',
+          });
+        }
+        schedulePull();
+      } catch (error) {
+        const currentIntent = latestCheckInIntentRef.current.get(k);
+        if (currentIntent?.seq === seq) {
+          if (adding) pendingCheckInsRef.current.delete(k);
+          else pendingCheckInDeletionsRef.current.delete(k);
+        }
+        setSyncState({ status: 'error', message: error instanceof Error ? error.message : '打卡同步失败' });
+        throw error;
+      }
+    });
+    checkInQueueRef.current.set(k, operation.catch(() => {}));
+    await operation;
   }, [schedulePull, settingsReady]);
 
   const pushDayRecord = useCallback(async (record: DayRecord) => {
@@ -305,54 +335,73 @@ function useHabitStoreInstance() {
 
   // Flush anything that accumulated while offline (also used by manual sync).
   const flushLocal = useCallback(async () => {
-    const base = settingsReady();
-    if (!base) return;
-    const source = dataRef.current;
-    const remote = await fetchServerData(base);
-    const remoteTaskById = new Map(remote.tasks.map((t) => [t.id, t]));
-    for (const task of source.tasks) {
-      const rt = remoteTaskById.get(task.id);
-      if (task.deletedAt) {
-        if (rt) await apiRequest(base, `/api/tasks/${task.id}`, { method: 'DELETE' });
-      } else if (!rt) {
-        await apiRequest(base, '/api/tasks', { method: 'POST', body: JSON.stringify(task) });
-      } else if (new Date(task.updatedAt) > new Date(rt.updatedAt)) {
-        await apiRequest(base, `/api/tasks/${task.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({
-            name: task.name, icon: task.icon, iconImage: task.iconImage ?? null,
-            color: task.color, description: task.description, sortOrder: task.sortOrder,
-            customGroups: task.customGroups ?? [],
-            timerSegments: task.timerSegments, removedSegmentIds: task.removedSegmentIds ?? [],
-            manualDurationMs: task.manualDurationMs,
-          }),
+    return enqueueSyncOperation(async () => {
+      const base = settingsReady();
+      if (!base) return;
+
+      const remote = await fetchServerData(base);
+      const source = dataRef.current;
+      const remoteTaskById = new Map(remote.tasks.map((t) => [t.id, t]));
+      for (const task of source.tasks) {
+        const rt = remoteTaskById.get(task.id);
+        if (task.deletedAt) {
+          if (rt) await apiRequest(base, `/api/tasks/${task.id}`, { method: 'DELETE' });
+        } else if (!rt) {
+          await apiRequest(base, '/api/tasks', { method: 'POST', body: JSON.stringify(task) });
+        } else if (new Date(task.updatedAt) > new Date(rt.updatedAt)) {
+          await apiRequest(base, `/api/tasks/${task.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              name: task.name, icon: task.icon, iconImage: task.iconImage ?? null,
+              color: task.color, description: task.description, sortOrder: task.sortOrder,
+              customGroups: task.customGroups ?? [],
+              timerSegments: task.timerSegments, removedSegmentIds: task.removedSegmentIds ?? [],
+              manualDurationMs: task.manualDurationMs,
+            }),
+          });
+        }
+      }
+
+      const remoteCheckInKeys = new Set(remote.checkIns.map((c) => keyOf(c.taskId, c.date)));
+      const pendingDeletions = pendingCheckInDeletionsRef.current;
+
+      // Never replay a stale source array. Re-read the user's latest active
+      // set; otherwise a check-in removed during this flush can be revived.
+      for (const checkIn of Array.from(dataRef.current.checkIns)) {
+        const k = keyOf(checkIn.taskId, checkIn.date);
+        if (pendingDeletions.has(k)) continue;
+        if (!remoteCheckInKeys.has(k)) {
+          await apiRequest(base, '/api/checkins', {
+            method: 'POST',
+            body: JSON.stringify(checkIn),
+          });
+        }
+      }
+
+      for (const k of Array.from(pendingDeletions)) {
+        if (!remoteCheckInKeys.has(k)) continue;
+        const separator = k.lastIndexOf(':');
+        const taskId = k.slice(0, separator);
+        const date = k.slice(separator + 1);
+        await apiRequest(base, `/api/checkins/${encodeURIComponent(taskId)}/${encodeURIComponent(date)}`, {
+          method: 'DELETE',
         });
       }
-    }
-    const remoteCheckInKeys = new Set(remote.checkIns.map((c) => keyOf(c.taskId, c.date)));
-    for (const checkIn of source.checkIns) {
-      const k = keyOf(checkIn.taskId, checkIn.date);
-      if (!remoteCheckInKeys.has(k)) {
-        await apiRequest(base, '/api/checkins', {
-          method: 'POST',
-          body: JSON.stringify(checkIn),
-        });
+
+      const remoteRecordByKey = new Map(
+        remote.dayRecords.map((r) => [keyOf(r.taskId, r.date), r]),
+      );
+      for (const record of source.dayRecords) {
+        const rt = remoteRecordByKey.get(keyOf(record.taskId, record.date));
+        if (!rt || new Date(record.updatedAt) > new Date(rt.updatedAt)) {
+          await pushDayRecord(record);
+        }
       }
-    }
-    const remoteRecordByKey = new Map(
-      remote.dayRecords.map((r) => [keyOf(r.taskId, r.date), r]),
-    );
-    for (const record of source.dayRecords) {
-      const rt = remoteRecordByKey.get(keyOf(record.taskId, record.date));
-      if (!rt || new Date(record.updatedAt) > new Date(rt.updatedAt)) {
-        await pushDayRecord(record);
-      }
-    }
-  }, [pushDayRecord, settingsReady]);
+    });
+  }, [enqueueSyncOperation, pushDayRecord, settingsReady]);
 
   const enqueueFlush = useCallback(() => {
-    const queued = flushChainRef.current.then(flushLocal, flushLocal);
-    flushChainRef.current = queued.catch(() => {});
+    void flushLocal().catch(() => {});
   }, [flushLocal]);
 
   // ---- realtime connection lifecycle + AppState ----
@@ -399,10 +448,12 @@ function useHabitStoreInstance() {
 
   // ---- initial load ----
   useEffect(() => {
+    if (initialLoadStartedRef.current) return;
+    initialLoadStartedRef.current = true;
     let mounted = true;
     (async () => {
       const stored = await loadData();
-      if (!mounted) return;
+      if (!mounted || hydratedRef.current) return;
       await commit(stored, false);
       setLoading(false);
       pullFromServer().catch(() => {});
@@ -410,7 +461,10 @@ function useHabitStoreInstance() {
     return () => {
       mounted = false;
     };
-  }, [commit, schedulePull]);
+    // pullFromServer is intentionally read once after local hydration; its
+    // identity is stable and re-running hydration would overwrite fresh state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commit]);
 
   // ---- mutations (optimistic local + direct push) ----
   const createTask = useCallback((input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs'>>) => {
@@ -501,18 +555,14 @@ function useHabitStoreInstance() {
   const toggleCheckIn = useCallback((taskId: string, dateKey = getTodayKey()) => {
     const result = toggleLocalCheckIn(dataRef.current.checkIns, taskId, dateKey);
     const adding = Boolean(result.checkedIn);
-    let nextData: AppData;
-    if (result.removedCheckIn) {
-      nextData = { ...dataRef.current, checkIns: result.checkIns };
-    } else {
-      nextData = { ...dataRef.current, checkIns: result.checkIns };
-    }
+    const nextData: AppData = { ...dataRef.current, checkIns: result.checkIns };
+    const k = keyOf(taskId, dateKey);
+    const seq = ++checkInSeqRef.current;
+    latestCheckInIntentRef.current.set(k, { seq, adding });
     void commit(nextData);
-    pushCheckIn(taskId, dateKey, adding).catch(() => {
-      // Roll back the optimistic toggle if the server rejected it.
-      const rollback = toggleLocalCheckIn(dataRef.current.checkIns, taskId, dateKey);
-      const rollbackData: AppData = { ...dataRef.current, checkIns: rollback.checkIns };
-      void commit(rollbackData);
+    pushCheckIn(taskId, dateKey, adding, seq).catch(() => {
+      // Do not flip the latest user intent here. A timed-out request may still
+      // have succeeded server-side; the serialized pull reconciles truth.
     });
     return adding;
   }, [commit, pushCheckIn]);
@@ -632,20 +682,6 @@ function pickRecord(a: DayRecord, b: DayRecord): DayRecord {
     return match?.localUri && !image.localUri ? { ...image, localUri: match.localUri } : image;
   });
   return { ...newer, images, image: images[0] ?? null };
-}
-
-function reconcileLatestTasks(latest: AppData, mergedTasks: Task[], pending: Set<string>): Task[] {
-  // Keep local pending edits that landed after the snapshot fetch began.
-  const byId = new Map(mergedTasks.map((t) => [t.id, t]));
-  for (const task of latest.tasks) {
-    const known = byId.get(task.id);
-    if (!known) {
-      if (pending.has(task.id) || task.deletedAt) byId.set(task.id, task);
-    } else if (new Date(task.updatedAt) > new Date(known.updatedAt)) {
-      byId.set(task.id, task);
-    }
-  }
-  return [...byId.values()];
 }
 
 type HabitStore = ReturnType<typeof useHabitStoreInstance>;

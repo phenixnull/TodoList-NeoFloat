@@ -174,7 +174,12 @@ describe('HabitPulse API', () => {
       url: '/api/checkins/toggle',
       payload: { taskId, date: '2026-01-01' },
     });
-    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.statusCode).toBe(200);
+    expect(duplicate.json().checkedIn).toBe(true);
+
+    const snapshot = (await app.inject({ url: '/api/snapshot' })).json() as any;
+    expect(snapshot.revision).toBeGreaterThan(0);
+    expect(snapshot.checkIns).toHaveLength(1);
 
     const all = await app.inject({ url: '/api/checkins' });
     expect(all.json()).toHaveLength(1);

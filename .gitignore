@@ -1,4 +1,6 @@
 node_modules/
+desktop/dist/
+desktop/dist-builder/
 *.log
 .DS_Store
 .env

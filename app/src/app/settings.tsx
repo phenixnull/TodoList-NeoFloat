@@ -88,7 +88,10 @@ export default function SettingsScreen() {
   // Check once on first open.
   useEffect(() => {
     if (Platform.OS === 'android' && settings.syncEnabled && settings.serverUrl.trim()) {
-      void checkForUpdates();
+      const timer = setTimeout(() => {
+        void checkForUpdates();
+      }, 0);
+      return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

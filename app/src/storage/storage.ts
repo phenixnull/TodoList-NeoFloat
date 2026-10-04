@@ -2,6 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppData, DayRecord, Task } from '../domain/types';
 
 const STORAGE_KEY = 'habitpulse.data.v1';
+let memoryData: AppData | null = null;
+let writeQueue: Promise<void> = Promise.resolve();
+
+const ignoreWriteError = () => {};
 
 export const defaultData: AppData = {
   tasks: [],
@@ -56,19 +60,31 @@ export function normalizeStoredData(parsed: Partial<AppData> | null | undefined)
 }
 
 export async function loadData(): Promise<AppData> {
+  if (memoryData) return memoryData;
+
+  // If a save is in flight, do not read the older value behind it.
+  await writeQueue.then(ignoreWriteError, ignoreWriteError);
+  if (memoryData) return memoryData;
+
   const raw = await AsyncStorage.getItem(STORAGE_KEY);
 
   if (!raw) {
-    return defaultData;
+    memoryData = defaultData;
+    return memoryData;
   }
 
   try {
-    return normalizeStoredData(JSON.parse(raw) as Partial<AppData>);
+    memoryData = normalizeStoredData(JSON.parse(raw) as Partial<AppData>);
   } catch {
-    return defaultData;
+    memoryData = defaultData;
   }
+
+  return memoryData;
 }
 
 export async function saveData(data: AppData): Promise<void> {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  memoryData = data;
+  const task = writeQueue.then(() => AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data)));
+  writeQueue = task.then(ignoreWriteError, ignoreWriteError);
+  await task;
 }

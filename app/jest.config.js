@@ -1,10 +1,7 @@
 /** @type {import('jest').Config} */
 module.exports = {
   preset: 'jest-expo',
-  testMatch: [
-    '<rootDir>/src/components/**/*.test.{ts,tsx}',
-    '<rootDir>/src/store/**/*.test.{ts,tsx}',
-  ],
+  testRegex: '/src/(components|store)/.*\\.test\\.[jt]sx$',
   transform: {
     '^.+\\.(js|jsx|ts|tsx)$': [
       'babel-jest',

@@ -154,4 +154,110 @@ describe('HabitPulse store sync race', () => {
     // Re-arm sanity: the gate must not be referenced again after teardown.
     checkinsGate = createDeferred();
   });
+
+  it('does not resurrect a deleted check-in when an older pull is still in flight', async () => {
+    const today = getTodayKey();
+    const createdAt = '2026-09-01T00:00:00.000Z';
+    const task = {
+      id: 't1',
+      name: 'Read',
+      icon: 'book',
+      iconImage: null,
+      color: '#ffffff',
+      description: '',
+      sortOrder: 0,
+      timerSegments: [],
+      manualDurationMs: 0,
+      createdAt,
+      updatedAt: createdAt,
+      deletedAt: null,
+    };
+    const remote: {
+      tasks: typeof task[];
+      checkIns: { id: string; taskId: string; date: string; createdAt: string }[];
+      dayRecords: unknown[];
+    } = {
+      tasks: [task],
+      checkIns: [{ id: 'c1', taskId: 't1', date: today, createdAt }],
+      dayRecords: [],
+    };
+    let stalePullGate = createDeferred();
+    let stalePullArmed = false;
+
+    const jsonResponse = (body: unknown) => ({
+      ok: true,
+      status: 200,
+      json: async () => body,
+    });
+
+    // @ts-expect-error controlled mock for the test
+    global.fetch = jest.fn(async (url: string, init?: { method?: string; body?: string }) => {
+      const method = init?.method ?? 'GET';
+      const urlString = String(url);
+
+      if (urlString.endsWith('/api/tasks') && method === 'GET') return jsonResponse(remote.tasks);
+      if (urlString.endsWith('/api/day-records') && method === 'GET') return jsonResponse(remote.dayRecords);
+
+      if (urlString.endsWith('/api/checkins') && method === 'GET') {
+        // Capture the generation before waiting. A response released later is
+        // deliberately stale and must not overwrite a newer pull.
+        const payload = stalePullArmed ? [...remote.checkIns] : remote.checkIns;
+        if (stalePullArmed) await stalePullGate.promise;
+        return jsonResponse(payload);
+      }
+
+      if (urlString.includes('/api/checkins/') && method === 'DELETE') {
+        const parts = urlString.split('/api/checkins/')[1].split('/');
+        const taskId = decodeURIComponent(parts[0]);
+        const date = decodeURIComponent(parts[1] ?? '');
+        remote.checkIns = remote.checkIns.filter((row) => !(row.taskId === taskId && row.date === date));
+        return jsonResponse({ ok: true, deleted: true });
+      }
+
+      return jsonResponse({});
+    });
+
+    const wrapper = ({ children }: { children?: React.ReactNode }) => (
+      <HabitStoreProvider>{children}</HabitStoreProvider>
+    );
+    const { result } = await renderHook(() => useHabitStore(), { wrapper });
+
+    await act(async () => {
+      await flush(20);
+    });
+    expect(result.current.checkIns).toHaveLength(1);
+
+    stalePullArmed = true;
+    await act(async () => {
+      void result.current.syncNow();
+      await flush(5);
+    });
+
+    await act(async () => {
+      result.current.toggleCheckIn('t1', today);
+      await flush(10);
+    });
+    expect(result.current.checkIns).toHaveLength(0);
+    expect(remote.checkIns).toHaveLength(0);
+
+    // Let DELETE's debounced pull arrive while the old sync is still queued.
+    await act(async () => {
+      await flush(360);
+    });
+
+    await act(async () => {
+      stalePullGate.release();
+      stalePullArmed = false;
+      await flush(500);
+    });
+
+    expect(result.current.syncState.status).toBe('ok');
+    expect(
+      result.current.checkIns.filter((row) => row.taskId === 't1' && row.date === today),
+    ).toHaveLength(0);
+    expect(remote.checkIns).toHaveLength(0);
+
+    // Prevent a rejected/native promise warning when this deferred goes out of scope.
+    stalePullGate = createDeferred();
+  });
 });
