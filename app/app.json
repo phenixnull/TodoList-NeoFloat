@@ -2,7 +2,7 @@
   "expo": {
     "name": "HabitPulse",
     "slug": "habitpulse",
-    "version": "1.7.0",
+    "version": "1.7.1",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "habitpulse",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "com.sagittarius.habitpulse",
-      "versionCode": 35,
+      "versionCode": 36,
       "permissions": [
         "android.permission.REQUEST_INSTALL_PACKAGES"
       ],
