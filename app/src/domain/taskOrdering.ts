@@ -15,6 +15,24 @@ export function matchesGroupFilter(task: Task, selectedGroups: string[]): boolea
   return selectedGroups.every((group) => task.customGroups?.includes(group));
 }
 
+export function getAvailableTaskGroups(
+  settingsGroups: readonly string[] = [],
+  tasks: readonly Task[] = [],
+): string[] {
+  const groups = new Set(settingsGroups);
+
+  // Drawers may have been created through a task on another device, so the
+  // editor must scan every active task, not just the task being edited.
+  for (const task of tasks) {
+    if (task.deletedAt) continue;
+    for (const group of task.customGroups ?? []) {
+      if (group) groups.add(group);
+    }
+  }
+
+  return [...groups];
+}
+
 function compareTasks(a: Task, b: Task): number {
   if (a.sortOrder !== b.sortOrder) {
     return a.sortOrder - b.sortOrder;

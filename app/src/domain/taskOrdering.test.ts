@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getTaskGroups, matchesGroupFilter, reorderTaskGroup } from './taskOrdering';
+import { getAvailableTaskGroups, getTaskGroups, matchesGroupFilter, reorderTaskGroup } from './taskOrdering';
 import { Task } from './types';
 
 function task(id: string, sortOrder: number): Task {
@@ -77,5 +77,18 @@ describe('task ordering', () => {
     expect(matchesGroupFilter(studyOnly, ['日常打卡', '学习打卡'])).toBe(false);
     expect(matchesGroupFilter(none, ['日常打卡', '学习打卡'])).toBe(false);
     expect(matchesGroupFilter(dailyOnly, [])).toBe(true);
+  });
+
+  it('collects drawer options from settings and every active task', () => {
+    const groups = getAvailableTaskGroups(
+      ['学习打卡'],
+      [
+        { ...task('daily', 0), customGroups: ['日常打卡'] },
+        { ...task('hidden', 1), customGroups: ['历史分组'], deletedAt: '2026-01-02T00:00:00.000Z' },
+        task('none', 2),
+      ],
+    );
+
+    expect(groups).toEqual(['学习打卡', '日常打卡']);
   });
 });

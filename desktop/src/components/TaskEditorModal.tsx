@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { isTimerRunning } from '../../../app/src/domain/timeTracking';
+import { getAvailableTaskGroups } from '../../../app/src/domain/taskOrdering';
 import type { Task } from '../../../app/src/domain/types';
 import { useStore } from '../data/store';
 
@@ -24,9 +25,13 @@ type Props = {
 
 export default function TaskEditorModal({ task, onClose }: Props) {
   const { createTask, updateTask, deleteTask, tasks } = useStore();
+  const storedGroups = useMemo(
+    () => JSON.parse(localStorage.getItem('habitpulse.desktop.customGroups') ?? '[]') as string[],
+    [task],
+  );
   const availableGroups = useMemo(
-    () => [...new Set([...(JSON.parse(localStorage.getItem('habitpulse.desktop.customGroups') ?? '[]') as string[]), ...tasks.flatMap((t) => t.customGroups ?? [])])],
-    [tasks],
+    () => getAvailableTaskGroups(storedGroups, tasks),
+    [storedGroups, tasks],
   );
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [name, setName] = useState('');

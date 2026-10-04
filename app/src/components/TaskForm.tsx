@@ -3,12 +3,13 @@ import { useRouter } from 'expo-router';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
-import { ReactNode, useState } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import GlassCard from './GlassCard';
 import PressableScale from './PressableScale';
 import GroupSelect from './GroupSelect';
+import { getAvailableTaskGroups } from '../domain/taskOrdering';
 import { taskColors, taskIcons } from '../domain/taskAppearance';
 import { Task } from '../domain/types';
 import { isTimerRunning } from '../domain/timeTracking';
@@ -46,7 +47,7 @@ export default function TaskForm({
   onSubmit,
 }: Props) {
   const router = useRouter();
-  const { settings, updateSettings } = useHabitStore();
+  const { settings, activeTasks, updateSettings } = useHabitStore();
   const theme = useTheme(settings.appearance);
   const [name, setName] = useState(initialTask?.name ?? '');
   const [description, setDescription] = useState(initialTask?.description ?? '');
@@ -58,10 +59,10 @@ export default function TaskForm({
   const [customGroups, setCustomGroups] = useState<string[]>(initialTask?.customGroups ?? []);
   const [error, setError] = useState('');
   const [processingImage, setProcessingImage] = useState(false);
-  const assignableGroups = Array.from(new Set([
-    ...(settings.customGroups ?? []),
-    ...(initialTask?.customGroups ?? []),
-  ]));
+  const assignableGroups = useMemo(
+    () => getAvailableTaskGroups(settings.customGroups ?? [], activeTasks),
+    [settings.customGroups, activeTasks],
+  );
 
   const createFormGroup = (rawName: string) => {
     const name = rawName.trim();
