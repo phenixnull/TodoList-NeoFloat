@@ -141,9 +141,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const refreshSeqRef = useRef(0);
+
   const refresh = useCallback(async () => {
+    // Monotonic guard: refreshes are triggered concurrently by SSE messages,
+    // the 30s poll, the URL-change effect and runWithBusy. Without ordering, a
+    // fetch that started earlier but resolves later would overwrite fresher
+    // state (the reported "status flips back" bug). Only the most recently
+    // started refresh is allowed to commit; its server snapshot is the newest.
+    const seq = ++refreshSeqRef.current;
     try {
       const remote = await fetchServerData(serverUrlRef.current);
+      if (seq !== refreshSeqRef.current) return;
       const next = {
         tasks: remote.tasks,
         checkIns: remote.checkIns,
@@ -154,7 +163,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setOnline(true);
       setLastSyncedAt(new Date());
     } catch {
-      setOnline(false);
+      if (seq === refreshSeqRef.current) setOnline(false);
     } finally {
       setLoading(false);
     }
@@ -224,25 +233,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     [refresh],
   );
-
   const toggleCheckIn = useCallback(
     (taskId: string, date: string) =>
       runWithBusy(async () => {
         const exists = data.checkIns.some((c) => c.taskId === taskId && c.date === date);
         checkInHistoryRef.current.push({ taskId, date, wasChecked: exists });
         if (checkInHistoryRef.current.length > 8) checkInHistoryRef.current.shift();
-        if (exists) {
-          await jsonFetch(`/api/checkins/${encodeURIComponent(taskId)}/${date}`, {
-            method: 'DELETE',
-          });
-        } else {
-          await jsonFetch('/api/checkins/toggle', {
-            method: 'POST',
-            body: { taskId, date },
-          });
+
+        // Optimistic update: immediately toggle locally
+        const nextCheckIns = exists
+          ? data.checkIns.filter((c) => !(c.taskId === taskId && c.date === date))
+          : [...data.checkIns, { id: `${taskId}:${date}`, taskId, date, createdAt: new Date().toISOString() }];
+        setData({ ...data, checkIns: nextCheckIns });
+
+        try {
+          if (exists) {
+            await jsonFetch(`/api/checkins/${encodeURIComponent(taskId)}/${date}`, {
+              method: 'DELETE',
+            });
+          } else {
+            await jsonFetch('/api/checkins/toggle', {
+              method: 'POST',
+              body: { taskId, date },
+            });
+          }
+        } catch {
+          // Rollback on failure
+          setData(data);
         }
       }),
-    [data.checkIns, jsonFetch, runWithBusy],
+    [data, jsonFetch],
   );
 
   const undoCheckIn = useCallback(
