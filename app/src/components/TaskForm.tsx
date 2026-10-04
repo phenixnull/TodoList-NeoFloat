@@ -8,6 +8,7 @@ import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-nati
 import * as Haptics from 'expo-haptics';
 import GlassCard from './GlassCard';
 import PressableScale from './PressableScale';
+import GroupSelect from './GroupSelect';
 import { taskColors, taskIcons } from '../domain/taskAppearance';
 import { Task } from '../domain/types';
 import { isTimerRunning } from '../domain/timeTracking';
@@ -55,7 +56,6 @@ export default function TaskForm({
     initialTask?.iconImage ?? defaultIconImage ?? null,
   );
   const [customGroups, setCustomGroups] = useState<string[]>(initialTask?.customGroups ?? []);
-  const [newGroupName, setNewGroupName] = useState('');
   const [error, setError] = useState('');
   const [processingImage, setProcessingImage] = useState(false);
   const assignableGroups = Array.from(new Set([
@@ -63,23 +63,14 @@ export default function TaskForm({
     ...(initialTask?.customGroups ?? []),
   ]));
 
-  const addFormGroup = () => {
-    const name = newGroupName.trim();
+  const createFormGroup = (rawName: string) => {
+    const name = rawName.trim();
     if (!name) return;
     const currentGroups = settings.customGroups ?? [];
-    const nextSettingsGroups = currentGroups.includes(name)
-      ? currentGroups
-      : [...currentGroups, name];
-    const selectedGroups = settings.selectedGroups ?? [];
-    updateSettings({
-      customGroups: nextSettingsGroups,
-      selectedGroups: selectedGroups.includes(name)
-        ? selectedGroups
-        : [...selectedGroups, name],
-      selectedGroup: name,
-    });
+    if (!currentGroups.includes(name)) {
+      updateSettings({ customGroups: [...currentGroups, name] });
+    }
     setCustomGroups((prev) => prev.includes(name) ? prev : [...prev, name]);
-    setNewGroupName('');
   };
   const save = () => {
     if (!name.trim()) {
@@ -189,52 +180,14 @@ export default function TaskForm({
           </Text>
         ) : null}
 
-        <>
-          <Text style={[styles.label, { color: theme.mutedText }]}>分组</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.groupDrawer}
-            contentContainerStyle={styles.groupDrawerContent}
-          >
-              <PressableScale
-                style={[styles.groupChip, !customGroups.length && styles.groupChipActive, { borderColor: theme.surfaceBorder }]}
-                onPress={() => setCustomGroups([])}
-              >
-                <Text style={[styles.groupChipText, !customGroups.length && { color: theme.accentText }]}>未分组</Text>
-              </PressableScale>
-            {assignableGroups.map((g) => (
-                <PressableScale
-                  key={g}
-                  style={[styles.groupChip, customGroups.includes(g) && styles.groupChipActive, { borderColor: theme.surfaceBorder }]}
-                  onPress={() => setCustomGroups((prev) => prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g])}
-                >
-                  <Text style={[styles.groupChipText, customGroups.includes(g) && { color: theme.accentText }]}>{g}</Text>
-                </PressableScale>
-              ))}
-          </ScrollView>
-          <View style={styles.groupAddRow}>
-            <TextInput
-              value={newGroupName}
-              onChangeText={setNewGroupName}
-              onSubmitEditing={addFormGroup}
-              onBlur={addFormGroup}
-              placeholder="新增分组"
-              placeholderTextColor={theme.mutedText}
-              style={[styles.groupInput, {
-                borderColor: theme.surfaceBorder,
-                backgroundColor: theme.inputBackground,
-                color: theme.text,
-              }]}
-            />
-            <PressableScale
-              style={[styles.groupAddButton, { backgroundColor: theme.accent }]}
-              onPress={addFormGroup}
-            >
-              <MaterialCommunityIcons name="plus" size={20} color={theme.onAccent} />
-            </PressableScale>
-          </View>
-        </>
+        <GroupSelect
+          label="分组"
+          groups={assignableGroups}
+          selected={customGroups}
+          allLabel="未分组"
+          onChange={setCustomGroups}
+          onCreateGroup={createFormGroup}
+        />
 
         <Text style={[styles.label, { color: theme.mutedText }]}>图标</Text>
         <View style={styles.customIconRow}>
@@ -364,58 +317,6 @@ const styles = StyleSheet.create({
     marginTop: 7,
     color: '#94a3b8',
     fontSize: 12,
-  },
-  groupRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  groupDrawer: {
-    flexGrow: 0,
-  },
-  groupDrawerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 3,
-  },
-  groupChip: {
-    minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 18,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-  },
-  groupChipActive: {
-    backgroundColor: 'rgba(34,211,238,0.12)',
-    borderColor: 'rgba(34,211,238,0.4)',
-  },
-  groupChipText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: 'rgba(148,163,184,0.7)',
-  },
-  groupAddRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-  },
-  groupInput: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    fontSize: 15,
-  },
-  groupAddButton: {
-    width: 42,
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 16,
   },
   customIconRow: {
     flexDirection: 'row',

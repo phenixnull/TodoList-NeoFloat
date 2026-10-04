@@ -1,12 +1,12 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Link, Stack } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { Alert, FlatList, Platform, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
-import { Alert } from 'react-native';
 import { NestableDraggableFlatList } from 'react-native-draggable-flatlist';
 import DailyOverviewCard from '@/components/DailyOverviewCard';
 import GlassCard from '@/components/GlassCard';
+import GroupSelect from '@/components/GroupSelect';
 import PressableScale from '@/components/PressableScale';
 import ScreenShell from '@/components/ScreenShell';
 import TaskRow from '@/components/TaskRow';
@@ -25,8 +25,6 @@ export default function HomeScreen() {
   const [dragListKey, setDragListKey] = useState(0);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
   const [sortDesc, setSortDesc] = useState(true);
-  const [groupEditorVisible, setGroupEditorVisible] = useState(false);
-  const [newGroupName, setNewGroupName] = useState('');
   const {
     activeTasks,
     checkIns,
@@ -41,7 +39,6 @@ export default function HomeScreen() {
   } = useHabitStore();
   const { settings } = useHabitStore();
   const theme = useTheme(settings.appearance);
-  const { width: winWidth } = useWindowDimensions();
   const [groupFilter, setGroupFilter] = useState<string[] | null>(() => {
     const persisted = settings.selectedGroups ?? (settings.selectedGroup ? [settings.selectedGroup] : null);
     return persisted?.length ? persisted : null;
@@ -156,24 +153,34 @@ export default function HomeScreen() {
     reorderTasks(recencyIds(taskGroups.finished, next), 'finished');
   }, [sortDesc, recencyIds, taskGroups, reorderTasks]);
 
-  const addGroup = useCallback(() => {
-    setNewGroupName('');
-    setGroupEditorVisible(true);
-  }, []);
+  const changeGroupFilter = useCallback((next: string[]) => {
+    setGroupFilter(next.length ? next : null);
+    updateSettings({
+      selectedGroups: next,
+      selectedGroup: next.length === 1 ? next[0] : null,
+    });
+  }, [updateSettings]);
 
-  const submitNewGroup = useCallback(() => {
-    const name = newGroupName.trim();
-    if (!name) {
-      setGroupEditorVisible(false);
+  const createGroup = useCallback((rawName: string) => {
+    const name = rawName.trim();
+    if (!name) return;
+    if (customGroups.includes(name)) {
+      changeGroupFilter([...(groupFilter ?? []), name]);
       return;
     }
-    if (!customGroups.includes(name)) {
-      updateSettings({ customGroups: [...customGroups, name] });
-    }
-    setGroupEditorVisible(false);
-    setNewGroupName('');
+    updateSettings({ customGroups: [...customGroups, name] });
     selectGroup(name);
-  }, [customGroups, newGroupName, selectGroup, updateSettings]);
+  }, [changeGroupFilter, customGroups, groupFilter, selectGroup, updateSettings]);
+
+  const deleteGroup = useCallback((group: string) => {
+    Alert.alert('删除分组', `确定删除"${group}"？任务不会删除。`, [
+      { text: '取消', style: 'cancel' },
+      { text: '删除', style: 'destructive', onPress: () => {
+        updateSettings({ customGroups: customGroups.filter((g) => g !== group) });
+        if (groupFilter?.includes(group)) changeGroupFilter(groupFilter.filter((g) => g !== group));
+      }},
+    ]);
+  }, [changeGroupFilter, customGroups, groupFilter, updateSettings]);
 
   const moveToGroup = useCallback((taskId: string, groups: string[]) => {
     updateTask(taskId, { customGroups: groups });
@@ -341,43 +348,15 @@ export default function HomeScreen() {
         </GlassCard>
       ) : (
         <>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.groupDrawer}
-            contentContainerStyle={[styles.groupDrawerContent, { minWidth: winWidth }]}
-          >
-            <PressableScale
-              style={[styles.groupTab, !groupFilter && styles.groupTabActive, { borderColor: theme.surfaceBorder }]}
-              onPress={() => selectGroup(null)}
-            >
-              <Text style={[styles.groupTabText, !groupFilter && { color: theme.accentText }]}>全部</Text>
-            </PressableScale>
-            {availableGroups.map((group) => (
-              <PressableScale
-                key={group}
-                style={[styles.groupTab, groupFilter?.includes(group) && styles.groupTabActive, { borderColor: theme.surfaceBorder }]}
-                onPress={() => selectGroup(group)}
-                onLongPress={() => {
-                  Alert.alert('删除分组', `确定删除"${group}"？任务不会删除。`, [
-                    { text: '取消', style: 'cancel' },
-                    { text: '删除', style: 'destructive', onPress: () => {
-                      updateSettings({ customGroups: customGroups.filter((g) => g !== group) });
-                      if (groupFilter?.includes(group)) selectGroup(null);
-                    }},
-                  ]);
-                }}
-              >
-                <Text style={[styles.groupTabText, groupFilter?.includes(group) && { color: theme.accentText }]}>{group}</Text>
-              </PressableScale>
-            ))}
-            <PressableScale
-              style={[styles.groupTab, styles.groupTabAdd, { borderColor: theme.surfaceBorder }]}
-              onPress={addGroup}
-            >
-              <MaterialCommunityIcons name="plus" size={20} color={theme.mutedText} />
-            </PressableScale>
-          </ScrollView>
+          <GroupSelect
+            label="分组"
+            groups={availableGroups}
+            selected={groupFilter ?? []}
+            allLabel="全部"
+            onChange={changeGroupFilter}
+            onCreateGroup={createGroup}
+            onGroupLongPress={deleteGroup}
+          />
 
           <View style={styles.controlRow}>
             <PressableScale
@@ -495,45 +474,6 @@ export default function HomeScreen() {
         </>
       )}
 
-      <Modal
-        visible={groupEditorVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setGroupEditorVisible(false)}
-      >
-        <Pressable style={styles.groupModalBackdrop} onPress={() => setGroupEditorVisible(false)}>
-          <Pressable style={[styles.groupModalCard, { backgroundColor: theme.surface, borderColor: theme.surfaceBorder }]}>
-            <Text style={[styles.groupModalTitle, { color: theme.text }]}>新建分组</Text>
-            <TextInput
-              autoFocus
-              value={newGroupName}
-              onChangeText={setNewGroupName}
-              onSubmitEditing={submitNewGroup}
-              placeholder="输入分组名称"
-              placeholderTextColor={theme.mutedText}
-              style={[styles.groupModalInput, {
-                borderColor: theme.inputBorder,
-                backgroundColor: theme.inputBackground,
-                color: theme.text,
-              }]}
-            />
-            <View style={styles.groupModalActions}>
-              <Pressable
-                style={[styles.groupModalButton, { borderColor: theme.surfaceBorder }]}
-                onPress={() => setGroupEditorVisible(false)}
-              >
-                <Text style={[styles.groupModalButtonText, { color: theme.mutedText }]}>取消</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.groupModalButton, styles.groupModalButtonPrimary, { backgroundColor: theme.accent }]}
-                onPress={submitNewGroup}
-              >
-                <Text style={[styles.groupModalButtonText, { color: theme.onAccent }]}>保存</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </ScreenShell>
   );
 }
@@ -594,48 +534,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
   },
-  filterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 4,
-  },
-  groupDrawer: {
-    flexGrow: 0,
-    marginHorizontal: -20,
-    marginTop: 4,
-  },
-  groupDrawerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 4,
-  },
-  groupTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 42,
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingHorizontal: 18,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    flexShrink: 0,
-  },
-  groupTabActive: {
-    backgroundColor: 'rgba(34,211,238,0.14)',
-    borderColor: 'rgba(34,211,238,0.45)',
-  },
-  groupTabAdd: {
-    minWidth: 42,
-    paddingHorizontal: 10,
-  },
-  groupTabText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: 'rgba(148,163,184,0.78)',
-  },
   controlRow: {
     flexDirection: 'row',
     gap: 10,
@@ -657,55 +555,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: 'rgba(148,163,184,0.82)',
   },
-  groupModalBackdrop: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(2,6,23,0.68)',
-    paddingHorizontal: 24,
-  },
-  groupModalCard: {
-    width: '100%',
-    maxWidth: 420,
-    borderRadius: 22,
-    borderWidth: 1,
-    padding: 20,
-  },
-  groupModalTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    marginBottom: 14,
-  },
-  groupModalInput: {
-    minHeight: 50,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
-  },
-  groupModalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
-    marginTop: 16,
-  },
-  groupModalButton: {
-    minWidth: 86,
-    minHeight: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-  },
-  groupModalButtonPrimary: {
-    borderColor: 'transparent',
-  },
-  groupModalButtonText: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -719,41 +568,6 @@ const styles = StyleSheet.create({
   filterChipActive: {
     backgroundColor: 'rgba(34,211,238,0.12)',
     borderColor: 'rgba(34,211,238,0.4)',
-  },
-  filterChipAdd: {
-    paddingHorizontal: 8,
-  },
-  filterChipText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: 'rgba(148,163,184,0.7)',
-  },
-  filterChipSm: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  filterChipTextSm: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: 'rgba(148,163,184,0.6)',
-  },
-  // Landscape: two big square-ish buttons split evenly, half width each.
-  filterRowLandscape: {
-    flexWrap: 'nowrap',
-    gap: 12,
-  },
-  filterBtnLandscape: {
-    flex: 1,
-    minHeight: 56,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  filterBtnLandscapeText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: 'rgba(148,163,184,0.85)',
   },
   groupTitle: {
     color: 'rgba(148,163,184,0.85)',
