@@ -63,6 +63,7 @@ export type HabitSettings = {
   appearance?: 'light' | 'dark' | 'system';
   customGroups?: string[];
   selectedGroup?: string | null;
+  selectedGroups?: string[];
 };
 
 export type AppData = {

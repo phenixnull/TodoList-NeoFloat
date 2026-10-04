@@ -45,7 +45,7 @@ export default function TaskForm({
   onSubmit,
 }: Props) {
   const router = useRouter();
-  const { settings } = useHabitStore();
+  const { settings, updateSettings } = useHabitStore();
   const theme = useTheme(settings.appearance);
   const [name, setName] = useState(initialTask?.name ?? '');
   const [description, setDescription] = useState(initialTask?.description ?? '');
@@ -55,8 +55,32 @@ export default function TaskForm({
     initialTask?.iconImage ?? defaultIconImage ?? null,
   );
   const [customGroups, setCustomGroups] = useState<string[]>(initialTask?.customGroups ?? []);
+  const [newGroupName, setNewGroupName] = useState('');
   const [error, setError] = useState('');
   const [processingImage, setProcessingImage] = useState(false);
+  const assignableGroups = Array.from(new Set([
+    ...(settings.customGroups ?? []),
+    ...(initialTask?.customGroups ?? []),
+  ]));
+
+  const addFormGroup = () => {
+    const name = newGroupName.trim();
+    if (!name) return;
+    const currentGroups = settings.customGroups ?? [];
+    const nextSettingsGroups = currentGroups.includes(name)
+      ? currentGroups
+      : [...currentGroups, name];
+    const selectedGroups = settings.selectedGroups ?? [];
+    updateSettings({
+      customGroups: nextSettingsGroups,
+      selectedGroups: selectedGroups.includes(name)
+        ? selectedGroups
+        : [...selectedGroups, name],
+      selectedGroup: name,
+    });
+    setCustomGroups((prev) => prev.includes(name) ? prev : [...prev, name]);
+    setNewGroupName('');
+  };
   const save = () => {
     if (!name.trim()) {
       setError('请输入任务名称');
@@ -165,17 +189,21 @@ export default function TaskForm({
           </Text>
         ) : null}
 
-        {(settings.customGroups?.length ?? 0) > 0 && (
-          <>
-            <Text style={[styles.label, { color: theme.mutedText }]}>分组</Text>
-            <View style={styles.groupRow}>
+        <>
+          <Text style={[styles.label, { color: theme.mutedText }]}>分组</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.groupDrawer}
+            contentContainerStyle={styles.groupDrawerContent}
+          >
               <PressableScale
                 style={[styles.groupChip, !customGroups.length && styles.groupChipActive, { borderColor: theme.surfaceBorder }]}
                 onPress={() => setCustomGroups([])}
               >
                 <Text style={[styles.groupChipText, !customGroups.length && { color: theme.accentText }]}>未分组</Text>
               </PressableScale>
-              {(settings.customGroups ?? []).map((g) => (
+            {assignableGroups.map((g) => (
                 <PressableScale
                   key={g}
                   style={[styles.groupChip, customGroups.includes(g) && styles.groupChipActive, { borderColor: theme.surfaceBorder }]}
@@ -184,9 +212,29 @@ export default function TaskForm({
                   <Text style={[styles.groupChipText, customGroups.includes(g) && { color: theme.accentText }]}>{g}</Text>
                 </PressableScale>
               ))}
-            </View>
-          </>
-        )}
+          </ScrollView>
+          <View style={styles.groupAddRow}>
+            <TextInput
+              value={newGroupName}
+              onChangeText={setNewGroupName}
+              onSubmitEditing={addFormGroup}
+              onBlur={addFormGroup}
+              placeholder="新增分组"
+              placeholderTextColor={theme.mutedText}
+              style={[styles.groupInput, {
+                borderColor: theme.surfaceBorder,
+                backgroundColor: theme.inputBackground,
+                color: theme.text,
+              }]}
+            />
+            <PressableScale
+              style={[styles.groupAddButton, { backgroundColor: theme.accent }]}
+              onPress={addFormGroup}
+            >
+              <MaterialCommunityIcons name="plus" size={20} color={theme.onAccent} />
+            </PressableScale>
+          </View>
+        </>
 
         <Text style={[styles.label, { color: theme.mutedText }]}>图标</Text>
         <View style={styles.customIconRow}>
@@ -322,20 +370,52 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
   },
+  groupDrawer: {
+    flexGrow: 0,
+  },
+  groupDrawerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 3,
+  },
   groupChip: {
-    borderRadius: 14,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
   },
   groupChipActive: {
     backgroundColor: 'rgba(34,211,238,0.12)',
     borderColor: 'rgba(34,211,238,0.4)',
   },
   groupChipText: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: 'rgba(148,163,184,0.7)',
+  },
+  groupAddRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  groupInput: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    fontSize: 15,
+  },
+  groupAddButton: {
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
   },
   customIconRow: {
     flexDirection: 'row',

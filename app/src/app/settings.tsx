@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Platform, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { AppState, Platform, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { ThemeMode, useTheme } from '../theme/theme';
 import GlassCard from '@/components/GlassCard';
 import PressableScale from '@/components/PressableScale';
@@ -94,6 +94,22 @@ export default function SettingsScreen() {
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Android may keep this JS screen behind the system install-permission page.
+  // When the user returns, the download is already complete: restore the
+  // actionable state instead of leaving the button stuck at 100%.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const subscription = AppState.addEventListener('change', (status) => {
+      if (status !== 'active') return;
+      setUpdateState((prev) => (
+        prev.phase === 'downloading'
+          ? { phase: 'available', manifest: prev.manifest }
+          : prev
+      ));
+    });
+    return () => subscription.remove();
   }, []);
 
   const updateStatusText = (() => {
