@@ -332,20 +332,25 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        <FilterChip
-          small
-          active={statusFilter !== 'all'}
+      <div className="flex items-stretch gap-2.5">
+        <button
+          type="button"
           onClick={() => setStatusFilter((prev) => (prev === 'all' ? 'active' : prev === 'active' ? 'done' : 'all'))}
+          className={`inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl border text-sm font-extrabold transition-all ${
+            statusFilter !== 'all'
+              ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300'
+              : 'border-white/10 bg-white/[0.03] text-slate-400 hover:text-slate-200'
+          }`}
         >
           {statusFilter === 'all' ? '全部' : statusFilter === 'active' ? '进行中' : '已完成'}
-        </FilterChip>
+        </button>
         <button
+          type="button"
           onClick={onSortPress}
-          className="ml-1 flex h-7 items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2.5 text-[11px] font-bold text-slate-400 transition-all hover:text-slate-200"
           title={sortDesc ? '按打卡时间倒序' : '按打卡时间正序'}
+          className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] text-sm font-extrabold text-slate-400 transition-all hover:text-slate-200"
         >
-          <ArrowUpDown size={11} />
+          <ArrowUpDown size={16} />
           {sortDesc ? '最新在上' : '最早在上'}
         </button>
       </div>
@@ -471,28 +476,6 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         </>
       )}
     </div>
-  );
-}
-
-function FilterChip({ active, small, onClick, children }: {
-  active: boolean;
-  small?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-full border transition-all ${
-        small ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1.5 text-xs'
-      } font-bold ${
-        active
-          ? 'border-cyan-400/40 bg-cyan-400/10 text-cyan-300'
-          : 'border-white/10 bg-white/[0.03] text-slate-400 hover:text-slate-200'
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 
