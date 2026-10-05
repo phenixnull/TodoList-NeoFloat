@@ -1,7 +1,11 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Trash2, X } from 'lucide-react';
+import { ImagePlus, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { isTimerRunning } from '../../../app/src/domain/timeTracking';
+import {
+  calculateTaskDurationMs,
+  isTimerRunning,
+  setTaskTotalDuration,
+} from '../../../app/src/domain/timeTracking';
 import { getAvailableTaskGroups } from '../../../app/src/domain/taskOrdering';
 import type { Task } from '../../../app/src/domain/types';
 import { useStore } from '../data/store';
@@ -38,6 +42,8 @@ export default function TaskEditorModal({ task, onClose }: Props) {
   const [description, setDescription] = useState('');
   const [color, setColor] = useState(PRESET_COLORS[0]);
   const [icon, setIcon] = useState('flag-variant-outline');
+  const [iconImage, setIconImage] = useState<string | null>(null);
+  const [targetMinutes, setTargetMinutes] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -45,6 +51,8 @@ export default function TaskEditorModal({ task, onClose }: Props) {
     setDescription(task?.description ?? '');
     setColor(task?.color ?? PRESET_COLORS[0]);
     setIcon(task?.icon ?? 'flag-variant-outline');
+    setIconImage(task?.iconImage ?? null);
+    setTargetMinutes(task ? String(Math.round(calculateTaskDurationMs(task, Date.now()) / 60_000)) : '');
     setSelectedGroups(task?.customGroups ?? []);
     setError('');
   }, [task?.id]);
@@ -56,15 +64,24 @@ export default function TaskEditorModal({ task, onClose }: Props) {
     }
 
     if (task) {
+      const targetMs = Number.parseFloat(targetMinutes);
+      const calibrated = Number.isFinite(targetMs)
+        ? setTaskTotalDuration(task, Math.max(0, Math.round(targetMs * 60_000)), new Date())
+        : task;
+
       await updateTask(task.id, {
         name: name.trim(),
         description,
         color,
         icon,
+        iconImage,
         customGroups: selectedGroups,
+        timerSegments: calibrated.timerSegments,
+        removedSegmentIds: calibrated.removedSegmentIds ?? [],
+        manualDurationMs: calibrated.manualDurationMs,
       });
     } else {
-      await createTask({ name, description, color, icon, manualDurationMs: 0, customGroups: selectedGroups });
+      await createTask({ name, description, color, icon, iconImage, manualDurationMs: 0, customGroups: selectedGroups });
     }
 
     onClose();
@@ -74,6 +91,43 @@ export default function TaskEditorModal({ task, onClose }: Props) {
     if (!task) return;
     await deleteTask(task.id);
     onClose();
+  };
+
+  const pickIconImage = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError('请选择图片文件');
+      return;
+    }
+
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('读取图片失败'));
+        reader.readAsDataURL(file);
+      });
+
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const element = new Image();
+        element.onload = () => resolve(element);
+        element.onerror = () => reject(new Error('图片解析失败'));
+        element.src = dataUrl;
+      });
+
+      const max = 512;
+      const scale = Math.min(1, max / Math.max(image.width || max, image.height || max));
+      const width = Math.max(1, Math.round((image.width || max) * scale));
+      const height = Math.max(1, Math.round((image.height || max) * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d')?.drawImage(image, 0, 0, width, height);
+      setIconImage(canvas.toDataURL('image/webp', 0.9));
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '图片处理失败');
+    }
   };
 
   return (
@@ -135,6 +189,37 @@ export default function TaskEditorModal({ task, onClose }: Props) {
               </div>
 
               <div>
+                <label className="label">任务图标</label>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+                    {iconImage ? (
+                      <img src={iconImage} alt="任务图标" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-lg font-black text-slate-300">{name.trim().slice(0, 1) || '任务'}</span>
+                    )}
+                  </div>
+                  <label className="btn-ghost cursor-pointer px-3 py-1.5 text-xs">
+                    <ImagePlus size={14} />
+                    上传图标
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => {
+                        void pickIconImage(event.target.files?.[0]);
+                        event.target.value = '';
+                      }}
+                    />
+                  </label>
+                  {iconImage && (
+                    <button className="btn-ghost px-3 py-1.5 text-xs" onClick={() => setIconImage(null)}>
+                      移除
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div>
                 <label className="label">描述（可选）</label>
                 <textarea
                   className="input min-h-[72px] resize-none"
@@ -162,6 +247,22 @@ export default function TaskEditorModal({ task, onClose }: Props) {
                       </button>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {task && (
+                <div>
+                  <label className="label">总时长校准（分钟）</label>
+                  <input
+                    className="input"
+                    inputMode="decimal"
+                    value={targetMinutes}
+                    onChange={(event) => setTargetMinutes(event.target.value)}
+                    placeholder="例如：90"
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    保存后会自动调整额外校准值，使任务总耗时等于这个分钟数。
+                  </p>
                 </div>
               )}
 

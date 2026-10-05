@@ -28,6 +28,7 @@ type PersistedSettings = {
 export type NewTaskInput = {
   name: string;
   icon?: string;
+  iconImage?: string | null;
   color?: string;
   description?: string;
   customGroups?: string[];
@@ -335,7 +336,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           id: genId(),
           name: input.name.trim(),
           icon: input.icon ?? 'flag-variant-outline',
-          iconImage: null,
+          iconImage: input.iconImage ?? null,
           color: input.color ?? '#22d3ee',
           description: input.description ?? '',
           sortOrder,

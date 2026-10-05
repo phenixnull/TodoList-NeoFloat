@@ -1,4 +1,4 @@
-import { Check, Play, Square } from 'lucide-react';
+import { CalendarDays, Check, Pencil, Play, Square } from 'lucide-react';
 import {
   calculateTimeSegmentsDurationForDate,
   formatDuration,
@@ -131,6 +131,16 @@ export default function TaskCard({
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
+        {!compact && (
+          <button
+            title="打开打卡记录 / 上传图片"
+            onClick={onOpenDetail}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-300 transition-all hover:bg-white/10 hover:text-cyan-300"
+          >
+            <CalendarDays size={15} />
+          </button>
+        )}
+
         <button
           title={running ? '停止计时' : '开始计时'}
           disabled={busy}
@@ -143,6 +153,16 @@ export default function TaskCard({
         >
           {running ? <Square size={14} fill="currentColor" /> : <Play size={14} />}
         </button>
+
+        {!compact && (
+          <button
+            title="编辑任务"
+            onClick={onEdit}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-300 transition-all hover:bg-white/10 hover:text-cyan-300"
+          >
+            <Pencil size={15} />
+          </button>
+        )}
 
         <button
           title={checked ? '取消打卡' : '完成打卡'}
