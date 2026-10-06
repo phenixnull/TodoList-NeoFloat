@@ -68,7 +68,11 @@ export default function HomeScreen() {
     () => new Set(todayCheckIns.filter((checkIn) => checkIn.status !== 'failed').map((checkIn) => checkIn.taskId)),
     [todayCheckIns],
   );
-  const completedIds = successIds;
+  const resolvedIds = useMemo(
+    () => new Set(todayCheckIns.map((checkIn) => checkIn.taskId)),
+    [todayCheckIns],
+  );
+  const completedIds = resolvedIds;
   const todayCheckInsByTask = useMemo(
     () => new Map(todayCheckIns.map((checkIn) => [checkIn.taskId, checkIn])),
     [todayCheckIns],
@@ -130,6 +134,15 @@ export default function HomeScreen() {
       progress: totalCount === 0 ? 0 : Math.min(completedCount / totalCount, 1),
     };
   }, [groupFilteredTasks, successIds]);
+  const overviewResolvedStats = useMemo(() => {
+    const completedCount = groupFilteredTasks.filter((task) => resolvedIds.has(task.id)).length;
+    const totalCount = groupFilteredTasks.length;
+
+    return {
+      completedCount: Math.min(completedCount, totalCount),
+      totalCount,
+    };
+  }, [groupFilteredTasks, resolvedIds]);
 
   useEffect(() => {
     if (loading) return;
@@ -262,6 +275,7 @@ export default function HomeScreen() {
       isActive={isActive}
       dragInProgress={isDragging}
       checkedInToday={completedIds.has(item.id)}
+      resolvedInToday={resolvedIds.has(item.id)}
       checkedInAt={todayCheckInsByTask.get(item.id)?.createdAt}
       checkInStatus={todayCheckInsByTask.get(item.id)?.status ?? 'success'}
       stats={statsByTaskId.get(item.id)}
@@ -490,6 +504,7 @@ export default function HomeScreen() {
                       task={item}
                       today={today}
                       checkedInToday={completedIds.has(item.id)}
+                      resolvedInToday={resolvedIds.has(item.id)}
                       checkedInAt={todayCheckInsByTask.get(item.id)?.createdAt}
                       checkInStatus={todayCheckInsByTask.get(item.id)?.status ?? 'success'}
                       stats={statsByTaskId.get(item.id)}

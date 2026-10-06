@@ -36,6 +36,7 @@ type Props = {
   task: Task;
   today: string;
   checkedInToday: boolean;
+  resolvedInToday?: boolean;
   checkedInAt?: string | null;
   checkInStatus?: CheckInStatus;
   stats?: HabitStats;
@@ -85,6 +86,7 @@ function TaskRow({
   task,
   today,
   checkedInToday,
+  resolvedInToday,
   checkedInAt,
   checkInStatus = 'success',
   stats,
@@ -105,6 +107,7 @@ function TaskRow({
   const running = isTimerRunning(task);
   const checkedInTime = formatCheckInTime(checkedInAt);
   const failed = checkInStatus === 'failed';
+  const resolved = resolvedInToday ?? checkedInToday;
   const [actionMenuVisible, setActionMenuVisible] = useState(false);
   const pulseColors = useMemo(() => getPulseColors(task.color), [task.color]);
   const theme = resolveTheme(isLight ? 'light' : 'dark', null);
@@ -120,13 +123,13 @@ function TaskRow({
     lastPulseFrameAt.value = nowMs;
     const phase = (nowMs % 2600) / 2600;
     aura.value = 0.5 - 0.5 * Math.cos(phase * Math.PI * 2);
-  }, !checkedInToday && !isActive && !dragInProgress);
+  }, !resolved && !isActive && !dragInProgress);
 
   const pulseStyle = useAnimatedStyle(() => ({
-    opacity: checkedInToday || isActive || dragInProgress
+    opacity: resolved || isActive || dragInProgress
       ? 0
       : 0.20 + Math.abs(aura.value * 2 - 1) * 0.28,
-  }), [aura, checkedInToday, isActive, dragInProgress]);
+  }), [aura, resolved, isActive, dragInProgress]);
 
   const toggle = () => {
     const checkedIn = onToggle(task.id);
@@ -208,8 +211,8 @@ function TaskRow({
       style={[
         styles.iconBox,
         {
-          borderColor: checkedInToday ? theme.surfaceBorder : `${task.color}55`,
-          backgroundColor: checkedInToday
+          borderColor: resolved ? theme.surfaceBorder : `${task.color}55`,
+          backgroundColor: resolved
             ? theme.inputBackground
             : theme.isLight ? 'rgba(255,255,255,0.72)' : 'rgba(2,6,23,0.38)',
         },
@@ -218,7 +221,7 @@ function TaskRow({
     >
       <TaskIcon
         task={task}
-        color={checkedInToday ? theme.subtleText : task.color}
+        color={failed ? '#fca5a5' : resolved ? theme.subtleText : task.color}
         size={28}
       />
     </View>
@@ -232,12 +235,12 @@ function TaskRow({
           {
             borderColor: failed
               ? 'rgba(239,68,68,0.48)'
-              : checkedInToday
+              : resolved
               ? theme.surfaceBorder
               : theme.isLight ? 'rgba(15,23,42,0.10)' : 'rgba(103,232,249,0.34)',
             backgroundColor: failed
               ? '#010208'
-              : checkedInToday
+              : resolved
               ? theme.surface
               : theme.isLight ? 'rgba(255,255,255,0.74)' : 'rgba(15,23,42,0.58)',
           },
@@ -251,7 +254,7 @@ function TaskRow({
               StyleSheet.absoluteFill,
               failed
                 ? { backgroundColor: '#010208' }
-                : checkedInToday
+                : resolved
                 ? { backgroundColor: theme.surface }
                 : { backgroundColor: theme.isLight ? 'rgba(255,255,255,0.88)' : 'rgba(9,14,31,0.88)' },
             ]}
@@ -260,7 +263,7 @@ function TaskRow({
           <LinearGradient
             colors={failed
               ? ['rgba(127,29,29,0.22)', 'rgba(2,6,23,0.96)']
-              : checkedInToday
+              : resolved
               ? (theme.isLight
                 ? ['rgba(15,23,42,0.05)', 'rgba(255,255,255,0.55)']
                 : ['rgba(148,163,184,0.14)', 'rgba(71,85,105,0.08)'])
@@ -268,7 +271,7 @@ function TaskRow({
             style={StyleSheet.absoluteFill}
           />
         )}
-        {!failed && !checkedInToday && !dragInProgress && (
+        {!failed && !resolved && !dragInProgress && (
           <Animated.View style={[StyleSheet.absoluteFill, pulseStyle]} pointerEvents="none">
             <LinearGradient
               colors={[`${pulseColors[0]}50`, `${pulseColors[1]}40`, `${pulseColors[2]}50`]}
@@ -281,8 +284,8 @@ function TaskRow({
 
         <View style={styles.cardPress}>
           <PressableScale
-            accessibilityLabel={failed ? `${task.name}打卡失败，点击取消` : checkedInToday ? `${task.name}已打卡，点击取消` : `${task.name}未打卡，点击打卡`}
-            accessibilityState={{ checked: checkedInToday && !failed }}
+            accessibilityLabel={failed ? `${task.name}打卡失败，点击取消` : resolved ? `${task.name}已打卡，点击取消` : `${task.name}未打卡，点击打卡`}
+            accessibilityState={{ checked: resolved && !failed }}
             accessibilityRole="checkbox"
             onPress={toggle}
             onLongPress={showActionMenu}
@@ -297,11 +300,11 @@ function TaskRow({
             )}
 
             <View style={styles.taskBody}>
-              <Text style={[styles.taskName, { color: failed ? '#fca5a5' : checkedInToday ? theme.mutedText : theme.text }]} numberOfLines={1}>
+              <Text style={[styles.taskName, { color: failed ? '#fca5a5' : resolved ? theme.mutedText : theme.text }]} numberOfLines={1}>
                 {task.name}
               </Text>
               <Text style={[styles.taskMeta, { color: failed ? '#f87171' : theme.subtleText }]} numberOfLines={1}>
-                {failed ? '打卡失败' : checkedInToday ? (checkedInTime ? `已打卡 ${checkedInTime}` : '已打卡') : '未打卡'}
+                {failed ? '打卡失败' : resolved ? (checkedInTime ? `已打卡 ${checkedInTime}` : '已打卡') : '未打卡'}
                 {stats ? ` · ${stats.current}天 · ${stats.total}次` : ''}
               </Text>
               <TaskDuration task={task} today={today} isLight={isLight} />
@@ -330,7 +333,7 @@ function TaskRow({
                   <MaterialCommunityIcons
                     name="chart-timeline-variant"
                     size={15}
-                    color={checkedInToday ? theme.subtleText : theme.accentText}
+                    color={failed ? '#fca5a5' : resolved ? theme.subtleText : theme.accentText}
                   />
                 </PressableScale>
               </Link>
@@ -343,7 +346,9 @@ function TaskRow({
                 <MaterialCommunityIcons
                   name="trash-can-outline"
                   size={15}
-                  color={checkedInToday
+                  color={failed
+                    ? '#fca5a5'
+                    : resolved
                     ? theme.subtleText
                     : theme.isLight ? '#b91c1c' : '#fca5a5'}
                 />
@@ -352,7 +357,7 @@ function TaskRow({
           </View>
         </View>
 
-        {checkedInToday && (
+        {resolved && (
           <View pointerEvents="none" style={styles.stamp}>
             <Text style={[styles.stampText, failed ? styles.stampFailed : styles.stampSuccess]}>
               {failed ? '失败' : '完成'}
@@ -373,7 +378,7 @@ function TaskRow({
             <View style={styles.menuHeader}>
               <Text numberOfLines={1} style={[styles.menuTitle, { color: theme.text }]}>{task.name}</Text>
               <Text style={[styles.menuSubtitle, { color: theme.subtleText }]}>
-                {failed ? '状态：打卡失败' : checkedInToday ? '状态：已完成' : '状态：未打卡'}
+                {failed ? '状态：打卡失败' : resolved ? '状态：已完成' : '状态：未打卡'}
               </Text>
             </View>
 

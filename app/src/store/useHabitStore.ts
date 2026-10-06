@@ -1,6 +1,6 @@
 import { createContext, createElement, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { AppData, CheckIn, DayRecord, DayRecordImage, SyncState, Task } from '../domain/types';
+import { AppData, CheckIn, CheckInStatus, DayRecord, DayRecordImage, SyncState, Task } from '../domain/types';
 import { toggleCheckIn as toggleLocalCheckIn } from '../domain/checkIns';
 import { getNextTaskAppearance } from '../domain/taskAppearance';
 import { getTodayKey } from '../domain/streak';
@@ -57,6 +57,7 @@ function useHabitStoreInstance() {
   const checkInQueueRef = useRef<Map<string, Promise<void>>>(new Map());
   const latestCheckInIntentRef = useRef<Map<string, { seq: number; adding: boolean }>>(new Map());
   const checkInSeqRef = useRef(0);
+  const checkInStatusQueueRef = useRef<Map<string, Promise<void>>>(new Map());
   const initialLoadStartedRef = useRef(false);
   const hydratedRef = useRef(false);
 
@@ -295,6 +296,46 @@ function useHabitStoreInstance() {
     checkInQueueRef.current.set(k, operation.catch(() => {}));
     await operation;
   }, [schedulePull, settingsReady]);
+
+  const setCheckInStatus = useCallback((taskId: string, date: string, status: CheckInStatus) => {
+    const k = keyOf(taskId, date);
+    const existing = dataRef.current.checkIns.find((item) => item.taskId === taskId && item.date === date);
+    const nextData: AppData = existing
+      ? {
+        ...dataRef.current,
+        checkIns: dataRef.current.checkIns.map((item) => (
+          item.taskId === taskId && item.date === date ? { ...item, status } : item
+        )),
+      }
+      : {
+        ...dataRef.current,
+        checkIns: [
+          ...dataRef.current.checkIns,
+          {
+            id: `failed-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+            taskId,
+            date,
+            createdAt: new Date().toISOString(),
+            status,
+          },
+        ],
+      };
+
+    void commit(nextData);
+
+    const previous = checkInStatusQueueRef.current.get(k) ?? Promise.resolve();
+    const operation = previous.then(async () => {
+      const base = settingsReady();
+      if (!base) return;
+      await apiRequest(base, '/api/checkins/status', {
+        method: 'POST',
+        body: JSON.stringify({ taskId, date, status }),
+      });
+      schedulePull();
+    });
+
+    checkInStatusQueueRef.current.set(k, operation.catch(() => {}));
+  }, [commit, schedulePull, settingsReady]);
 
   const pushDayRecord = useCallback(async (record: DayRecord) => {
     const base = settingsReady();
@@ -656,6 +697,7 @@ function useHabitStoreInstance() {
     reorderTasks,
     toggleTimer,
     toggleCheckIn,
+    setCheckInStatus,
     saveDayRecord,
     updateSettings,
     syncNow,
