@@ -73,9 +73,25 @@ export default function DayRecordModal({ target, initialFiles, onClose }: Props)
   const [note, setNote] = useState('');
   const [images, setImages] = useState<ImageItem[]>([]);
   const [segments, setSegments] = useState<TimeSegment[]>([]);
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [hint, setHint] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Keyboard navigation for the lightbox.
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setLightboxIndex(null);
+      } else if (event.key === 'ArrowLeft' && lightboxIndex > 0) {
+        setLightboxIndex(lightboxIndex - 1);
+      } else if (event.key === 'ArrowRight' && lightboxIndex < images.length - 1) {
+        setLightboxIndex(lightboxIndex + 1);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [lightboxIndex, images.length]);
 
   const task = useMemo(
     () => tasks.find((t) => t.id === target?.taskId) ?? null,
@@ -371,12 +387,12 @@ export default function DayRecordModal({ target, initialFiles, onClose }: Props)
                     </p>
                   ) : (
                     <div className="flex flex-wrap gap-2.5">
-                      {images.map((item) => (
+                      {images.map((item, index) => (
                         <div key={item.url} className="group relative">
                           <img
                             src={item.url}
                             className="h-20 w-20 cursor-zoom-in rounded-lg border border-white/10 object-cover"
-                            onClick={() => setLightbox(item.url)}
+                            onClick={() => setLightboxIndex(index)}
                             alt="打卡图"
                           />
                           <button
@@ -425,18 +441,40 @@ export default function DayRecordModal({ target, initialFiles, onClose }: Props)
 
           {/* Lightbox */}
           <AnimatePresence>
-            {lightbox && (
+            {lightboxIndex !== null && images[lightboxIndex] && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-10"
-                onClick={() => setLightbox(null)}
+                onClick={() => setLightboxIndex(null)}
               >
-                <img src={lightbox} className="max-h-full max-w-full rounded-xl object-contain" alt="" />
-                <button className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20">
+                <img src={images[lightboxIndex].url} className="max-h-full max-w-full rounded-xl object-contain" alt="" />
+                {lightboxIndex > 0 && (
+                  <button
+                    className="absolute left-5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+                    onClick={(event) => { event.stopPropagation(); setLightboxIndex(lightboxIndex - 1); }}
+                  >
+                    <ChevronLeft size={22} />
+                  </button>
+                )}
+                {lightboxIndex < images.length - 1 && (
+                  <button
+                    className="absolute right-5 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+                    onClick={(event) => { event.stopPropagation(); setLightboxIndex(lightboxIndex + 1); }}
+                  >
+                    <ChevronRight size={22} />
+                  </button>
+                )}
+                <button
+                  className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+                  onClick={(event) => { event.stopPropagation(); setLightboxIndex(null); }}
+                >
                   <X size={20} />
                 </button>
+                <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1 text-xs font-bold text-white">
+                  {lightboxIndex + 1} / {images.length}
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
