@@ -21,6 +21,7 @@ export default function HeatmapGrid({
 
   const getCellLabel = (cell: HeatmapCell) => {
     if (cell.status === 'complete') return '已完成';
+    if (cell.status === 'failed') return '打卡失败';
     if (cell.status === 'partial') return `未完成 · 用时 ${formatDuration(cell.durationMs)}`;
 
     return '无记录';
@@ -61,6 +62,10 @@ export default function HeatmapGrid({
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, { backgroundColor: '#38bdf8' }]} />
           <Text style={[styles.legendText, { color: theme.subtleText }]}>有用时未打卡</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <View style={[styles.legendDot, { backgroundColor: '#ef4444' }]} />
+          <Text style={[styles.legendText, { color: theme.subtleText }]}>打卡失败</Text>
         </View>
         <View style={styles.legendItem}>
           <View style={[styles.legendDot, { backgroundColor: '#22c55e' }]} />

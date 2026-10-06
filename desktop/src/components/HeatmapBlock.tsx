@@ -32,14 +32,17 @@ export default function HeatmapBlock() {
       const dateKey = toLocalDateKey(cursor);
 
       let completed: boolean;
+      let failed: boolean;
       let durationMs: number;
 
       if (task) {
         completed = checkIns.some((c) => c.taskId === task.id && c.date === dateKey);
+        failed = checkIns.some((c) => c.taskId === task.id && c.date === dateKey && c.status === 'failed');
         durationMs = calculateTimeSegmentsDurationForDate(task, dateKey, now.getTime());
       } else {
         // Aggregate across every active task.
         const dayCheckins = checkIns.filter((c) => c.date === dateKey);
+        failed = dayCheckins.length > 0 && dayCheckins.every((c) => c.status === 'failed');
         completed = dayCheckins.length > 0;
         durationMs = activeTasks.reduce(
           (sum, t) => sum + calculateTimeSegmentsDurationForDate(t, dateKey, now.getTime()),
@@ -47,7 +50,7 @@ export default function HeatmapBlock() {
         );
       }
 
-      days.push({ date: dateKey, completed, durationMs });
+      days.push({ date: dateKey, completed, failed, durationMs });
       cursor.setDate(cursor.getDate() + 1);
     }
 
@@ -91,6 +94,7 @@ export default function HeatmapBlock() {
       weekday: new Date(`${selectedDate}T00:00:00`).toLocaleDateString('zh-CN', { weekday: 'long' }),
       completed: cell.status === 'complete',
       partial: cell.status === 'partial',
+      failed: cell.status === 'failed',
       durationMs: cell.durationMs,
       checkinTasks,
       taskName: task?.name,
@@ -173,8 +177,8 @@ export default function HeatmapBlock() {
           </div>
           <div className="mt-3 flex items-start justify-between gap-6">
             <div>
-              <p className={`text-sm font-bold ${detail.completed ? 'text-emerald-400' : detail.partial ? 'text-cyan-400' : 'text-slate-500'}`}>
-                {detail.completed ? '✅ 已完成打卡' : detail.partial ? '⏱ 有计时记录' : '无记录'}
+              <p className={`text-sm font-bold ${detail.completed ? 'text-emerald-400' : detail.failed ? 'text-red-400' : detail.partial ? 'text-cyan-400' : 'text-slate-500'}`}>
+                {detail.completed ? '✅ 已完成打卡' : detail.failed ? '❌ 打卡失败' : detail.partial ? '⏱ 有计时记录' : '无记录'}
               </p>
               {detail.durationMs > 0 && (
                 <p className="mt-1 font-mono text-sm text-emerald-300">⏱ {formatMs(detail.durationMs)}</p>
@@ -200,10 +204,14 @@ export default function HeatmapBlock() {
 
 function cellStyle(
   level: 0 | 1 | 2 | 3 | 4,
-  status: 'empty' | 'partial' | 'complete',
+  status: 'empty' | 'partial' | 'complete' | 'failed',
 ): React.CSSProperties {
   if (status === 'empty') {
     return { backgroundColor: 'rgba(2,6,23,0.78)' };
+  }
+
+  if (status === 'failed') {
+    return { backgroundColor: 'rgba(239,68,68,0.88)' };
   }
 
   const rgb = status === 'complete' ? '34,197,94' : '56,189,248';

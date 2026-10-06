@@ -194,6 +194,32 @@ describe('HabitPulse API', () => {
     expect(afterDelete.json()).toHaveLength(0);
   });
 
+  it('stores and clears failed check-ins without counting them as success', async () => {
+    const app = buildApp({ database: ':memory:' });
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      payload: { name: 'Failure habit', icon: 'run', color: '#f87171', description: '' },
+    });
+    const taskId = created.json().id;
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/checkins/status',
+      payload: { taskId, date: '2026-01-01', status: 'failed' },
+    });
+
+    const snapshot = (await app.inject({ url: '/api/snapshot' })).json() as any;
+    expect(snapshot.checkIns[0].status).toBe('failed');
+
+    const restored = await app.inject({
+      method: 'POST',
+      url: '/api/checkins/toggle',
+      payload: { taskId, date: '2026-01-01' },
+    });
+    expect(restored.json().checkIn.status).toBe('success');
+  });
+
   it('stores day-record metadata and serves its image', async () => {
     const imageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'habitpulse-images-'));
     const app = buildApp({ database: ':memory:', imageRoot });

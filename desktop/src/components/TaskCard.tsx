@@ -5,6 +5,7 @@ import {
   isTimerRunning,
 } from '../../../app/src/domain/timeTracking';
 import type { Task } from '../../../app/src/domain/types';
+import type { CheckInStatus } from '../../../app/src/domain/types';
 import { extractImageFiles } from '../hooks/useImageCapture';
 import { useStore } from '../data/store';
 import TaskIcon from './TaskIcon';
@@ -23,6 +24,8 @@ type Props = {
   date: string;
   checked: boolean;
   checkedAt?: string | null;
+  checkInStatus?: CheckInStatus;
+  onSetCheckInStatus?: (taskId: string, date: string, status: CheckInStatus) => void;
   onEdit: () => void;
   onOpenDetail: () => void;
   onDropImages?: (files: File[]) => void;
@@ -34,6 +37,8 @@ export default function TaskCard({
   date,
   checked,
   checkedAt,
+  checkInStatus = 'success',
+  onSetCheckInStatus,
   onEdit,
   onOpenDetail,
   onDropImages,
@@ -42,6 +47,7 @@ export default function TaskCard({
   const { now, toggleCheckIn, toggleTimer, busy } = useStore();
   const total = calculateTimeSegmentsDurationForDate(task, date, now.getTime());
   const running = isTimerRunning(task);
+  const failed = checkInStatus === 'failed';
   const bodyRef = useRef<HTMLDivElement>(null);
 
   // A reorder drag and the toggle click share the same element. Some browsers
@@ -80,7 +86,11 @@ export default function TaskCard({
           : undefined
       }
       className={`glass relative flex items-center gap-3 ${compact ? 'px-3 py-2.5' : 'px-4 py-3.5'} ${
-        checked ? 'border-emerald-400/25 bg-emerald-400/[0.06]' : ''
+        failed
+          ? 'border-red-500/45 bg-[#010208]'
+          : checked
+            ? 'border-emerald-400/25 bg-emerald-400/[0.06]'
+            : ''
       }`}
     >
       <div
@@ -107,7 +117,7 @@ export default function TaskCard({
         onDragEnd={() => suppressNextClick()}
       >
         <div className="flex items-center gap-2">
-          <span className={`truncate font-bold ${compact ? 'text-[13px]' : 'text-sm'} text-slate-100`}>
+          <span className={`truncate font-bold ${compact ? 'text-[13px]' : 'text-sm'} ${failed ? 'text-red-300' : 'text-slate-100'}`}>
             {task.name}
           </span>
           {running && (
@@ -121,10 +131,12 @@ export default function TaskCard({
           {formatDuration(total)}
         </div>
         {!compact && (
-          <div className={`text-[11px] font-semibold ${checked ? 'text-emerald-400' : 'text-slate-500'}`}>
-            {checked
-              ? `已打卡 ${checkedAt ? new Date(checkedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}`
-              : '未打卡'}
+          <div className={`text-[11px] font-semibold ${failed ? 'text-red-400' : checked ? 'text-emerald-400' : 'text-slate-500'}`}>
+            {failed
+              ? '打卡失败'
+              : checked
+                ? `已打卡 ${checkedAt ? new Date(checkedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : ''}`
+                : '未打卡'}
           </div>
         )}
 
@@ -178,6 +190,24 @@ export default function TaskCard({
           <Check size={compact ? 15 : 18} strokeWidth={3} />
         </button>
       </div>
+
+      {checked && (
+        <div
+          className="pointer-events-none absolute right-[18%] top-1/2 z-20 -translate-y-1/2 rotate-[-45deg] rounded-md border-2 px-2 py-0.5"
+          style={{
+            borderColor: failed ? '#ef4444' : '#22c55e',
+            backgroundColor: 'rgba(1,2,8,0.68)',
+          }}
+        >
+          <span
+            className={`text-base font-black italic tracking-wide ${
+              failed ? 'text-red-500' : 'text-green-500'
+            }`}
+          >
+            {failed ? '失败' : '完成'}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

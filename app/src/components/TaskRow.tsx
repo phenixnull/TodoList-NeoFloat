@@ -3,7 +3,7 @@ import { Link } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Gesture,
   GestureDetector,
@@ -20,7 +20,7 @@ import TaskIcon from './TaskIcon';
 import { getPulseColors } from '../domain/color';
 import { formatCheckInTime } from '../domain/format';
 import { HabitStats } from '../domain/streak';
-import { Task } from '../domain/types';
+import { CheckInStatus, Task } from '../domain/types';
 import { calculateTimeSegmentsDurationForDate, formatDuration, isTimerRunning } from '../domain/timeTracking';
 import { resolveTheme } from '../theme/theme';
 
@@ -37,6 +37,7 @@ type Props = {
   today: string;
   checkedInToday: boolean;
   checkedInAt?: string | null;
+  checkInStatus?: CheckInStatus;
   stats?: HabitStats;
   index?: number;
   isActive?: boolean;
@@ -45,6 +46,7 @@ type Props = {
   dragInProgress?: boolean;
   onToggle: (taskId: string) => boolean;
   onToggleTimer: (taskId: string) => void;
+  onSetCheckInStatus?: (taskId: string, date: string, status: CheckInStatus) => void;
   onDelete: (taskId: string) => void;
   customGroups?: string[];
   onMoveToGroup?: (taskId: string, groups: string[]) => void;
@@ -84,6 +86,7 @@ function TaskRow({
   today,
   checkedInToday,
   checkedInAt,
+  checkInStatus = 'success',
   stats,
   isActive = false,
   drag,
@@ -91,6 +94,7 @@ function TaskRow({
   dragInProgress = false,
   onToggle,
   onToggleTimer,
+  onSetCheckInStatus,
   onDelete,
   customGroups = [],
   onMoveToGroup,
@@ -100,6 +104,8 @@ function TaskRow({
   const lastPulseFrameAt = useSharedValue(0);
   const running = isTimerRunning(task);
   const checkedInTime = formatCheckInTime(checkedInAt);
+  const failed = checkInStatus === 'failed';
+  const [actionMenuVisible, setActionMenuVisible] = useState(false);
   const pulseColors = useMemo(() => getPulseColors(task.color), [task.color]);
   const theme = resolveTheme(isLight ? 'light' : 'dark', null);
 
@@ -162,6 +168,8 @@ function TaskRow({
     ]);
   };
 
+  const showActionMenu = () => setActionMenuVisible(true);
+
   const [handlePressed, setHandlePressed] = useState(false);
   const activateDrag = useCallback(() => {
     setHandlePressed(true);
@@ -222,10 +230,14 @@ function TaskRow({
         style={[
           styles.card,
           {
-            borderColor: checkedInToday
+            borderColor: failed
+              ? 'rgba(239,68,68,0.48)'
+              : checkedInToday
               ? theme.surfaceBorder
               : theme.isLight ? 'rgba(15,23,42,0.10)' : 'rgba(103,232,249,0.34)',
-            backgroundColor: checkedInToday
+            backgroundColor: failed
+              ? '#010208'
+              : checkedInToday
               ? theme.surface
               : theme.isLight ? 'rgba(255,255,255,0.74)' : 'rgba(15,23,42,0.58)',
           },
@@ -237,14 +249,18 @@ function TaskRow({
           <View
             style={[
               StyleSheet.absoluteFill,
-              checkedInToday
+              failed
+                ? { backgroundColor: '#010208' }
+                : checkedInToday
                 ? { backgroundColor: theme.surface }
                 : { backgroundColor: theme.isLight ? 'rgba(255,255,255,0.88)' : 'rgba(9,14,31,0.88)' },
             ]}
           />
         ) : (
           <LinearGradient
-            colors={checkedInToday
+            colors={failed
+              ? ['rgba(127,29,29,0.22)', 'rgba(2,6,23,0.96)']
+              : checkedInToday
               ? (theme.isLight
                 ? ['rgba(15,23,42,0.05)', 'rgba(255,255,255,0.55)']
                 : ['rgba(148,163,184,0.14)', 'rgba(71,85,105,0.08)'])
@@ -252,7 +268,7 @@ function TaskRow({
             style={StyleSheet.absoluteFill}
           />
         )}
-        {!checkedInToday && !dragInProgress && (
+        {!failed && !checkedInToday && !dragInProgress && (
           <Animated.View style={[StyleSheet.absoluteFill, pulseStyle]} pointerEvents="none">
             <LinearGradient
               colors={[`${pulseColors[0]}50`, `${pulseColors[1]}40`, `${pulseColors[2]}50`]}
@@ -265,11 +281,11 @@ function TaskRow({
 
         <View style={styles.cardPress}>
           <PressableScale
-            accessibilityLabel={checkedInToday ? `${task.name}已打卡，点击取消` : `${task.name}未打卡，点击打卡`}
-            accessibilityState={{ checked: checkedInToday }}
+            accessibilityLabel={failed ? `${task.name}打卡失败，点击取消` : checkedInToday ? `${task.name}已打卡，点击取消` : `${task.name}未打卡，点击打卡`}
+            accessibilityState={{ checked: checkedInToday && !failed }}
             accessibilityRole="checkbox"
             onPress={toggle}
-            onLongPress={showGroupMenu}
+            onLongPress={showActionMenu}
             style={styles.mainRow}
           >
             {handleGesture ? (
@@ -281,11 +297,11 @@ function TaskRow({
             )}
 
             <View style={styles.taskBody}>
-              <Text style={[styles.taskName, { color: checkedInToday ? theme.mutedText : theme.text }]} numberOfLines={1}>
+              <Text style={[styles.taskName, { color: failed ? '#fca5a5' : checkedInToday ? theme.mutedText : theme.text }]} numberOfLines={1}>
                 {task.name}
               </Text>
-              <Text style={[styles.taskMeta, { color: theme.subtleText }]} numberOfLines={1}>
-                {checkedInToday ? (checkedInTime ? `已打卡 ${checkedInTime}` : '已打卡') : '未打卡'}
+              <Text style={[styles.taskMeta, { color: failed ? '#f87171' : theme.subtleText }]} numberOfLines={1}>
+                {failed ? '打卡失败' : checkedInToday ? (checkedInTime ? `已打卡 ${checkedInTime}` : '已打卡') : '未打卡'}
                 {stats ? ` · ${stats.current}天 · ${stats.total}次` : ''}
               </Text>
               <TaskDuration task={task} today={today} isLight={isLight} />
@@ -335,7 +351,67 @@ function TaskRow({
             </View>
           </View>
         </View>
+
+        {checkedInToday && (
+          <View pointerEvents="none" style={styles.stamp}>
+            <Text style={[styles.stampText, failed ? styles.stampFailed : styles.stampSuccess]}>
+              {failed ? '失败' : '完成'}
+            </Text>
+          </View>
+        )}
       </View>
+
+      <Modal transparent visible={actionMenuVisible} animationType="fade" onRequestClose={() => setActionMenuVisible(false)}>
+        <Pressable style={styles.menuBackdrop} onPress={() => setActionMenuVisible(false)}>
+          <Pressable
+            style={[styles.menuCard, {
+              backgroundColor: theme.isLight ? 'rgba(255,255,255,0.98)' : 'rgba(8,13,30,0.98)',
+              borderColor: theme.surfaceBorder,
+            }]}
+            onPress={() => {}}
+          >
+            <View style={styles.menuHeader}>
+              <Text numberOfLines={1} style={[styles.menuTitle, { color: theme.text }]}>{task.name}</Text>
+              <Text style={[styles.menuSubtitle, { color: theme.subtleText }]}>
+                {failed ? '状态：打卡失败' : checkedInToday ? '状态：已完成' : '状态：未打卡'}
+              </Text>
+            </View>
+
+            <PressableScale
+              style={styles.menuItem}
+              onPress={() => {
+                onSetCheckInStatus?.(task.id, today, failed ? 'success' : 'failed');
+                setActionMenuVisible(false);
+              }}
+            >
+              <MaterialCommunityIcons
+                name={failed ? 'check-circle-outline' : 'close-circle-outline'}
+                size={19}
+                color={failed ? '#22c55e' : '#f87171'}
+              />
+              <Text style={[styles.menuItemText, { color: failed ? '#22c55e' : '#f87171' }]}>
+                {failed ? '标记为已打卡成功' : '标记为打卡失败'}
+              </Text>
+            </PressableScale>
+
+            {onMoveToGroup && (
+              <PressableScale style={styles.menuItem} onPress={showGroupMenu}>
+                <MaterialCommunityIcons name="shape" size={19} color={theme.mutedText} />
+                <Text style={[styles.menuItemText, { color: theme.text }]}>移动 / 分组</Text>
+              </PressableScale>
+            )}
+
+            <PressableScale style={styles.menuItem} onPress={confirmDelete}>
+              <MaterialCommunityIcons name="trash-can-outline" size={19} color="#f87171" />
+              <Text style={[styles.menuItemText, styles.menuDanger]}>删除任务</Text>
+            </PressableScale>
+
+            <PressableScale style={[styles.menuItem, styles.menuCancel]} onPress={() => setActionMenuVisible(false)}>
+              <Text style={[styles.menuItemText, { color: theme.mutedText }]}>取消</Text>
+            </PressableScale>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -498,5 +574,91 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  stamp: {
+    position: 'absolute',
+    right: '18%',
+    top: '50%',
+    zIndex: 20,
+    transform: [{ translateY: -15 }, { rotate: '-45deg' }],
+    borderRadius: 7,
+    borderWidth: 2.5,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+  },
+  stampText: {
+    fontSize: 17,
+    fontStyle: 'italic',
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  stampFailed: {
+    borderColor: '#ef4444',
+    color: '#ef4444',
+    textShadowColor: 'rgba(0,0,0,0.55)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  stampSuccess: {
+    borderColor: '#22c55e',
+    color: '#22c55e',
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2,6,23,0.68)',
+    paddingHorizontal: 24,
+    justifyContent: 'center',
+  },
+  menuCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    shadowColor: '#020617',
+    shadowOpacity: 0.24,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 18 },
+    elevation: 20,
+  },
+  menuHeader: {
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(148,163,184,0.18)',
+  },
+  menuTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  menuSubtitle: {
+    marginTop: 3,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  menuItem: {
+    minHeight: 48,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 12,
+    marginTop: 4,
+  },
+  menuItemText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  menuDanger: {
+    color: '#f87171',
+  },
+  menuCancel: {
+    justifyContent: 'center',
+    marginTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(148,163,184,0.18)',
+  },
 });
-

@@ -56,6 +56,13 @@ const upsertCheckInSchema = z.object({
   taskId: z.string().min(1),
   date: dateKey,
   createdAt: isoDateTime.optional(),
+  status: z.enum(['success', 'failed']).optional(),
+});
+
+const checkInStatusSchema = z.object({
+  taskId: z.string().min(1),
+  date: dateKey,
+  status: z.enum(['success', 'failed']),
 });
 
 const dayRecordImageSchema = z.object({
@@ -582,19 +589,25 @@ export function buildApp({
 
     if (existingRow) {
       if (existingRow.deleted_at) {
-        db.prepare('UPDATE check_ins SET deleted_at = NULL, created_at = ?, id = ? WHERE task_id = ? AND date = ?')
-          .run(createdAt, id, parsed.data.taskId, parsed.data.date);
+        db.prepare('UPDATE check_ins SET deleted_at = NULL, created_at = ?, id = ?, status = ? WHERE task_id = ? AND date = ?')
+          .run(createdAt, id, parsed.data.status ?? 'success', parsed.data.taskId, parsed.data.date);
         broadcast('checkin.changed', { taskId: parsed.data.taskId, date: parsed.data.date });
-        return reply.code(201).send({ id, taskId: parsed.data.taskId, date: parsed.data.date, createdAt });
+        return reply.code(201).send({ id, taskId: parsed.data.taskId, date: parsed.data.date, createdAt, status: parsed.data.status ?? 'success' });
+      }
+
+      if (parsed.data.status && existingRow.status !== parsed.data.status) {
+        db.prepare('UPDATE check_ins SET status = ? WHERE task_id = ? AND date = ?')
+          .run(parsed.data.status, parsed.data.taskId, parsed.data.date);
+        broadcast('checkin.changed', { taskId: parsed.data.taskId, date: parsed.data.date });
       }
 
       return reply.code(200).send(rowFromCheckIn(existingRow));
     }
 
-    db.prepare('INSERT INTO check_ins (id, task_id, date, created_at, deleted_at) VALUES (?, ?, ?, ?, NULL)')
-      .run(id, parsed.data.taskId, parsed.data.date, createdAt);
+    db.prepare('INSERT INTO check_ins (id, task_id, date, created_at, deleted_at, status) VALUES (?, ?, ?, ?, NULL, ?)')
+      .run(id, parsed.data.taskId, parsed.data.date, createdAt, parsed.data.status ?? 'success');
     broadcast('checkin.changed', { taskId: parsed.data.taskId, date: parsed.data.date });
-    return reply.code(201).send({ id, taskId: parsed.data.taskId, date: parsed.data.date, createdAt });
+    return reply.code(201).send({ id, taskId: parsed.data.taskId, date: parsed.data.date, createdAt, status: parsed.data.status ?? 'success' });
   });
 
   app.post('/api/checkins/toggle', async (request, reply) => {
@@ -607,6 +620,14 @@ export function buildApp({
     const existing = db.prepare('SELECT * FROM check_ins WHERE task_id = ? AND date = ?').get(parsed.data.taskId, parsed.data.date) as any;
 
     if (existing && !existing.deleted_at) {
+      if (existing.status === 'failed') {
+        db.prepare("UPDATE check_ins SET status = 'success' WHERE task_id = ? AND date = ?")
+          .run(parsed.data.taskId, parsed.data.date);
+        broadcast('checkin.changed', { taskId: parsed.data.taskId, date: parsed.data.date });
+        const restored = db.prepare('SELECT * FROM check_ins WHERE task_id = ? AND date = ?').get(parsed.data.taskId, parsed.data.date) as any;
+        return reply.code(200).send({ checkedIn: true, checkIn: rowFromCheckIn(restored) });
+      }
+
       // The mobile client sends an explicit "add" operation, not a UI toggle.
       // A retry after an ambiguous network result must be idempotent.
       return reply.code(200).send({ checkedIn: true, checkIn: rowFromCheckIn(existing) });
@@ -623,7 +644,31 @@ export function buildApp({
     }
 
     broadcast('checkin.changed', { taskId: parsed.data.taskId, date: parsed.data.date });
-    return reply.code(201).send({ checkedIn: true, checkIn: { id, taskId: parsed.data.taskId, date: parsed.data.date, createdAt } });
+    return reply.code(201).send({ checkedIn: true, checkIn: { id, taskId: parsed.data.taskId, date: parsed.data.date, createdAt, status: 'success' } });
+  });
+
+  app.post('/api/checkins/status', async (request, reply) => {
+    const parsed = checkInStatusSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid check-in status', details: parsed.error.flatten() });
+    }
+
+    const { taskId, date, status } = parsed.data;
+    const existing = db.prepare('SELECT * FROM check_ins WHERE task_id = ? AND date = ?').get(taskId, date) as any;
+    const now = new Date().toISOString();
+
+    if (!existing) {
+      db.prepare('INSERT INTO check_ins (id, task_id, date, created_at, deleted_at, status) VALUES (?, ?, ?, ?, NULL, ?)')
+        .run(randomUUID(), taskId, date, now, status);
+    } else {
+      db.prepare('UPDATE check_ins SET status = ?, deleted_at = NULL WHERE task_id = ? AND date = ?')
+        .run(status, taskId, date);
+    }
+
+    const row = db.prepare('SELECT * FROM check_ins WHERE task_id = ? AND date = ?').get(taskId, date) as any;
+    broadcast('checkin.changed', { taskId, date });
+    return rowFromCheckIn(row);
   });
 
   app.delete('/api/checkins/:taskId/:date', async (request, reply) => {
@@ -896,5 +941,6 @@ function rowFromCheckIn(row: any) {
     taskId: row.task_id,
     date: row.date,
     createdAt: row.created_at,
+    status: row.status === 'failed' ? 'failed' : 'success',
   };
 }

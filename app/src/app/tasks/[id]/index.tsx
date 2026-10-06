@@ -55,7 +55,14 @@ export default function TaskDetailScreen() {
     () => taskCheckIns.map((checkIn) => checkIn.date),
     [taskCheckIns],
   );
-  const completedDates = useMemo(() => new Set(taskDates), [taskDates]);
+  const failedDates = useMemo(
+    () => new Set(taskCheckIns.filter((checkIn) => checkIn.status === 'failed').map((checkIn) => checkIn.date)),
+    [taskCheckIns],
+  );
+  const completedDates = useMemo(
+    () => new Set(taskCheckIns.filter((checkIn) => checkIn.status !== 'failed').map((checkIn) => checkIn.date)),
+    [taskCheckIns],
+  );
   const heatmapInput = useMemo(() => {
     const currentTask = activeTasks.find((item) => item.id === taskId);
 
@@ -72,6 +79,7 @@ export default function TaskDetailScreen() {
     return [...dates].map((date) => ({
       date,
       completed: completedDates.has(date),
+      failed: failedDates.has(date),
       durationMs: calculateTimeSegmentsDurationForDate(
         currentTask,
         date,
@@ -81,6 +89,7 @@ export default function TaskDetailScreen() {
   }, [
     activeTasks,
     completedDates,
+    failedDates,
     heatmapNowMs,
     taskDates,
     taskId,

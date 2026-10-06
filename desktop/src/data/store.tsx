@@ -53,6 +53,7 @@ type StoreValue = LoadedData & {
   setServerUrl: (url: string) => void;
   refresh: () => Promise<void>;
   toggleCheckIn: (taskId: string, date: string) => void;
+  setCheckInStatus: (taskId: string, date: string, status: 'success' | 'failed') => void;
   undoCheckIn: () => Promise<void>;
   toggleTimer: (taskId: string) => Promise<void>;
   createTask: (input: NewTaskInput) => Promise<void>;
@@ -293,6 +294,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [jsonFetch],
   );
 
+  const setCheckInStatus = useCallback(
+    (taskId: string, date: string, status: 'success' | 'failed') => {
+      setData((prev) => {
+        const exists = prev.checkIns.some((c) => c.taskId === taskId && c.date === date);
+        return {
+          ...prev,
+          checkIns: exists
+            ? prev.checkIns.map((c) => (c.taskId === taskId && c.date === date ? { ...c, status } : c))
+            : [...prev.checkIns, { id: `${taskId}:${date}`, taskId, date, createdAt: new Date().toISOString(), status }],
+        };
+      });
+
+      void jsonFetch('/api/checkins/status', { method: 'POST', body: { taskId, date, status } })
+        .then(() => refresh())
+        .catch(() => refresh());
+    },
+    [jsonFetch, refresh],
+  );
+
   const undoCheckIn = useCallback(
     () =>
       runWithBusy(async () => {
@@ -441,6 +461,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setServerUrl,
       refresh,
       toggleCheckIn,
+      setCheckInStatus,
       undoCheckIn,
       toggleTimer,
       createTask,
@@ -461,6 +482,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setServerUrl,
       refresh,
       toggleCheckIn,
+      setCheckInStatus,
       undoCheckIn,
       toggleTimer,
       createTask,

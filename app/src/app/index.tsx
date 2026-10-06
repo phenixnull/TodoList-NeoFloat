@@ -31,6 +31,7 @@ export default function HomeScreen() {
     loading,
     syncState,
     toggleCheckIn,
+    setCheckInStatus,
     toggleTimer,
     deleteTask,
     updateTask,
@@ -63,10 +64,11 @@ export default function HomeScreen() {
     () => checkIns.filter((checkIn) => checkIn.date === today),
     [checkIns, today],
   );
-  const completedIds = useMemo(
-    () => new Set(todayCheckIns.map((checkIn) => checkIn.taskId)),
+  const successIds = useMemo(
+    () => new Set(todayCheckIns.filter((checkIn) => checkIn.status !== 'failed').map((checkIn) => checkIn.taskId)),
     [todayCheckIns],
   );
+  const completedIds = successIds;
   const todayCheckInsByTask = useMemo(
     () => new Map(todayCheckIns.map((checkIn) => [checkIn.taskId, checkIn])),
     [todayCheckIns],
@@ -119,7 +121,7 @@ export default function HomeScreen() {
     [allTasksFlat, groupFilter],
   );
   const overviewStats = useMemo(() => {
-    const completedCount = groupFilteredTasks.filter((task) => completedIds.has(task.id)).length;
+    const completedCount = groupFilteredTasks.filter((task) => successIds.has(task.id)).length;
     const totalCount = groupFilteredTasks.length;
 
     return {
@@ -127,7 +129,7 @@ export default function HomeScreen() {
       totalCount,
       progress: totalCount === 0 ? 0 : Math.min(completedCount / totalCount, 1),
     };
-  }, [groupFilteredTasks, completedIds]);
+  }, [groupFilteredTasks, successIds]);
 
   useEffect(() => {
     if (loading) return;
@@ -232,23 +234,23 @@ export default function HomeScreen() {
     updateTask(taskId, { customGroups: groups });
   }, [updateTask]);
 
-  const checkInDatesByTask = useMemo(() => {
+  const successCheckInDatesByTask = useMemo(() => {
     const dates = new Map<string, string[]>();
-
     for (const checkIn of checkIns) {
+      if (checkIn.status === 'failed') continue;
       const list = dates.get(checkIn.taskId) ?? [];
       list.push(checkIn.date);
       dates.set(checkIn.taskId, list);
     }
-
     return dates;
   }, [checkIns]);
+
   const statsByTaskId = useMemo(() => new Map(
     activeTasks.map((task) => [
       task.id,
-      computeStats(checkInDatesByTask.get(task.id) ?? [], today),
+      computeStats(successCheckInDatesByTask.get(task.id) ?? [], today),
     ]),
-  ), [activeTasks, checkInDatesByTask, today]);
+  ), [activeTasks, successCheckInDatesByTask, today]);
 
   const renderTask = useCallback(({ item, drag, dragGesture, getIndex, isActive, isDragging }: RenderItemParams<Task>) => (
     <TaskRow
@@ -261,15 +263,17 @@ export default function HomeScreen() {
       dragInProgress={isDragging}
       checkedInToday={completedIds.has(item.id)}
       checkedInAt={todayCheckInsByTask.get(item.id)?.createdAt}
+      checkInStatus={todayCheckInsByTask.get(item.id)?.status ?? 'success'}
       stats={statsByTaskId.get(item.id)}
       onToggle={toggleCheckIn}
       onToggleTimer={toggleTimer}
+      onSetCheckInStatus={setCheckInStatus}
       onDelete={deleteTask}
       customGroups={availableGroups}
       onMoveToGroup={moveToGroup}
       isLight={theme.isLight}
     />
-  ), [availableGroups, today, completedIds, theme.isLight, todayCheckInsByTask, statsByTaskId, toggleCheckIn, toggleTimer, deleteTask, moveToGroup]);
+  ), [availableGroups, today, completedIds, theme.isLight, todayCheckInsByTask, statsByTaskId, setCheckInStatus, toggleCheckIn, toggleTimer, deleteTask, moveToGroup]);
 
   // Web build: react-native-draggable-flatlist is not web-compatible (it calls
   // findNodeHandle on layout, which throws on react-native-web). Render the same
@@ -487,9 +491,11 @@ export default function HomeScreen() {
                       today={today}
                       checkedInToday={completedIds.has(item.id)}
                       checkedInAt={todayCheckInsByTask.get(item.id)?.createdAt}
+                      checkInStatus={todayCheckInsByTask.get(item.id)?.status ?? 'success'}
                       stats={statsByTaskId.get(item.id)}
                       onToggle={toggleCheckIn}
                       onToggleTimer={toggleTimer}
+                      onSetCheckInStatus={setCheckInStatus}
                       onDelete={deleteTask}
                       customGroups={availableGroups}
                       onMoveToGroup={moveToGroup}

@@ -29,7 +29,10 @@ export type CheckIn = {
   taskId: string;
   date: string;
   createdAt: string;
+  status?: CheckInStatus;
 };
+
+export type CheckInStatus = 'success' | 'failed';
 
 export type DayRecordImage = {
   fileName: string;

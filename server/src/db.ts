@@ -126,5 +126,11 @@ export function createDatabase({ database = 'habitpulse.db' }: DatabaseOptions =
     db.prepare('ALTER TABLE check_ins ADD COLUMN deleted_at TEXT').run();
   }
 
+  if (!checkInColumns.some((column) => column.name === 'status')) {
+    db.prepare("ALTER TABLE check_ins ADD COLUMN status TEXT NOT NULL DEFAULT 'success'").run();
+  }
+
+  db.prepare("UPDATE check_ins SET status = 'success' WHERE status IS NULL OR status = ''").run();
+
   return db;
 }

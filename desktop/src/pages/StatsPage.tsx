@@ -19,10 +19,11 @@ export default function StatsPage() {
   const { tasks, checkIns, now } = useStore();
   const today = getTodayKey(now);
   const activeTasks = useMemo(() => tasks.filter((t) => !t.deletedAt), [tasks]);
+  const successCheckIns = useMemo(() => checkIns.filter((c) => c.status !== 'failed'), [checkIns]);
 
   const unionDates = useMemo(
-    () => new Set(checkIns.map((c) => c.date)),
-    [checkIns],
+    () => new Set(successCheckIns.map((c) => c.date)),
+    [successCheckIns],
   );
 
   const totalDuration = useMemo(
@@ -31,7 +32,7 @@ export default function StatsPage() {
     [activeTasks, now],
   );
 
-  const todayCount = checkIns.filter((c) => c.date === today).length;
+  const todayCount = successCheckIns.filter((c) => c.date === today).length;
 
   const topCards = [
     { label: '今日完成', value: `${todayCount}/${activeTasks.length}`, accent: true },
@@ -42,7 +43,7 @@ export default function StatsPage() {
 
   const perTask = activeTasks
     .map((task) => {
-      const dates = checkIns.filter((c) => c.taskId === task.id).map((c) => c.date);
+      const dates = successCheckIns.filter((c) => c.taskId === task.id).map((c) => c.date);
       const stats = computeStats(dates, today);
       return { task, ...stats };
     })
@@ -58,13 +59,13 @@ export default function StatsPage() {
       const key = toLocalDateKey(cursor);
       data.push({
         date: key.slice(5),
-        count: checkIns.filter((c) => c.date === key).length,
+        count: successCheckIns.filter((c) => c.date === key).length,
       });
       cursor.setDate(cursor.getDate() + 1);
     }
 
     return data;
-  }, [checkIns, today]);
+  }, [successCheckIns, today]);
 
   return (
     <div className="flex flex-col gap-5">

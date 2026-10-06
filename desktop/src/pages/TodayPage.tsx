@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { AlarmClock, ArrowUpDown, Plus } from 'lucide-react';
+import { AlarmClock, ArrowUpDown, CircleCheck, CircleX, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ProgressRing from '../components/ProgressRing';
 import TaskCard from '../components/TaskCard';
@@ -21,7 +21,7 @@ function pad2(value: number): string {
 }
 
 export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
-  const { tasks, checkIns, now, updateTask, deleteTask, undoCheckIn, reorderTasks, loading } = useStore();
+  const { tasks, checkIns, now, updateTask, deleteTask, undoCheckIn, reorderTasks, setCheckInStatus, loading } = useStore();
   const today = getTodayKey(now);
   const [groupFilter, setGroupFilter] = useState<string[]>(() => {
     try { const v = JSON.parse(localStorage.getItem('habitpulse.desktop.selectedGroups') ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
@@ -36,6 +36,10 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   const [newGroupName, setNewGroupName] = useState('');
   const completedIds = useMemo(
     () => new Set(checkIns.filter((c) => c.date === today).map((c) => c.taskId)),
+    [checkIns, today],
+  );
+  const successIds = useMemo(
+    () => new Set(checkIns.filter((c) => c.date === today && c.status !== 'failed').map((c) => c.taskId)),
     [checkIns, today],
   );
   const groups = useMemo(() => getTaskGroups(tasks, completedIds), [tasks, completedIds]);
@@ -102,7 +106,7 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
       ...recencyIds(groups.finished, next),
     ]);
   }, [sortDesc, recencyIds, groups, reorderTasks]);
-  const groupFilteredCompletedCount = useMemo(() => groupFiltered.filter((t) => completedIds.has(t.id)).length, [groupFiltered, completedIds]);
+  const groupFilteredCompletedCount = useMemo(() => groupFiltered.filter((t) => successIds.has(t.id)).length, [groupFiltered, successIds]);
   const filteredRatio = groupFiltered.length ? groupFilteredCompletedCount / groupFiltered.length : 0;
 
   const renameGroup = useCallback((oldName: string, newName: string) => {
@@ -172,6 +176,7 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
   }, [customGroups]);
 
   const ctxTask = ctxMenu ? tasks.find((t) => t.id === ctxMenu.taskId) : undefined;
+  const ctxStatus = ctxTask ? checkIns.find((c) => c.taskId === ctxTask.id && c.date === today)?.status ?? 'success' : 'success';
   const ratio = filteredRatio;
 
   const dragTaskId = useRef<string | null>(null);
@@ -245,6 +250,8 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
         task={task}
         date={today}
         checked={completedIds.has(task.id)}
+        checkInStatus={checkIns.find((c) => c.taskId === task.id && c.date === today)?.status ?? 'success'}
+        onSetCheckInStatus={setCheckInStatus}
         onEdit={() => onEditTask(task)}
         onOpenDetail={() => onOpenRecord({ taskId: task.id, date: today })}
         onDropImages={(files) => onOpenRecord({ taskId: task.id, date: today }, files)}
@@ -501,23 +508,42 @@ export default function TodayPage({ onEditTask, onOpenRecord }: Props) {
       {/* Global context menu — rendered once at page level */}
       {ctxMenu && ctxTask && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setCtxMenu(null)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null); }} />
+          <div className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[2px]" onClick={() => setCtxMenu(null)} onContextMenu={(e) => { e.preventDefault(); setCtxMenu(null); }} />
           <div
-            className="fixed z-50 min-w-[160px] rounded-xl border border-white/10 bg-slate-900/95 py-1 shadow-2xl backdrop-blur-sm"
-            style={{ left: ctxMenu.x, top: ctxMenu.y }}
+            className="fixed z-50 min-w-[220px] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/98 py-2 shadow-2xl backdrop-blur-xl"
+            style={{
+              left: Math.min(ctxMenu.x, window.innerWidth - 236),
+              top: Math.min(ctxMenu.y, window.innerHeight - 260),
+            }}
           >
+            <div className="border-b border-white/[0.07] px-3 pb-2">
+              <p className="truncate text-sm font-black text-slate-100">{ctxTask.name}</p>
+              <p className="mt-0.5 text-[11px] font-semibold text-slate-500">
+                状态：{ctxStatus === 'failed' ? '打卡失败' : ctxStatus === 'success' ? '已完成' : '未打卡'}
+              </p>
+            </div>
             <button
-              className="w-full px-3 py-1.5 text-left text-xs font-semibold text-slate-200 hover:bg-white/[0.06]"
+              className="mx-2 mt-2 flex w-[calc(100%-16px)] items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13px] font-bold text-slate-200 transition-colors hover:bg-white/[0.07]"
               onClick={() => { onEditTask(ctxTask); setCtxMenu(null); }}
             >
-              ✏️ 编辑
+              <Pencil size={16} className="text-cyan-300" />
+              编辑任务
             </button>
-            <div className="my-1 border-t border-white/[0.06]" />
             <button
-              className="w-full px-3 py-1.5 text-left text-xs text-rose-400 hover:bg-rose-500/10"
+              className={`mx-2 flex w-[calc(100%-16px)] items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13px] font-bold transition-colors ${
+                ctxStatus === 'failed' ? 'text-emerald-300 hover:bg-emerald-400/10' : 'text-red-300 hover:bg-red-400/10'
+              }`}
+              onClick={() => { setCheckInStatus(ctxTask.id, today, ctxStatus === 'failed' ? 'success' : 'failed'); setCtxMenu(null); }}
+            >
+              {ctxStatus === 'failed' ? <CircleCheck size={16} /> : <CircleX size={16} />}
+              {ctxStatus === 'failed' ? '标记为打卡成功' : '标记为打卡失败'}
+            </button>
+            <button
+              className="mx-2 flex w-[calc(100%-16px)] items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13px] font-bold text-slate-200 transition-colors hover:bg-white/[0.07]"
               onClick={() => { void deleteTask(ctxTask.id); setCtxMenu(null); }}
             >
-              🗑 删除
+              <Trash2 size={16} className="text-red-400" />
+              删除任务
             </button>
           </div>
         </>

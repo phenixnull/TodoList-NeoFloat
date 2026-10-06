@@ -1,10 +1,11 @@
 import { toLocalDateKey } from './streak';
 
-export type HeatmapStatus = 'empty' | 'partial' | 'complete';
+export type HeatmapStatus = 'empty' | 'partial' | 'complete' | 'failed';
 
 export type HeatmapDay = {
   date: string;
   completed?: boolean;
+  failed?: boolean;
   durationMs?: number;
 };
 
@@ -74,12 +75,15 @@ export function buildHeatmap(
       const dateKey = toLocalDateKey(date);
       const day = dayByKey.get(dateKey);
       const completed = day?.completed ?? false;
+      const failed = day?.failed ?? false;
       const durationMs = Math.max(0, day?.durationMs ?? 0);
-      const hasData = completed || durationMs > 0;
+      const hasData = completed || failed || durationMs > 0;
       const intensity = maxDurationMs > 0 ? clamp01(durationMs / maxDurationMs) : 0;
       const status: HeatmapStatus = completed
         ? 'complete'
-        : durationMs > 0
+        : failed
+          ? 'failed'
+          : durationMs > 0
           ? 'partial'
           : 'empty';
 
@@ -111,6 +115,10 @@ export function getHeatmapCellStyle(
 
   if (cell.status === 'empty') {
     return { backgroundColor: isLight ? 'rgba(15,23,42,0.08)' : 'rgba(2,6,23,0.78)' };
+  }
+
+  if (cell.status === 'failed') {
+    return { backgroundColor: 'rgba(239,68,68,0.88)' };
   }
 
   const rgb = cell.status === 'complete' ? '34,197,94' : '56,189,248';
