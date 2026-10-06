@@ -79,11 +79,11 @@ export default function GroupSelect({
   };
 
   const showGroupActions = (group: string) => {
-    const buttons: Array<{
+    const buttons: {
       text: string;
       onPress?: () => void;
       style?: 'default' | 'cancel' | 'destructive';
-    }> = [];
+    }[] = [];
 
     if (onRenameGroup) {
       buttons.push({

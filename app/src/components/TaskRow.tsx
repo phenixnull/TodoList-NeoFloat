@@ -24,14 +24,6 @@ import { CheckInStatus, Task } from '../domain/types';
 import { calculateTimeSegmentsDurationForDate, formatDuration, isTimerRunning } from '../domain/timeTracking';
 import { resolveTheme } from '../theme/theme';
 
-const GROUP_COLORS = ['#22d3ee', '#a78bfa', '#f472b6', '#fb923c', '#34d399', '#facc15', '#60a5fa', '#f87171', '#2dd4bf', '#c084fc'];
-
-function getGroupColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  return GROUP_COLORS[Math.abs(hash) % GROUP_COLORS.length];
-}
-
 type Props = {
   task: Task;
   today: string;

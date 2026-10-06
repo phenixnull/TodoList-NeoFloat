@@ -134,16 +134,6 @@ export default function HomeScreen() {
       progress: totalCount === 0 ? 0 : Math.min(completedCount / totalCount, 1),
     };
   }, [groupFilteredTasks, successIds]);
-  const overviewResolvedStats = useMemo(() => {
-    const completedCount = groupFilteredTasks.filter((task) => resolvedIds.has(task.id)).length;
-    const totalCount = groupFilteredTasks.length;
-
-    return {
-      completedCount: Math.min(completedCount, totalCount),
-      totalCount,
-    };
-  }, [groupFilteredTasks, resolvedIds]);
-
   useEffect(() => {
     if (loading) return;
 
@@ -287,7 +277,7 @@ export default function HomeScreen() {
       onMoveToGroup={moveToGroup}
       isLight={theme.isLight}
     />
-  ), [availableGroups, today, completedIds, theme.isLight, todayCheckInsByTask, statsByTaskId, setCheckInStatus, toggleCheckIn, toggleTimer, deleteTask, moveToGroup]);
+  ), [availableGroups, today, completedIds, resolvedIds, theme.isLight, todayCheckInsByTask, statsByTaskId, setCheckInStatus, toggleCheckIn, toggleTimer, deleteTask, moveToGroup]);
 
   // Web build: react-native-draggable-flatlist is not web-compatible (it calls
   // findNodeHandle on layout, which throws on react-native-web). Render the same
@@ -497,27 +487,27 @@ export default function HomeScreen() {
                   contentContainerStyle={styles.taskList}
                 />
               ) : (
-                <View style={styles.taskList}>
-                  {sortedFinished.map((item) => (
-                    <TaskRow
-                      key={item.id}
-                      task={item}
-                      today={today}
-                      checkedInToday={completedIds.has(item.id)}
-                      resolvedInToday={resolvedIds.has(item.id)}
-                      checkedInAt={todayCheckInsByTask.get(item.id)?.createdAt}
-                      checkInStatus={todayCheckInsByTask.get(item.id)?.status ?? 'success'}
-                      stats={statsByTaskId.get(item.id)}
-                      onToggle={toggleCheckIn}
-                      onToggleTimer={toggleTimer}
-                      onSetCheckInStatus={setCheckInStatus}
-                      onDelete={deleteTask}
-                      customGroups={availableGroups}
-                      onMoveToGroup={moveToGroup}
-                      isLight={theme.isLight}
-                    />
-                  ))}
-                </View>
+                <NestableDraggableFlatList
+                  key={`fin-${dragListKey}-${groupFilter?.join('\u0000') ?? 'all'}-${statusFilter}`}
+                  data={sortedFinished}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderTask}
+                  dragGestureDetector="item"
+                  onDragEnd={({ from, to }) => handleReorder(
+                    sortedFinished.map((item) => item.id),
+                    from,
+                    to,
+                    'finished',
+                  )}
+                  scrollEnabled={false}
+                  activationDistance={8}
+                  autoscrollEnabled={false}
+                  dropAnimationConfig={DRAG_SNAP_SPRING}
+                  dropAnimationMode="instant"
+                  dragItemOverflow
+                  windowSize={5}
+                  contentContainerStyle={styles.taskList}
+                />
               )}
             </>
           )}
