@@ -1,7 +1,8 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Link, Stack } from 'expo-router';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { dialog } from '@/components/dialog/dialogs';
 import GlassCard from '@/components/GlassCard';
 import PressableScale from '@/components/PressableScale';
 import ScreenShell from '@/components/ScreenShell';
@@ -63,10 +64,13 @@ export default function TasksScreen() {
 
                   <PressableScale
                     style={[styles.smallButton, { borderColor: theme.surfaceBorder, backgroundColor: theme.inputBackground }]}
-                    onPress={() => Alert.alert('删除任务', `确定删除“${task.name}”吗？`, [
-                      { text: '取消', style: 'cancel' },
-                      { text: '删除', style: 'destructive', onPress: () => deleteTask(task.id) },
-                    ])}
+                    onPress={() => dialog.confirm({
+                      title: '删除任务',
+                      message: `确定删除“${task.name}”吗？`,
+                      confirmText: '删除',
+                      danger: true,
+                      onConfirm: () => deleteTask(task.id),
+                    })}
                   >
                     <MaterialCommunityIcons
                       name="trash-can-outline"

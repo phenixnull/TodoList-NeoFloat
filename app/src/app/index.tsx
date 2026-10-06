@@ -1,9 +1,10 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Link, Stack } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, Platform, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Platform, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { NestableDraggableFlatList } from 'react-native-draggable-flatlist';
+import { dialog } from '@/components/dialog/dialogs';
 import DailyOverviewCard from '@/components/DailyOverviewCard';
 import GlassCard from '@/components/GlassCard';
 import GroupSelect from '@/components/GroupSelect';
@@ -202,9 +203,12 @@ export default function HomeScreen() {
   }, [changeGroupFilter, customGroups, groupFilter, selectGroup, updateSettings]);
 
   const deleteGroup = useCallback((group: string) => {
-    Alert.alert('删除分组', `确定删除"${group}"？任务不会删除。`, [
-      { text: '取消', style: 'cancel' },
-      { text: '删除', style: 'destructive', onPress: () => {
+    dialog.confirm({
+      title: '删除分组',
+      message: `确定删除"${group}"？任务不会删除。`,
+      confirmText: '删除',
+      danger: true,
+      onConfirm: () => {
         // Deleting a drawer removes its bindings; otherwise every task that
         // still carries the group would resurrect it on the next render.
         for (const task of activeTasks) {
@@ -213,8 +217,8 @@ export default function HomeScreen() {
         }
         updateSettings({ customGroups: customGroups.filter((g) => g !== group) });
         if (groupFilter?.includes(group)) changeGroupFilter(groupFilter.filter((g) => g !== group));
-      }},
-    ]);
+      },
+    });
   }, [activeTasks, changeGroupFilter, customGroups, groupFilter, updateTask, updateSettings]);
 
   const renameGroup = useCallback((oldName: string, rawNewName: string) => {

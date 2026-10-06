@@ -1,9 +1,10 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { dialog } from '@/components/dialog/dialogs';
 import GlassCard from '@/components/GlassCard';
 import HeatmapGrid from '@/components/HeatmapGrid';
 import PressableScale from '@/components/PressableScale';
@@ -313,17 +314,16 @@ export default function TaskDetailScreen() {
       {mode === 'stats' ? (
         <PressableScale
           style={styles.deleteButton}
-          onPress={() => Alert.alert('删除任务', `确定删除“${task.name}”吗？`, [
-            { text: '取消', style: 'cancel' },
-            {
-              text: '删除',
-              style: 'destructive',
-              onPress: () => {
-                deleteTask(task.id);
-                router.back();
-              },
+          onPress={() => dialog.confirm({
+            title: '删除任务',
+            message: `确定删除“${task.name}”吗？`,
+            confirmText: '删除',
+            danger: true,
+            onConfirm: () => {
+              deleteTask(task.id);
+              router.back();
             },
-          ])}
+          })}
         >
           <Text style={[styles.deleteText, { color: theme.isLight ? '#b91c1c' : '#fca5a5' }]}>
             删除任务

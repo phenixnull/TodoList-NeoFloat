@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { HabitStoreProvider, useHabitStore } from '@/store/useHabitStore';
+import DialogHost from '@/components/dialog/DialogHost';
 
 const darkTheme = {
   ...DarkTheme,
@@ -42,6 +43,7 @@ function AppChrome() {
             contentStyle: { backgroundColor: 'transparent' },
           }}
         />
+        <DialogHost />
       </ThemeProvider>
     </>
   );

@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { dialog } from './dialog/dialogs';
 import GlassCard from './GlassCard';
 import PressableScale from './PressableScale';
 import { Task, TimeSegment } from '../domain/types';
@@ -579,24 +580,19 @@ export default function TimeSegmentsEditor({
               borderColor: theme.isLight ? 'rgba(180,83,9,0.22)' : 'rgba(251,191,36,0.22)',
               backgroundColor: theme.isLight ? 'rgba(245,158,11,0.08)' : 'rgba(251,191,36,0.07)',
             }]}
-            onPress={() => Alert.alert(
-              '清空当天时间段',
-              `将删除 ${date} 这一天的计时记录，跨天记录会保留其他日期的部分。`,
-              [
-                { text: '取消', style: 'cancel' },
-                {
-                  text: '清空',
-                  style: 'destructive',
-                  onPress: () => {
-                    const cleared = clearTimeSegmentsForDate(task, date);
-                    onUpdateTask(task.id, {
-                      timerSegments: cleared.timerSegments,
-                      removedSegmentIds: cleared.removedSegmentIds,
-                    });
-                  },
-                },
-              ],
-            )}
+            onPress={() => dialog.confirm({
+              title: '清空当天时间段',
+              message: `将删除 ${date} 这一天的计时记录，跨天记录会保留其他日期的部分。`,
+              confirmText: '清空',
+              danger: true,
+              onConfirm: () => {
+                const cleared = clearTimeSegmentsForDate(task, date);
+                onUpdateTask(task.id, {
+                  timerSegments: cleared.timerSegments,
+                  removedSegmentIds: cleared.removedSegmentIds,
+                });
+              },
+            })}
           >
             <MaterialCommunityIcons
               name="calendar-remove"
@@ -613,25 +609,20 @@ export default function TimeSegmentsEditor({
               borderColor: theme.isLight ? 'rgba(185,28,28,0.20)' : 'rgba(252,165,165,0.22)',
               backgroundColor: theme.isLight ? 'rgba(220,38,38,0.08)' : 'rgba(248,113,113,0.07)',
             }]}
-            onPress={() => Alert.alert(
-              '重置全部耗时',
-              '将删除该任务所有计时时间段和额外耗时，此操作不可撤销。',
-              [
-                { text: '取消', style: 'cancel' },
-                {
-                  text: '重置',
-                  style: 'destructive',
-                  onPress: () => {
-                    const reset = resetTaskDuration(task);
-                    onUpdateTask(task.id, {
-                      timerSegments: reset.timerSegments,
-                      removedSegmentIds: reset.removedSegmentIds,
-                      manualDurationMs: reset.manualDurationMs,
-                    });
-                  },
-                },
-              ],
-            )}
+            onPress={() => dialog.confirm({
+              title: '重置全部耗时',
+              message: '将删除该任务所有计时时间段和额外耗时，此操作不可撤销。',
+              confirmText: '重置',
+              danger: true,
+              onConfirm: () => {
+                const reset = resetTaskDuration(task);
+                onUpdateTask(task.id, {
+                  timerSegments: reset.timerSegments,
+                  removedSegmentIds: reset.removedSegmentIds,
+                  manualDurationMs: reset.manualDurationMs,
+                });
+              },
+            })}
           >
             <MaterialCommunityIcons
               name="restart"

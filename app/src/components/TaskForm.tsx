@@ -4,8 +4,9 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { ReactNode, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { dialog } from './dialog/dialogs';
 import GlassCard from './GlassCard';
 import PressableScale from './PressableScale';
 import GroupSelect from './GroupSelect';
@@ -93,7 +94,7 @@ export default function TaskForm({
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!permission.granted) {
-        Alert.alert('无法访问图片', '请在系统设置中允许 HabitPulse 访问照片。');
+        dialog.alert('无法访问图片', '请在系统设置中允许 HabitPulse 访问照片。');
         return;
       }
 
@@ -142,7 +143,7 @@ export default function TaskForm({
 
       setIconImage(`data:image/jpeg;base64,${manipulated.base64}`);
     } catch (error) {
-      Alert.alert('图片处理失败', error instanceof Error ? error.message : '请换一张图片再试。');
+      dialog.alert('图片处理失败', error instanceof Error ? error.message : '请换一张图片再试。');
     } finally {
       setProcessingImage(false);
     }

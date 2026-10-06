@@ -3,7 +3,7 @@ import { Link } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   Gesture,
   GestureDetector,
@@ -15,6 +15,7 @@ import Animated, {
   useSharedValue,
   runOnJS,
 } from 'react-native-reanimated';
+import { dialog, type DialogOption } from './dialog/dialogs';
 import PressableScale from './PressableScale';
 import TaskIcon from './TaskIcon';
 import { getPulseColors } from '../domain/color';
@@ -135,32 +136,39 @@ function TaskRow({
 
   const showGroupMenu = () => {
     if (!onMoveToGroup) return;
-    const buttons: { text: string; onPress: () => void; style?: 'default' | 'cancel' | 'destructive' }[] = [];
-
-    buttons.push({
+    const currentGroups = task.customGroups ?? [];
+    const options: DialogOption[] = [{
       text: '未分组',
+      icon: 'close-circle-outline',
+      selected: currentGroups.length === 0,
       onPress: () => onMoveToGroup(task.id, []),
-    });
+    }];
     for (const g of customGroups) {
-      buttons.push({
-        text: `${(task.customGroups ?? []).includes(g) ? '✓ ' : ''}${g}`,
-        onPress: () => onMoveToGroup(task.id, (task.customGroups ?? []).includes(g) ? (task.customGroups ?? []).filter((x) => x !== g) : [...(task.customGroups ?? []), g]),
+      const has = currentGroups.includes(g);
+      options.push({
+        text: g,
+        selected: has,
+        onPress: () => onMoveToGroup(task.id, has
+          ? currentGroups.filter((x) => x !== g)
+          : [...currentGroups, g]),
       });
     }
-    buttons.push({ text: '取消', style: 'cancel', onPress: () => {} });
 
-    Alert.alert(
-      `移动「${task.name}」到分组`,
-      `当前：${task.customGroups?.join(', ') ?? '未分组'}`,
-      buttons,
-    );
+    dialog.sheet({
+      title: `移动「${task.name}」到分组`,
+      message: `当前：${currentGroups.join(', ') || '未分组'}`,
+      options,
+    });
   };
 
   const confirmDelete = () => {
-    Alert.alert('删除任务', `确定删除“${task.name}”吗？`, [
-      { text: '取消', style: 'cancel' },
-      { text: '删除', style: 'destructive', onPress: () => onDelete(task.id) },
-    ]);
+    dialog.confirm({
+      title: '删除任务',
+      message: `确定删除“${task.name}”吗？`,
+      confirmText: '删除',
+      danger: true,
+      onConfirm: () => onDelete(task.id),
+    });
   };
 
   const showActionMenu = () => setActionMenuVisible(true);

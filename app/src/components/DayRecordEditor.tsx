@@ -2,8 +2,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { useState } from 'react';
-import { Alert, ImageStyle, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ImageStyle, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { dialog } from './dialog/dialogs';
 import GlassCard from './GlassCard';
 import PressableScale from './PressableScale';
 import { DayRecord, DayRecordImage } from '../domain/types';
@@ -68,7 +69,7 @@ export default function DayRecordEditor({
       setImages((current) => [...current, ...prepared].slice(0, maxImages));
       setSaved(false);
     } catch (error) {
-      Alert.alert('图片处理失败', error instanceof Error ? error.message : '请换一张图片再试。');
+      dialog.alert('图片处理失败', error instanceof Error ? error.message : '请换一张图片再试。');
     } finally {
       setProcessing(false);
     }
@@ -79,7 +80,7 @@ export default function DayRecordEditor({
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!permission.granted) {
-        Alert.alert('无法访问图片', '请在系统设置中允许 HabitPulse 访问照片。');
+        dialog.alert('无法访问图片', '请在系统设置中允许 HabitPulse 访问照片。');
         return;
       }
 
@@ -94,7 +95,7 @@ export default function DayRecordEditor({
       if (result.canceled || result.assets.length === 0) return;
       await addAssets(result.assets);
     } catch (error) {
-      Alert.alert('图片处理失败', error instanceof Error ? error.message : '请换一张图片再试。');
+      dialog.alert('图片处理失败', error instanceof Error ? error.message : '请换一张图片再试。');
     } finally {
       setProcessing(false);
     }
@@ -105,7 +106,7 @@ export default function DayRecordEditor({
       const permission = await ImagePicker.requestCameraPermissionsAsync();
 
       if (!permission.granted) {
-        Alert.alert('无法使用相机', '请在系统设置中允许 HabitPulse 使用相机。');
+        dialog.alert('无法使用相机', '请在系统设置中允许 HabitPulse 使用相机。');
         return;
       }
 
@@ -117,7 +118,7 @@ export default function DayRecordEditor({
       if (result.canceled || result.assets.length === 0) return;
       await addAssets(result.assets);
     } catch (error) {
-      Alert.alert('拍照失败', error instanceof Error ? error.message : '请重新拍摄。');
+      dialog.alert('拍照失败', error instanceof Error ? error.message : '请重新拍摄。');
     } finally {
       setProcessing(false);
     }

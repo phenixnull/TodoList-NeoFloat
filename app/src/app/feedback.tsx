@@ -4,7 +4,6 @@ import Constants from 'expo-constants';
 import { Stack } from 'expo-router';
 import { useState } from 'react';
 import {
-  Alert,
   Platform,
   Image,
   Pressable,
@@ -15,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { dialog } from '@/components/dialog/dialogs';
 import GlassCard from '@/components/GlassCard';
 import PressableScale from '@/components/PressableScale';
 import ScreenShell from '@/components/ScreenShell';
@@ -44,7 +44,7 @@ export default function FeedbackScreen() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert('无法访问图片', '请在系统设置中允许 HabitPulse 访问照片。');
+      dialog.alert('无法访问图片', '请在系统设置中允许 HabitPulse 访问照片。');
       return;
     }
 
@@ -90,12 +90,12 @@ export default function FeedbackScreen() {
 
   const submit = async () => {
     if (!title.trim()) {
-      Alert.alert('请填写问题标题');
+      dialog.alert('请填写问题标题');
       return;
     }
 
     if (!settings.syncEnabled || !settings.serverUrl.trim()) {
-      Alert.alert('未连接服务端', '请先在设置中开启同步并填写服务端地址。');
+      dialog.alert('未连接服务端', '请先在设置中开启同步并填写服务端地址。');
       return;
     }
 
@@ -132,7 +132,7 @@ export default function FeedbackScreen() {
       setImages([]);
       setTimeout(() => {}, 2000);
     } catch (error) {
-      Alert.alert('提交失败', error instanceof Error ? error.message : '请检查服务端连接。');
+      dialog.alert('提交失败', error instanceof Error ? error.message : '请检查服务端连接。');
     } finally {
       setSubmitting(false);
     }

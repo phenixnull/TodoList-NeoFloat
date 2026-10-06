@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { dialog, type DialogOption } from './dialog/dialogs';
 import PressableScale from './PressableScale';
 import { useHabitStore } from '../store/useHabitStore';
 import { useTheme } from '../theme/theme';
@@ -79,15 +80,12 @@ export default function GroupSelect({
   };
 
   const showGroupActions = (group: string) => {
-    const buttons: {
-      text: string;
-      onPress?: () => void;
-      style?: 'default' | 'cancel' | 'destructive';
-    }[] = [];
+    const options: DialogOption[] = [];
 
     if (onRenameGroup) {
-      buttons.push({
+      options.push({
         text: '改名',
+        icon: 'pencil-outline',
         onPress: () => {
           setRenameName(group);
           setRenameTarget(group);
@@ -95,19 +93,20 @@ export default function GroupSelect({
       });
     }
     if (onDeleteGroup) {
-      buttons.push({
+      options.push({
         text: '删除',
-        style: 'destructive',
+        icon: 'trash-outline',
+        danger: true,
         onPress: () => onDeleteGroup(group),
       });
     }
-    if (!buttons.length) return;
+    if (!options.length) return;
 
-    Alert.alert(
-      `抽屉：${group}`,
-      '长按抽屉后可以选择改名或删除。',
-      [...buttons, { text: '取消', style: 'cancel' }],
-    );
+    dialog.sheet({
+      title: `抽屉：${group}`,
+      message: '选择改名或删除。',
+      options,
+    });
   };
 
   const optionStyle = (active: boolean, color: string) => [
