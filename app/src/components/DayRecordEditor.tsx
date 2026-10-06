@@ -49,9 +49,32 @@ export default function DayRecordEditor({
   const { settings } = useHabitStore();
   const theme = useTheme(settings.appearance);
 
-  const addImages = async () => {
+  const addAssets = async (assets: ImagePicker.ImagePickerAsset[]) => {
     setProcessing(true);
 
+    try {
+      const prepared: DayRecordImage[] = [];
+
+      for (const asset of assets) {
+        prepared.push(await prepareDayRecordImage(
+          taskId,
+          date,
+          asset.uri,
+          Number(asset.width ?? 0),
+          Number(asset.height ?? 0),
+        ));
+      }
+
+      setImages((current) => [...current, ...prepared].slice(0, maxImages));
+      setSaved(false);
+    } catch (error) {
+      Alert.alert('图片处理失败', error instanceof Error ? error.message : '请换一张图片再试。');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const addImages = async () => {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -69,23 +92,32 @@ export default function DayRecordEditor({
       });
 
       if (result.canceled || result.assets.length === 0) return;
-
-      const prepared: DayRecordImage[] = [];
-
-      for (const asset of result.assets) {
-        prepared.push(await prepareDayRecordImage(
-          taskId,
-          date,
-          asset.uri,
-          Number(asset.width ?? 0),
-          Number(asset.height ?? 0),
-        ));
-      }
-
-      setImages((current) => [...current, ...prepared].slice(0, maxImages));
-      setSaved(false);
+      await addAssets(result.assets);
     } catch (error) {
       Alert.alert('图片处理失败', error instanceof Error ? error.message : '请换一张图片再试。');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const takePhoto = async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+
+      if (!permission.granted) {
+        Alert.alert('无法使用相机', '请在系统设置中允许 HabitPulse 使用相机。');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        quality: 0.88,
+      });
+
+      if (result.canceled || result.assets.length === 0) return;
+      await addAssets(result.assets);
+    } catch (error) {
+      Alert.alert('拍照失败', error instanceof Error ? error.message : '请重新拍摄。');
     } finally {
       setProcessing(false);
     }
@@ -187,6 +219,20 @@ export default function DayRecordEditor({
           <MaterialCommunityIcons name="image-multiple-outline" size={17} color={accentColor} />
             <Text style={[styles.imageButtonText, { color: accentColor }]}>
             {processing ? '处理中...' : images.length ? '继续添加' : '上传图片'}
+          </Text>
+        </PressableScale>
+
+        <PressableScale
+          style={[styles.imageButton, {
+            borderColor: `${accentColor}55`,
+            backgroundColor: theme.inputBackground,
+          }]}
+          onPress={() => void takePhoto()}
+          disabled={processing || images.length >= maxImages}
+        >
+          <MaterialCommunityIcons name="camera-outline" size={17} color={accentColor} />
+          <Text style={[styles.imageButtonText, { color: accentColor }]}>
+            拍照打卡
           </Text>
         </PressableScale>
 

@@ -11,7 +11,6 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { Directions, FlingGestureHandler, State } from 'react-native-gesture-handler';
 import PressableScale from './PressableScale';
 import { CheckIn, DayRecord, Task } from '../domain/types';
 import { formatCheckInTime } from '../domain/format';
@@ -77,20 +76,8 @@ export default function DayRecordDetail({
   const activeIndex = scrollIndex.date === date ? scrollIndex.index : 0;
 
   return (
-    <FlingGestureHandler
-      direction={Directions.LEFT}
-      onHandlerStateChange={({ nativeEvent }) => {
-        if (nativeEvent.state === State.ACTIVE && canGoNext) onNext();
-      }}
-    >
-      <FlingGestureHandler
-        direction={Directions.RIGHT}
-        onHandlerStateChange={({ nativeEvent }) => {
-          if (nativeEvent.state === State.ACTIVE && canGoPrevious) onPrevious();
-        }}
-      >
-        <View style={styles.container}>
-          <View style={styles.dateRow}>
+    <View style={styles.container}>
+      <View style={styles.dateRow}>
             <PressableScale
               style={[styles.arrowButton, {
                 borderColor: canGoPrevious ? theme.accentBorder : theme.surfaceBorder,
@@ -132,7 +119,7 @@ export default function DayRecordDetail({
                 color={canGoNext ? theme.accentText : theme.subtleText}
               />
             </PressableScale>
-          </View>
+      </View>
 
           {record?.note ? (
             <Text style={[styles.note, { color: theme.mutedText }]}>{record.note}</Text>
@@ -199,8 +186,6 @@ export default function DayRecordDetail({
             </View>
           )}
         </View>
-      </FlingGestureHandler>
-    </FlingGestureHandler>
   );
 }
 
