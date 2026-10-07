@@ -144,6 +144,71 @@ describe('HabitPulse API', () => {
     expect(rebound.json().appUsageSegments).toEqual([]);
   });
 
+  it('accepts realtime foreground-service usage samples and rejects mismatched bindings', async () => {
+    const app = buildApp({ database: ':memory:' });
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      payload: {
+        name: 'Foreground service usage',
+        icon: 'android',
+        color: '#22d3ee',
+        description: '',
+        appUsageBinding: { packageName: 'com.example.reader', appName: 'Reader' },
+      },
+    });
+    const taskId = created.json().id;
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/usage/samples',
+      payload: {
+        samples: [{
+          taskId,
+          packageName: 'com.example.reader',
+          segments: [
+            { id: 'app-com.example.reader-live', startAt: '2026-10-08T01:00:00.000Z', stopAt: null },
+          ],
+        }],
+      },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json().updatedIds).toEqual([taskId]);
+
+    const closed = await app.inject({
+      method: 'POST',
+      url: '/api/usage/samples',
+      payload: {
+        samples: [{
+          taskId,
+          packageName: 'com.example.reader',
+          segments: [
+            { id: 'app-com.example.reader-live', startAt: '2026-10-08T01:00:00.000Z', stopAt: '2026-10-08T01:05:00.000Z' },
+          ],
+        }],
+      },
+    });
+    expect(closed.statusCode).toBe(200);
+
+    const snapshot = (await app.inject({ url: '/api/snapshot' })).json() as any;
+    const task = snapshot.tasks.find((item: any) => item.id === taskId);
+    expect(task.appUsageSegments[0].stopAt).toBe('2026-10-08T01:05:00.000Z');
+
+    const mismatched = await app.inject({
+      method: 'POST',
+      url: '/api/usage/samples',
+      payload: {
+        samples: [{
+          taskId,
+          packageName: 'com.example.other',
+          segments: [{ id: 'bad', startAt: '2026-10-08T02:00:00.000Z', stopAt: null }],
+        }],
+      },
+    });
+    expect(mismatched.statusCode).toBe(200);
+    expect(mismatched.json().updatedIds).toEqual([]);
+  });
+
   it('deletes timer segments with tombstones and prevents stale sync from reviving them', async () => {
     const app = buildApp({ database: ':memory:' });
     const created = await app.inject({

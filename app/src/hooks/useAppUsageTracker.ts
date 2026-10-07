@@ -2,13 +2,20 @@ import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import { mergeAppUsageSegments } from '../domain/appUsage';
 import { getTodayKey } from '../domain/streak';
-import { getAppUsageSegments, hasUsageAccess, isAppUsageSupported } from '../services/appUsage';
+import { normalizeServerUrl } from '../services/api';
+import {
+  getAppUsageSegments,
+  hasUsageAccess,
+  isAppUsageSupported,
+  startUsageTracking,
+  stopUsageTracking,
+} from '../services/appUsage';
 import { useHabitStore } from '../store/useHabitStore';
 
 const SAMPLE_INTERVAL_MS = 15_000;
 
 export default function useAppUsageTracker() {
-  const { activeTasks, updateTask } = useHabitStore();
+  const { activeTasks, settings, updateTask } = useHabitStore();
   const tasksRef = useRef(activeTasks);
   const updateTaskRef = useRef(updateTask);
   const busyRef = useRef(false);
@@ -17,6 +24,53 @@ export default function useAppUsageTracker() {
     tasksRef.current = activeTasks;
     updateTaskRef.current = updateTask;
   }, [activeTasks, updateTask]);
+
+  const trackingBindings = activeTasks
+    .filter((task) => task.appUsageBinding?.packageName)
+    .map((task) => ({
+      taskId: task.id,
+      packageName: task.appUsageBinding!.packageName,
+    }));
+  const trackingConfig = JSON.stringify({
+    serverUrl: settings.syncEnabled && settings.serverUrl.trim()
+      ? normalizeServerUrl(settings.serverUrl)
+      : '',
+    samples: trackingBindings,
+  });
+
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !isAppUsageSupported()) return;
+
+    let cancelled = false;
+
+    const syncService = async () => {
+      try {
+        const granted = await hasUsageAccess();
+        if (cancelled) return;
+
+        const config = JSON.parse(trackingConfig) as {
+          serverUrl: string;
+          samples: { taskId: string; packageName: string }[];
+        };
+        if (!granted || config.samples.length === 0) {
+          await stopUsageTracking();
+          return;
+        }
+
+        await startUsageTracking(config.serverUrl, config.samples);
+      } catch {
+        // A transient permission/provider/start failure must not break the UI.
+      }
+    };
+
+    void syncService();
+
+    return () => {
+      cancelled = true;
+    };
+    // trackingConfig is a stable JSON fingerprint that avoids restarting the
+    // foreground service on every unrelated task/check-in state update.
+  }, [trackingConfig]);
 
   useEffect(() => {
     if (Platform.OS !== 'android' || !isAppUsageSupported()) return;

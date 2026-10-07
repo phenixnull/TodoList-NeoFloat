@@ -38,6 +38,5 @@ yarn-error.*
 
 example
 
-# generated native folders
+# generated native folders; Android is tracked because it contains HabitPulse services
 /ios
-/android

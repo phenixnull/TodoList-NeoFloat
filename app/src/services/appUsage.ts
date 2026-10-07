@@ -11,6 +11,9 @@ type NativeAppUsageModule = {
     startMs: number,
     endMs: number,
   ): Promise<{ startAt: string; stopAt: string | null }[]>;
+  startUsageTracking(configJson: string): Promise<boolean>;
+  stopUsageTracking(): Promise<boolean>;
+  isUsageTrackingActive(): Promise<boolean>;
 };
 
 const native = Platform.OS === 'android'
@@ -50,4 +53,17 @@ export async function getAppUsageSegments(
       startAt: row.startAt,
       stopAt: row.stopAt,
     }));
+}
+
+export function startUsageTracking(
+  serverUrl: string,
+  samples: { taskId: string; packageName: string }[],
+): Promise<boolean> {
+  if (!native) return Promise.resolve(false);
+  return native.startUsageTracking(JSON.stringify({ serverUrl, samples }));
+}
+
+export function stopUsageTracking(): Promise<boolean> {
+  if (!native) return Promise.resolve(true);
+  return native.stopUsageTracking();
 }

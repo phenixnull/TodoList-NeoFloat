@@ -66,6 +66,16 @@ const updateTaskSchema = z.object({
   scheduleWindow: scheduleWindowSchema.nullable().optional(),
 });
 
+const usageSampleSchema = z.object({
+  taskId: z.string().min(1),
+  packageName: z.string().min(1).max(255),
+  segments: z.array(timeSegmentSchema).max(1_000),
+});
+
+const usageSamplesSchema = z.object({
+  samples: z.array(usageSampleSchema).max(500),
+});
+
 const toggleCheckInSchema = z.object({
   taskId: z.string().min(1),
   date: dateKey,
@@ -605,6 +615,63 @@ export function buildApp({
 
     broadcast('task.deleted', { id });
     return { ok: true };
+  });
+
+  app.post('/api/usage/samples', async (request, reply) => {
+    const parsed = usageSamplesSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid usage samples', details: parsed.error.flatten() });
+    }
+
+    const now = new Date().toISOString();
+    const updatedIds: string[] = [];
+
+    db.transaction(() => {
+      for (const sample of parsed.data.samples) {
+        const existing = db.prepare('SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL').get(sample.taskId) as any;
+        if (!existing) continue;
+
+        const current = rowFromTask(existing);
+        if (current.appUsageBinding?.packageName !== sample.packageName) continue;
+
+        const byId = new Map((current.appUsageSegments ?? []).map((segment) => [segment.id, segment]));
+        for (const segment of sample.segments) {
+          const stored = byId.get(segment.id);
+          byId.set(segment.id, {
+            id: segment.id,
+            startAt: segment.startAt,
+            stopAt: segment.stopAt ?? stored?.stopAt ?? null,
+          });
+        }
+
+        const appUsageSegments = [...byId.values()]
+          .filter((segment) => Number.isFinite(new Date(segment.startAt).getTime()))
+          .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+
+        if (JSON.stringify(appUsageSegments) === JSON.stringify(current.appUsageSegments ?? [])) {
+          continue;
+        }
+
+        db.prepare(`
+          UPDATE tasks SET
+            app_usage_segments = @appUsageSegmentsJson,
+            updated_at = @updatedAt
+          WHERE id = @id
+        `).run({
+          id: sample.taskId,
+          appUsageSegmentsJson: JSON.stringify(appUsageSegments),
+          updatedAt: now,
+        });
+        updatedIds.push(sample.taskId);
+      }
+    })();
+
+    if (updatedIds.length) {
+      broadcast('usage.updated', { ids: updatedIds });
+    }
+
+    return { ok: true, updatedIds };
   });
 
   app.get('/api/checkins', async () => {
