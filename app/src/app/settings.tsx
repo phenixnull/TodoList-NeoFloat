@@ -67,7 +67,7 @@ export default function SettingsScreen() {
       const downloaded = await getDownloadedApk(manifest);
       if (downloaded) {
         await installApk(downloaded.localUri);
-        setUpdateState({ phase: 'available', manifest });
+        setUpdateState({ phase: 'available', manifest, alreadyDownloaded: true });
         return;
       }
 
@@ -105,7 +105,7 @@ export default function SettingsScreen() {
       if (status !== 'active') return;
       setUpdateState((prev) => (
         prev.phase === 'downloading'
-          ? { phase: 'available', manifest: prev.manifest }
+          ? { phase: 'available', manifest: prev.manifest, alreadyDownloaded: true }
           : prev
       ));
     });

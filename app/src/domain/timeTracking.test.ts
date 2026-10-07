@@ -200,6 +200,24 @@ describe('time tracking', () => {
     expect(formatManualDuration(-3_723_000)).toBe('-01:02:03');
   });
 
+  it('adds Android foreground app usage to the task total and calibration baseline', () => {
+    const source = task({
+      timerSegments: [
+        { id: 'manual', startAt: '2026-10-07T01:00:00Z', stopAt: '2026-10-07T01:10:00Z' },
+      ],
+      appUsageSegments: [
+        { id: 'auto', startAt: '2026-10-07T02:00:00Z', stopAt: '2026-10-07T02:20:00Z' },
+      ],
+      manualDurationMs: 60_000,
+    });
+
+    expect(calculateTaskDurationMs(source)).toBe(31 * 60_000);
+
+    const calibrated = setTaskTotalDuration(source, 60 * 60_000, new Date('2026-10-07T03:00:00Z'));
+    expect(calibrated.manualDurationMs).toBe(30 * 60_000);
+    expect(calculateTaskDurationMs(calibrated)).toBe(60 * 60_000);
+  });
+
   it('parses minutes, hours, compact units, and clock durations', () => {
     expect(parseDurationInput('30')).toBe(30 * 60_000);
     expect(parseDurationInput('1.5')).toBe(90 * 60_000);

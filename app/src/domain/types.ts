@@ -11,6 +11,9 @@ export type Task = {
   timerSegments: TimeSegment[];
   /** IDs intentionally deleted on any device. Used to stop server-side union sync from resurrecting them. */
   removedSegmentIds?: string[];
+  /** Foreground periods imported from an Android app binding. Kept separate from manual timing. */
+  appUsageSegments?: TimeSegment[];
+  appUsageBinding?: AppUsageBinding | null;
   /** User-editable correction/additional time. May be negative; task total is clamped at zero. */
   manualDurationMs: number;
   /** Optional planned time window; a missing check-in past its end auto-fails. */
@@ -24,6 +27,11 @@ export type TimeSegment = {
   id: string;
   startAt: string;
   stopAt?: string | null;
+};
+
+export type AppUsageBinding = {
+  packageName: string;
+  appName?: string;
 };
 
 export type ScheduleRepeat = 'daily' | 'weekly' | 'once';

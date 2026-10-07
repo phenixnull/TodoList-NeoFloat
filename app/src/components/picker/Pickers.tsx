@@ -45,11 +45,19 @@ function WheelPicker<T>({
   );
   const [activeIndex, setActiveIndex] = useState(baseIndex);
   const activeIndexRef = useRef(baseIndex);
+  const [lastData, setLastData] = useState(data);
+
+  // Adjust state during render when the item collection is replaced. This is
+  // React's recommended alternative to a synchronous state update in an effect.
+  if (data !== lastData) {
+    setLastData(data);
+    const idx = Math.max(0, data.findIndex((item) => item.value === value));
+    setActiveIndex(idx);
+  }
 
   useEffect(() => {
     const idx = Math.max(0, data.findIndex((item) => item.value === value));
     listRef.current?.scrollToIndex({ index: idx, animated: false, viewPosition: 0.5 });
-    setActiveIndex(idx);
     activeIndexRef.current = idx;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
@@ -221,16 +229,18 @@ export function TimePickerSheet({
   const initial = useMemo(() => {
     const m = /^(\d{2}):(\d{2})$/.exec(value);
     return { h: Number(m?.[1] ?? 8), min: Number(m?.[2] ?? 0) };
-  }, [value]);
+    // Visibility intentionally creates a new initial draft when reopening.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, visible]);
   const [hour, setHour] = useState(initial.h);
   const [minute, setMinute] = useState(initial.min);
+  const [lastInitial, setLastInitial] = useState(initial);
 
-  useEffect(() => {
-    if (visible) {
-      setHour(initial.h);
-      setMinute(initial.min);
-    }
-  }, [visible, initial]);
+  if (initial !== lastInitial) {
+    setLastInitial(initial);
+    setHour(initial.h);
+    setMinute(initial.min);
+  }
 
   const hours = useMemo(
     () => Array.from({ length: 24 }, (_, i) => ({ label: pad2(i), value: i })),
@@ -304,19 +314,19 @@ export function DatePickerSheet({
       d: Number(m?.[3] ?? now.getDate()),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
+  }, [value, visible]);
 
   const [year, setYear] = useState(initial.y);
   const [month, setMonth] = useState(initial.mo);
   const [day, setDay] = useState(initial.d);
+  const [lastInitial, setLastInitial] = useState(initial);
 
-  useEffect(() => {
-    if (visible) {
-      setYear(initial.y);
-      setMonth(initial.mo);
-      setDay(initial.d);
-    }
-  }, [visible, initial]);
+  if (initial !== lastInitial) {
+    setLastInitial(initial);
+    setYear(initial.y);
+    setMonth(initial.mo);
+    setDay(initial.d);
+  }
 
   const years = useMemo(
     () =>
@@ -331,14 +341,13 @@ export function DatePickerSheet({
     [],
   );
   const dayCount = daysInMonth(year, month);
+  if (day > dayCount) {
+    setDay(dayCount);
+  }
   const days = useMemo(
     () => Array.from({ length: dayCount }, (_, i) => ({ label: `${i + 1}日`, value: i + 1 })),
     [dayCount],
   );
-
-  useEffect(() => {
-    if (day > dayCount) setDay(dayCount);
-  }, [dayCount, day]);
 
   const fadeColor = theme.isLight ? '#f1f5f9' : '#0f172a';
 

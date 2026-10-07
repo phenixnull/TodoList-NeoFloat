@@ -9,6 +9,8 @@ jest.mock('@expo/vector-icons', () => ({
 jest.mock('./PressableScale', () => ({
   __esModule: true,
   default: ({ children, ...props }: any) => {
+    // Jest mock factories may import their mocked platform lazily.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { Pressable } = require('react-native');
 
     return <Pressable {...props}>{children}</Pressable>;

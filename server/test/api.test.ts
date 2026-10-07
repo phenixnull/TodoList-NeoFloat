@@ -95,6 +95,55 @@ describe('HabitPulse API', () => {
     expect(updated.json().manualDurationMs).toBe(-45 * 60_000);
   });
 
+  it('syncs app usage bindings and foreground segments separately from manual timing', async () => {
+    const app = buildApp({ database: ':memory:' });
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      payload: {
+        name: 'Bound usage',
+        icon: 'android',
+        color: '#22d3ee',
+        description: '',
+        appUsageBinding: { packageName: 'com.example.reader', appName: 'Reader' },
+        appUsageSegments: [
+          { id: 'app-com.example.reader-1', startAt: '2026-10-08T01:00:00.000Z', stopAt: '2026-10-08T01:20:00.000Z' },
+        ],
+      },
+    });
+
+    expect(created.statusCode).toBe(201);
+    expect(created.json().appUsageBinding).toEqual({
+      packageName: 'com.example.reader',
+      appName: 'Reader',
+    });
+    expect(created.json().appUsageSegments).toHaveLength(1);
+
+    const closed = await app.inject({
+      method: 'PATCH',
+      url: `/api/tasks/${created.json().id}`,
+      payload: {
+        appUsageSegments: [
+          { id: 'app-com.example.reader-1', startAt: '2026-10-08T01:00:00.000Z', stopAt: '2026-10-08T01:20:00.000Z' },
+        ],
+      },
+    });
+    expect(closed.statusCode).toBe(200);
+    expect(closed.json().appUsageBinding).toEqual({
+      packageName: 'com.example.reader',
+      appName: 'Reader',
+    });
+
+    const rebound = await app.inject({
+      method: 'PATCH',
+      url: `/api/tasks/${created.json().id}`,
+      payload: { appUsageBinding: null, appUsageSegments: [] },
+    });
+    expect(rebound.statusCode).toBe(200);
+    expect(rebound.json().appUsageBinding).toBeNull();
+    expect(rebound.json().appUsageSegments).toEqual([]);
+  });
+
   it('deletes timer segments with tombstones and prevents stale sync from reviving them', async () => {
     const app = buildApp({ database: ':memory:' });
     const created = await app.inject({

@@ -578,7 +578,7 @@ function useHabitStoreInstance() {
   }, [loading, sweepScheduleWindows]);
 
   // ---- mutations (optimistic local + direct push) ----
-  const createTask = useCallback((input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs' | 'customGroups' | 'scheduleWindow'>>) => {
+  const createTask = useCallback((input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs' | 'appUsageSegments' | 'appUsageBinding' | 'customGroups' | 'scheduleWindow'>>) => {
     const now = new Date().toISOString();
     const suggested = getNextTaskAppearance(dataRef.current.tasks);
     const nextSortOrder = dataRef.current.tasks
@@ -595,6 +595,8 @@ function useHabitStoreInstance() {
       customGroups: input.customGroups ?? [],
       timerSegments: [],
       removedSegmentIds: [],
+      appUsageSegments: input.appUsageSegments ?? [],
+      appUsageBinding: input.appUsageBinding ?? null,
       manualDurationMs: input.manualDurationMs ?? 0,
       scheduleWindow: input.scheduleWindow ?? null,
       createdAt: now,
@@ -606,7 +608,7 @@ function useHabitStoreInstance() {
     void pushTask(task);
   }, [commit, pushTask]);
 
-  const updateTask = useCallback((id: string, input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs' | 'timerSegments' | 'removedSegmentIds' | 'customGroups' | 'scheduleWindow'>>) => {
+  const updateTask = useCallback((id: string, input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs' | 'timerSegments' | 'removedSegmentIds' | 'appUsageSegments' | 'appUsageBinding' | 'customGroups' | 'scheduleWindow'>>) => {
     const tasks = dataRef.current.tasks.map((task) => (task.id === id
       ? { ...task, ...input, updatedAt: new Date().toISOString() }
       : task));

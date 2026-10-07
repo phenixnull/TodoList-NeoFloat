@@ -7,3 +7,9 @@ desktop/dist-builder/
 *.db
 *.db-shm
 *.db-wal
+
+# Local code-intelligence artifacts
+.gitnexus/
+.claude/
+AGENTS.md
+CLAUDE.md

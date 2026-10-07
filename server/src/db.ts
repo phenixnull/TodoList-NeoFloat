@@ -28,6 +28,7 @@ export function createDatabase({ database = 'habitpulse.db' }: DatabaseOptions =
       custom_groups TEXT NOT NULL DEFAULT '[]',
       timer_segments TEXT NOT NULL DEFAULT '[]',
       removed_segment_ids TEXT NOT NULL DEFAULT '[]',
+      app_usage_segments TEXT NOT NULL DEFAULT '[]',
       manual_duration_ms INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -108,6 +109,7 @@ export function createDatabase({ database = 'habitpulse.db' }: DatabaseOptions =
     { column: 'custom_groups', sql: "ALTER TABLE tasks ADD COLUMN custom_groups TEXT NOT NULL DEFAULT '[]'" },
     { column: 'timer_segments', sql: "ALTER TABLE tasks ADD COLUMN timer_segments TEXT NOT NULL DEFAULT '[]'" },
     { column: 'removed_segment_ids', sql: "ALTER TABLE tasks ADD COLUMN removed_segment_ids TEXT NOT NULL DEFAULT '[]'" },
+    { column: 'app_usage_segments', sql: "ALTER TABLE tasks ADD COLUMN app_usage_segments TEXT NOT NULL DEFAULT '[]'" },
     { column: 'manual_duration_ms', sql: 'ALTER TABLE tasks ADD COLUMN manual_duration_ms INTEGER NOT NULL DEFAULT 0' },
   ]) {
     if (!taskColumns.some((column) => column.name === migration.column)) {
@@ -117,6 +119,10 @@ export function createDatabase({ database = 'habitpulse.db' }: DatabaseOptions =
 
   if (!taskColumns.some((column) => column.name === 'schedule_window')) {
     db.prepare('ALTER TABLE tasks ADD COLUMN schedule_window TEXT').run();
+  }
+
+  if (!taskColumns.some((column) => column.name === 'app_usage_binding')) {
+    db.prepare('ALTER TABLE tasks ADD COLUMN app_usage_binding TEXT').run();
   }
 
   const dayColumns = db.prepare('PRAGMA table_info(day_records)').all() as Array<{ name: string }>;

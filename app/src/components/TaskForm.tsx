@@ -11,10 +11,12 @@ import { DatePickerSheet, TimePickerSheet } from './picker/Pickers';
 import GlassCard from './GlassCard';
 import PressableScale from './PressableScale';
 import GroupSelect from './GroupSelect';
+import AppUsageBindingSelect from './AppUsageBindingSelect';
 import { getAvailableTaskGroups } from '../domain/taskOrdering';
 import { taskColors, taskIcons } from '../domain/taskAppearance';
-import { ScheduleRepeat, ScheduleWindow, Task } from '../domain/types';
+import { AppUsageBinding, ScheduleRepeat, ScheduleWindow, Task, TimeSegment } from '../domain/types';
 import { isTimerRunning } from '../domain/timeTracking';
+import { shouldReplaceAppUsage } from '../domain/appUsage';
 import { getTodayKey } from '../domain/streak';
 import { useHabitStore } from '../store/useHabitStore';
 import { useTheme } from '../theme/theme';
@@ -35,6 +37,8 @@ type Props = {
     color: string;
     iconImage: string | null;
     customGroups: string[];
+    appUsageBinding: AppUsageBinding | null;
+    appUsageSegments?: TimeSegment[];
     scheduleWindow: ScheduleWindow | null;
   }) => void;
 };
@@ -61,6 +65,9 @@ export default function TaskForm({
     initialTask?.iconImage ?? defaultIconImage ?? null,
   );
   const [customGroups, setCustomGroups] = useState<string[]>(initialTask?.customGroups ?? []);
+  const [appUsageBinding, setAppUsageBinding] = useState<AppUsageBinding | null>(
+    initialTask?.appUsageBinding ?? null,
+  );
   const [scheduleWindow, setScheduleWindow] = useState<ScheduleWindow | null>(
     initialTask?.scheduleWindow ?? null,
   );
@@ -89,7 +96,18 @@ export default function TaskForm({
     }
 
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onSubmit({ name, description, icon, color, iconImage, customGroups, scheduleWindow });
+    const replaceUsage = !initialTask || shouldReplaceAppUsage(initialTask, appUsageBinding);
+    onSubmit({
+      name,
+      description,
+      icon,
+      color,
+      iconImage,
+      customGroups,
+      appUsageBinding,
+      appUsageSegments: replaceUsage ? [] : initialTask?.appUsageSegments,
+      scheduleWindow,
+    });
     if (navigateBackOnSubmit) {
       router.back();
     }
@@ -197,6 +215,14 @@ export default function TaskForm({
           allLabel="未分组"
           onChange={setCustomGroups}
           onCreateGroup={createFormGroup}
+        />
+
+        <AppUsageBindingSelect
+          value={appUsageBinding}
+          onChange={(binding) => {
+            void Haptics.selectionAsync();
+            setAppUsageBinding(binding);
+          }}
         />
 
         <View style={styles.switchRow}>
@@ -704,4 +730,3 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
-

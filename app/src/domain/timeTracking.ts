@@ -281,17 +281,23 @@ export function setTaskTotalDuration(
   });
 
   const segmentMs = segmentsWithDuration.reduce((total, item) => total + item.duration, 0);
+  const appUsageMs = (task.appUsageSegments ?? []).reduce((total, segment) => {
+    const start = new Date(segment.startAt).getTime();
+    const stop = segment.stopAt ? new Date(segment.stopAt).getTime() : nowMs;
+    return total + (Number.isNaN(start) || Number.isNaN(stop) ? 0 : Math.max(0, stop - start));
+  }, 0);
 
   return {
     ...task,
     timerSegments: lockedSegments,
-    manualDurationMs: target - segmentMs,
+    manualDurationMs: target - segmentMs - appUsageMs,
     updatedAt: now.toISOString(),
   };
 }
 
 export function calculateTaskDurationMs(task: Task, nowMs: number = Date.now()): number {
-  const closed = task.timerSegments.reduce((total, segment) => {
+  const allSegments = [...task.timerSegments, ...(task.appUsageSegments ?? [])];
+  const closed = allSegments.reduce((total, segment) => {
     if (!segment.stopAt) {
       return total;
     }
@@ -299,6 +305,7 @@ export function calculateTaskDurationMs(task: Task, nowMs: number = Date.now()):
     return total + Math.max(0, new Date(segment.stopAt).getTime() - new Date(segment.startAt).getTime());
   }, 0);
   const open = task.timerSegments
+    .concat(task.appUsageSegments ?? [])
     .filter(isOpen)
     .reduce((total, segment) => total + Math.max(0, nowMs - new Date(segment.startAt).getTime()), 0);
 

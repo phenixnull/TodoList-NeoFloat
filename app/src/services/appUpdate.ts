@@ -57,6 +57,7 @@ export async function getDownloadedApk(
 
     // Must match target version AND file must still exist
     if (info.versionCode !== manifest.versionCode || info.versionName !== manifest.versionName) {
+      await AsyncStorage.removeItem(DOWNLOADED_APK_KEY);
       return null;
     }
 
@@ -93,7 +94,6 @@ async function cleanupOldApks(currentFileName: string): Promise<void> {
         await FileSystem.deleteAsync(`${dir}${file}`, { idempotent: true });
       }
     }
-    await AsyncStorage.removeItem(DOWNLOADED_APK_KEY);
   } catch {
     // ignore cleanup errors
   }

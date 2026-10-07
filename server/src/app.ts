@@ -16,6 +16,11 @@ const timeSegmentSchema = z.object({
 
 const stringIdListSchema = z.array(z.string().min(1));
 
+const appUsageBindingSchema = z.object({
+  packageName: z.string().min(1).max(255),
+  appName: z.string().max(255).optional(),
+});
+
 const hhmmSchema = z.string().regex(/^\d{2}:\d{2}$/, 'time must use HH:MM');
 const scheduleWindowSchema = z.object({
   start: hhmmSchema,
@@ -36,6 +41,8 @@ const createTaskSchema = z.object({
   customGroups: z.array(z.string().max(80)).default([]),
   timerSegments: z.array(timeSegmentSchema).default([]),
   removedSegmentIds: stringIdListSchema.default([]),
+  appUsageSegments: z.array(timeSegmentSchema).default([]),
+  appUsageBinding: appUsageBindingSchema.nullable().default(null),
   // A negative value is a manual correction that can offset timer segments.
   manualDurationMs: z.number().int().default(0),
   scheduleWindow: scheduleWindowSchema.nullable().default(null),
@@ -53,6 +60,8 @@ const updateTaskSchema = z.object({
   customGroups: z.array(z.string().max(80)).optional(),
   timerSegments: z.array(timeSegmentSchema).optional(),
   removedSegmentIds: stringIdListSchema.optional(),
+  appUsageSegments: z.array(timeSegmentSchema).optional(),
+  appUsageBinding: appUsageBindingSchema.nullable().optional(),
   manualDurationMs: z.number().int().optional(),
   scheduleWindow: scheduleWindowSchema.nullable().optional(),
 });
@@ -452,6 +461,8 @@ export function buildApp({
       customGroups: parsed.data.customGroups ?? [],
       timerSegments: parsed.data.timerSegments,
       removedSegmentIds: parsed.data.removedSegmentIds,
+      appUsageSegments: parsed.data.appUsageSegments,
+      appUsageBinding: parsed.data.appUsageBinding ?? null,
       manualDurationMs: parsed.data.manualDurationMs,
       scheduleWindow: parsed.data.scheduleWindow ?? null,
       createdAt: parsed.data.createdAt ?? now,
@@ -462,12 +473,12 @@ export function buildApp({
     db.prepare(`
       INSERT INTO tasks (
         id, name, icon, icon_image, color, description, sort_order, custom_groups, timer_segments,
-        removed_segment_ids,
+        removed_segment_ids, app_usage_segments, app_usage_binding,
         manual_duration_ms, schedule_window, created_at, updated_at, deleted_at
       )
       VALUES (
         @id, @name, @icon, @iconImage, @color, @description, @sortOrder, @customGroupsJson, @timerSegmentsJson,
-        @removedSegmentIdsJson,
+        @removedSegmentIdsJson, @appUsageSegmentsJson, @appUsageBindingJson,
         @manualDurationMs, @scheduleWindowJson, @createdAt, @updatedAt, @deletedAt
       )
   `).run({
@@ -478,6 +489,10 @@ export function buildApp({
     timerSegmentsJson: JSON.stringify(parsed.data.timerSegments),
     removedSegmentIds: undefined,
     removedSegmentIdsJson: JSON.stringify(parsed.data.removedSegmentIds),
+    appUsageSegments: undefined,
+    appUsageSegmentsJson: JSON.stringify(parsed.data.appUsageSegments ?? []),
+    appUsageBinding: undefined,
+    appUsageBindingJson: JSON.stringify(parsed.data.appUsageBinding ?? null),
     scheduleWindowJson: JSON.stringify(parsed.data.scheduleWindow ?? null),
   });
 
@@ -539,6 +554,10 @@ export function buildApp({
       ...patch,
       timerSegments: mergedSegments,
       removedSegmentIds: tombstones,
+      appUsageSegments: patch.appUsageSegments ?? current.appUsageSegments ?? [],
+      appUsageBinding: patch.appUsageBinding !== undefined
+        ? patch.appUsageBinding
+        : current.appUsageBinding ?? null,
       updatedAt: new Date().toISOString(),
     };
 
@@ -553,6 +572,8 @@ export function buildApp({
         custom_groups = @customGroupsJson,
         timer_segments = @timerSegmentsJson,
         removed_segment_ids = @removedSegmentIdsJson,
+        app_usage_segments = @appUsageSegmentsJson,
+        app_usage_binding = @appUsageBindingJson,
         manual_duration_ms = @manualDurationMs,
         schedule_window = @scheduleWindowJson,
         updated_at = @updatedAt
@@ -564,6 +585,8 @@ export function buildApp({
       customGroupsJson: JSON.stringify(updated.customGroups ?? []),
       timerSegmentsJson: JSON.stringify(updated.timerSegments),
       removedSegmentIdsJson: JSON.stringify(updated.removedSegmentIds),
+      appUsageSegmentsJson: JSON.stringify(updated.appUsageSegments ?? []),
+      appUsageBindingJson: JSON.stringify(updated.appUsageBinding ?? null),
       scheduleWindowJson: JSON.stringify(updated.scheduleWindow ?? null),
       deletedAt: undefined,
     });
@@ -935,6 +958,15 @@ function rowFromTask(row: any) {
     })(),
     timerSegments: parseTimerSegments(row.timer_segments ?? '[]'),
     removedSegmentIds: parseIdList(row.removed_segment_ids ?? '[]'),
+    appUsageSegments: parseTimerSegments(row.app_usage_segments ?? '[]'),
+    appUsageBinding: (() => {
+      try {
+        const parsed = JSON.parse(row.app_usage_binding ?? 'null');
+        return parsed && typeof parsed.packageName === 'string' ? parsed : null;
+      } catch {
+        return null;
+      }
+    })(),
     manualDurationMs: row.manual_duration_ms ?? 0,
     scheduleWindow: parseScheduleWindow(row.schedule_window),
     createdAt: row.created_at,

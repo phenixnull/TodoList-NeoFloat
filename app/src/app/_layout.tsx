@@ -5,6 +5,7 @@ import { useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { HabitStoreProvider, useHabitStore } from '@/store/useHabitStore';
 import DialogHost from '@/components/dialog/DialogHost';
+import useAppUsageTracker from '@/hooks/useAppUsageTracker';
 
 const darkTheme = {
   ...DarkTheme,
@@ -28,6 +29,7 @@ const lightTheme = {
 
 function AppChrome() {
   const { settings } = useHabitStore();
+  useAppUsageTracker();
   const systemColorScheme = useColorScheme();
   const appearance = settings.appearance ?? 'dark';
   const isLight = appearance === 'light'
