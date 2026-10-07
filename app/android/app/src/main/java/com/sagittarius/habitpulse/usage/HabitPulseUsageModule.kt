@@ -178,11 +178,9 @@ class HabitPulseUsageModule(private val reactContext: ReactApplicationContext) :
     try {
       val intent = Intent(reactContext, HabitPulseUsageService::class.java)
           .setAction(HabitPulseUsageService.ACTION_STOP)
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        reactContext.startForegroundService(intent)
-      } else {
-        reactContext.startService(intent)
-      }
+      // A stop request must not enter the foreground-service start contract;
+      // it immediately removes/stop itself and never calls startForeground.
+      reactContext.startService(intent)
       promise.resolve(true)
     } catch (error: Exception) {
       promise.reject("USAGE_TRACKING_STOP_FAILED", error)
