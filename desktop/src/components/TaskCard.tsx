@@ -1,9 +1,10 @@
-import { CalendarDays, Check, Pencil, Play, Square } from 'lucide-react';
+import { CalendarDays, Check, Clock, Pencil, Play, Square } from 'lucide-react';
 import {
   calculateTimeSegmentsDurationForDate,
   formatDuration,
   isTimerRunning,
 } from '../../../app/src/domain/timeTracking';
+import { getWindowPhase } from '../../../app/src/domain/scheduleWindow';
 import type { Task } from '../../../app/src/domain/types';
 import type { CheckInStatus } from '../../../app/src/domain/types';
 import { extractImageFiles } from '../hooks/useImageCapture';
@@ -44,11 +45,22 @@ export default function TaskCard({
   onDropImages,
   compact = false,
 }: Props) {
-  const { now, toggleCheckIn, toggleTimer, busy } = useStore();
+  const { now, toggleCheckIn, setCheckInStatus, toggleTimer, busy } = useStore();
   const total = calculateTimeSegmentsDurationForDate(task, date, now.getTime());
   const running = isTimerRunning(task);
   const failed = checkInStatus === 'failed';
+  const windowPhase = task.scheduleWindow
+    ? getWindowPhase(task, date, now.getDay(), now)
+    : 'none';
   const bodyRef = useRef<HTMLDivElement>(null);
+
+  const handleActivate = () => {
+    if (failed) {
+      setCheckInStatus(task.id, date, 'success');
+    } else {
+      void toggleCheckIn(task.id, date);
+    }
+  };
 
   // A reorder drag and the toggle click share the same element. Some browsers
   // synthesize a click on the source right after a native drag ends, which would
@@ -108,7 +120,7 @@ export default function TaskCard({
       <div
         ref={bodyRef}
         className="min-w-0 flex-1 cursor-pointer select-none"
-        onClick={() => void toggleCheckIn(task.id, date)}
+        onClick={handleActivate}
         draggable
         onDragStart={(e) => {
           e.dataTransfer.setData('text/plain', task.id);
@@ -127,6 +139,17 @@ export default function TaskCard({
             </span>
           )}
         </div>
+        {task.scheduleWindow && (
+          <div
+            className={`mt-0.5 flex items-center gap-1 font-mono ${
+              compact ? 'text-[10px]' : 'text-[11px]'
+            } ${windowPhase === 'active' ? 'text-cyan-300' : 'text-slate-500'}`}
+          >
+            <Clock size={compact ? 10 : 11} />
+            {task.scheduleWindow.start}–{task.scheduleWindow.end}
+            {windowPhase === 'active' ? ' · 进行中' : windowPhase === 'before' ? ' · 未开始' : ''}
+          </div>
+        )}
         <div className={`mt-0.5 font-mono ${compact ? 'text-[11px]' : 'text-xs'} text-slate-400`}>
           {formatDuration(total)}
         </div>
@@ -177,9 +200,9 @@ export default function TaskCard({
         )}
 
         <button
-          title={checked ? '取消打卡' : '完成打卡'}
+          title={failed ? '补卡，标记为完成' : checked ? '取消打卡' : '完成打卡'}
           disabled={busy}
-          onClick={() => void toggleCheckIn(task.id, date)}
+          onClick={handleActivate}
           className={`flex items-center justify-center rounded-full transition-all disabled:opacity-50 ${
             checked
               ? 'bg-emerald-400 text-slate-950 shadow-[0_0_14px_rgba(52,211,153,0.5)]'

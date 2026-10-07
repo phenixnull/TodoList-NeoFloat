@@ -7,13 +7,15 @@ import { ReactNode, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { dialog } from './dialog/dialogs';
+import { DatePickerSheet, TimePickerSheet } from './picker/Pickers';
 import GlassCard from './GlassCard';
 import PressableScale from './PressableScale';
 import GroupSelect from './GroupSelect';
 import { getAvailableTaskGroups } from '../domain/taskOrdering';
 import { taskColors, taskIcons } from '../domain/taskAppearance';
-import { Task } from '../domain/types';
+import { ScheduleRepeat, ScheduleWindow, Task } from '../domain/types';
 import { isTimerRunning } from '../domain/timeTracking';
+import { getTodayKey } from '../domain/streak';
 import { useHabitStore } from '../store/useHabitStore';
 import { useTheme } from '../theme/theme';
 
@@ -33,6 +35,7 @@ type Props = {
     color: string;
     iconImage: string | null;
     customGroups: string[];
+    scheduleWindow: ScheduleWindow | null;
   }) => void;
 };
 
@@ -58,6 +61,11 @@ export default function TaskForm({
     initialTask?.iconImage ?? defaultIconImage ?? null,
   );
   const [customGroups, setCustomGroups] = useState<string[]>(initialTask?.customGroups ?? []);
+  const [scheduleWindow, setScheduleWindow] = useState<ScheduleWindow | null>(
+    initialTask?.scheduleWindow ?? null,
+  );
+  const [whichTime, setWhichTime] = useState<'start' | 'end' | null>(null);
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [error, setError] = useState('');
   const [processingImage, setProcessingImage] = useState(false);
   const assignableGroups = useMemo(
@@ -81,7 +89,7 @@ export default function TaskForm({
     }
 
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    onSubmit({ name, description, icon, color, iconImage, customGroups });
+    onSubmit({ name, description, icon, color, iconImage, customGroups, scheduleWindow });
     if (navigateBackOnSubmit) {
       router.back();
     }
@@ -191,6 +199,165 @@ export default function TaskForm({
           onCreateGroup={createFormGroup}
         />
 
+        <View style={styles.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.label, { color: theme.mutedText }]}>计划时间段</Text>
+            <Text style={styles.fieldHint}>过了结束时间仍未打卡，自动判为失败</Text>
+          </View>
+          <PressableScale
+            style={[
+              styles.toggleOuter,
+              {
+                backgroundColor: scheduleWindow ? theme.accent : theme.inputBackground,
+                borderColor: theme.inputBorder,
+              },
+            ]}
+            onPress={() => {
+              void Haptics.selectionAsync();
+              setScheduleWindow(
+                scheduleWindow
+                  ? null
+                  : { start: '07:00', end: '08:00', repeat: 'daily' },
+              );
+            }}
+          >
+            <View
+              style={[
+                styles.toggleKnob,
+                { alignSelf: scheduleWindow ? 'flex-end' : 'flex-start' },
+              ]}
+            />
+          </PressableScale>
+        </View>
+
+        {scheduleWindow ? (
+          <View style={styles.windowBlock}>
+            <View style={styles.timeRow}>
+              <PressableScale
+                style={[
+                  styles.timeBtn,
+                  { borderColor: theme.inputBorder, backgroundColor: theme.inputBackground },
+                ]}
+                onPress={() => setWhichTime('start')}
+              >
+                <MaterialCommunityIcons name="clock-outline" size={16} color={color} />
+                <Text style={[styles.timeText, { color: theme.text }]}>{scheduleWindow.start}</Text>
+              </PressableScale>
+              <Text style={[styles.rangeDash, { color: theme.mutedText }]}>至</Text>
+              <PressableScale
+                style={[
+                  styles.timeBtn,
+                  { borderColor: theme.inputBorder, backgroundColor: theme.inputBackground },
+                ]}
+                onPress={() => setWhichTime('end')}
+              >
+                <MaterialCommunityIcons name="clock-outline" size={16} color={color} />
+                <Text style={[styles.timeText, { color: theme.text }]}>{scheduleWindow.end}</Text>
+              </PressableScale>
+            </View>
+
+            <View style={styles.segment}>
+              {([
+                ['daily', '每天'],
+                ['weekly', '按星期'],
+                ['once', '一次性'],
+              ] as [ScheduleRepeat, string][]).map(([value, label]) => (
+                <PressableScale
+                  key={value}
+                  style={[
+                    styles.segmentBtn,
+                    {
+                      borderColor: theme.inputBorder,
+                      backgroundColor:
+                        scheduleWindow.repeat === value ? `${color}26` : theme.inputBackground,
+                    },
+                  ]}
+                  onPress={() => {
+                    void Haptics.selectionAsync();
+                    setScheduleWindow({
+                      ...scheduleWindow,
+                      repeat: value,
+                      weekdays:
+                        value === 'weekly'
+                          ? scheduleWindow.weekdays?.length
+                            ? scheduleWindow.weekdays
+                            : [1, 2, 3, 4, 5]
+                          : undefined,
+                      targetDate:
+                        value === 'once'
+                          ? scheduleWindow.targetDate ?? getTodayKey()
+                          : undefined,
+                    });
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.segmentText,
+                      { color: scheduleWindow.repeat === value ? color : theme.mutedText },
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </PressableScale>
+              ))}
+            </View>
+
+            {scheduleWindow.repeat === 'weekly' ? (
+              <View style={styles.weekdayRow}>
+                {['日', '一', '二', '三', '四', '五', '六'].map((label, wd) => {
+                  const active = scheduleWindow.weekdays?.includes(wd);
+                  return (
+                    <PressableScale
+                      key={wd}
+                      style={[
+                        styles.weekdayBtn,
+                        {
+                          backgroundColor: active ? color : theme.inputBackground,
+                          borderColor: theme.inputBorder,
+                        },
+                      ]}
+                      onPress={() => {
+                        void Haptics.selectionAsync();
+                        const current = new Set(scheduleWindow.weekdays ?? []);
+                        if (current.has(wd)) current.delete(wd);
+                        else current.add(wd);
+                        setScheduleWindow({
+                          ...scheduleWindow,
+                          weekdays: [...current].sort(),
+                        });
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.weekdayText,
+                          { color: active ? theme.onAccent : theme.mutedText },
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                    </PressableScale>
+                  );
+                })}
+              </View>
+            ) : null}
+
+            {scheduleWindow.repeat === 'once' ? (
+              <PressableScale
+                style={[
+                  styles.dateBtn,
+                  { borderColor: theme.inputBorder, backgroundColor: theme.inputBackground },
+                ]}
+                onPress={() => setDatePickerVisible(true)}
+              >
+                <MaterialCommunityIcons name="calendar-blank" size={17} color={color} />
+                <Text style={[styles.timeText, { color: theme.text }]}>
+                  {scheduleWindow.targetDate ?? getTodayKey()}
+                </Text>
+              </PressableScale>
+            ) : null}
+          </View>
+        ) : null}
+
         <Text style={[styles.label, { color: theme.mutedText }]}>图标</Text>
         <View style={styles.customIconRow}>
           <View style={[styles.customIconPreview, {
@@ -278,6 +445,36 @@ export default function TaskForm({
           <Text style={[styles.submitText, { color: theme.onAccent }]}>{submitLabel}</Text>
         </PressableScale>
       </GlassCard>
+      <TimePickerSheet
+        visible={whichTime === 'start'}
+        title="开始时间"
+        value={scheduleWindow?.start ?? '07:00'}
+        onClose={() => setWhichTime(null)}
+        onConfirm={(value) => {
+          if (scheduleWindow) setScheduleWindow({ ...scheduleWindow, start: value });
+          setWhichTime(null);
+        }}
+      />
+      <TimePickerSheet
+        visible={whichTime === 'end'}
+        title="结束时间"
+        value={scheduleWindow?.end ?? '08:00'}
+        onClose={() => setWhichTime(null)}
+        onConfirm={(value) => {
+          if (scheduleWindow) setScheduleWindow({ ...scheduleWindow, end: value });
+          setWhichTime(null);
+        }}
+      />
+      <DatePickerSheet
+        visible={datePickerVisible}
+        title="日期"
+        value={scheduleWindow?.targetDate ?? getTodayKey()}
+        onClose={() => setDatePickerVisible(false)}
+        onConfirm={(value) => {
+          if (scheduleWindow) setScheduleWindow({ ...scheduleWindow, targetDate: value });
+          setDatePickerVisible(false);
+        }}
+      />
       {footer}
     </View>
   );
@@ -319,6 +516,98 @@ const styles = StyleSheet.create({
     marginTop: 7,
     color: '#94a3b8',
     fontSize: 12,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  fieldHint: {
+    marginTop: 3,
+    color: '#94a3b8',
+    fontSize: 12,
+  },
+  toggleOuter: {
+    width: 52,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    padding: 3,
+    justifyContent: 'center',
+  },
+  toggleKnob: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#ffffff',
+  },
+  windowBlock: {
+    gap: 12,
+    marginTop: -2,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  timeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 12,
+  },
+  timeText: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  rangeDash: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  segment: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  segmentBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 14,
+    alignItems: 'center',
+    paddingVertical: 11,
+  },
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  weekdayBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekdayText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  dateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 13,
   },
   customIconRow: {
     flexDirection: 'row',

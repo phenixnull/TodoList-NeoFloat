@@ -20,6 +20,7 @@ import PressableScale from './PressableScale';
 import TaskIcon from './TaskIcon';
 import { getPulseColors } from '../domain/color';
 import { formatCheckInTime } from '../domain/format';
+import { getWindowPhase } from '../domain/scheduleWindow';
 import { HabitStats } from '../domain/streak';
 import { CheckInStatus, Task } from '../domain/types';
 import { calculateTimeSegmentsDurationForDate, formatDuration, isTimerRunning } from '../domain/timeTracking';
@@ -75,6 +76,48 @@ function TaskDuration({ task, today, isLight = false }: { task: Task; today: str
   );
 }
 
+function ScheduleWindowRow({
+  task,
+  today,
+  isLight,
+  failed,
+}: {
+  task: Task;
+  today: string;
+  isLight: boolean;
+  failed: boolean;
+}) {
+  const win = task.scheduleWindow;
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    if (!win) return;
+    const id = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(id);
+  }, [win]);
+
+  if (!win) return null;
+
+  const phase = getWindowPhase(task, today, now.getDay(), now);
+  const theme = resolveTheme(isLight ? 'light' : 'dark', null);
+  const active = phase === 'active';
+  const color = failed ? '#f87171' : active ? task.color : theme.subtleText;
+  const suffix = active ? ' · 进行中' : phase === 'before' ? ' · 未开始' : '';
+
+  return (
+    <View style={[styles.windowRow, active && { borderColor: `${task.color}66` }]}>
+      <MaterialCommunityIcons
+        name={active ? 'clock-alert-outline' : 'clock-outline'}
+        size={12}
+        color={color}
+      />
+      <Text style={[styles.windowText, { color }]} numberOfLines={1}>
+        {win.start}–{win.end}{suffix}
+      </Text>
+    </View>
+  );
+}
+
 function TaskRow({
   task,
   today,
@@ -125,6 +168,12 @@ function TaskRow({
   }), [aura, resolved, isActive, dragInProgress]);
 
   const toggle = () => {
+    if (failed) {
+      onSetCheckInStatus?.(task.id, today, 'success');
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return;
+    }
+
     const checkedIn = onToggle(task.id);
 
     if (checkedIn) {
@@ -284,7 +333,7 @@ function TaskRow({
 
         <View style={styles.cardPress}>
           <PressableScale
-            accessibilityLabel={failed ? `${task.name}打卡失败，点击取消` : resolved ? `${task.name}已打卡，点击取消` : `${task.name}未打卡，点击打卡`}
+            accessibilityLabel={failed ? `${task.name}打卡失败，点击补卡` : resolved ? `${task.name}已打卡，点击取消` : `${task.name}未打卡，点击打卡`}
             accessibilityState={{ checked: resolved && !failed }}
             accessibilityRole="checkbox"
             onPress={toggle}
@@ -307,6 +356,7 @@ function TaskRow({
                 {failed ? '打卡失败' : resolved ? (checkedInTime ? `已打卡 ${checkedInTime}` : '已打卡') : '未打卡'}
                 {stats ? ` · ${stats.current}天 · ${stats.total}次` : ''}
               </Text>
+              <ScheduleWindowRow task={task} today={today} isLight={isLight} failed={failed} />
               <TaskDuration task={task} today={today} isLight={isLight} />
             </View>
           </PressableScale>
@@ -553,6 +603,22 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 5,
     paddingVertical: 1,
+  },
+  windowRow: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.18)',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  windowText: {
+    fontSize: 10,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
   durationText: {
     color: '#cbd5e1',

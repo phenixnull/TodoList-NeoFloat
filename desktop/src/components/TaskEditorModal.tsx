@@ -7,7 +7,8 @@ import {
   setTaskTotalDuration,
 } from '../../../app/src/domain/timeTracking';
 import { getAvailableTaskGroups } from '../../../app/src/domain/taskOrdering';
-import type { Task } from '../../../app/src/domain/types';
+import { getTodayKey } from '../../../app/src/domain/streak';
+import type { ScheduleRepeat, ScheduleWindow, Task } from '../../../app/src/domain/types';
 import { useStore } from '../data/store';
 
 const PRESET_COLORS = [
@@ -44,6 +45,12 @@ export default function TaskEditorModal({ task, onClose }: Props) {
   const [icon, setIcon] = useState('flag-variant-outline');
   const [iconImage, setIconImage] = useState<string | null>(null);
   const [targetMinutes, setTargetMinutes] = useState('');
+  const [windowEnabled, setWindowEnabled] = useState(false);
+  const [winStart, setWinStart] = useState('07:00');
+  const [winEnd, setWinEnd] = useState('08:00');
+  const [winRepeat, setWinRepeat] = useState<ScheduleRepeat>('daily');
+  const [winWeekdays, setWinWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [winDate, setWinDate] = useState(() => getTodayKey());
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -54,8 +61,31 @@ export default function TaskEditorModal({ task, onClose }: Props) {
     setIconImage(task?.iconImage ?? null);
     setTargetMinutes(task ? String(Math.round(calculateTaskDurationMs(task, Date.now()) / 60_000)) : '');
     setSelectedGroups(task?.customGroups ?? []);
+    const existingWindow = task?.scheduleWindow ?? null;
+    setWindowEnabled(Boolean(existingWindow));
+    setWinStart(existingWindow?.start ?? '07:00');
+    setWinEnd(existingWindow?.end ?? '08:00');
+    setWinRepeat(existingWindow?.repeat ?? 'daily');
+    setWinWeekdays(existingWindow?.weekdays?.length ? existingWindow.weekdays : [1, 2, 3, 4, 5]);
+    setWinDate(existingWindow?.targetDate ?? getTodayKey());
     setError('');
   }, [task?.id]);
+
+  const buildWindow = (): ScheduleWindow | null => {
+    if (!windowEnabled) return null;
+    if (winRepeat === 'weekly') {
+      return {
+        start: winStart,
+        end: winEnd,
+        repeat: 'weekly',
+        weekdays: winWeekdays.length ? winWeekdays : [1, 2, 3, 4, 5],
+      };
+    }
+    if (winRepeat === 'once') {
+      return { start: winStart, end: winEnd, repeat: 'once', targetDate: winDate };
+    }
+    return { start: winStart, end: winEnd, repeat: 'daily' };
+  };
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -79,9 +109,10 @@ export default function TaskEditorModal({ task, onClose }: Props) {
         timerSegments: calibrated.timerSegments,
         removedSegmentIds: calibrated.removedSegmentIds ?? [],
         manualDurationMs: calibrated.manualDurationMs,
+        scheduleWindow: buildWindow(),
       });
     } else {
-      await createTask({ name, description, color, icon, iconImage, manualDurationMs: 0, customGroups: selectedGroups });
+      await createTask({ name, description, color, icon, iconImage, manualDurationMs: 0, customGroups: selectedGroups, scheduleWindow: buildWindow() });
     }
 
     onClose();
@@ -249,6 +280,105 @@ export default function TaskEditorModal({ task, onClose }: Props) {
                   </div>
                 </div>
               )}
+
+              <div>
+                <label className="label flex items-center justify-between">
+                  <span>计划时间段</span>
+                  <button
+                    type="button"
+                    onClick={() => setWindowEnabled((v) => !v)}
+                    className={`relative h-6 w-11 rounded-full transition-colors ${
+                      windowEnabled ? 'bg-cyan-400' : 'bg-white/15'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
+                        windowEnabled ? 'left-[22px]' : 'left-0.5'
+                      }`}
+                    />
+                  </button>
+                </label>
+                {windowEnabled && (
+                  <div className="flex flex-col gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                    <p className="text-[11px] text-slate-500">
+                      过了结束时间仍未打卡，自动判为失败，之后仍可补卡。
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="time"
+                        className="input flex-1"
+                        style={{ colorScheme: 'dark' }}
+                        value={winStart}
+                        onChange={(e) => setWinStart(e.target.value)}
+                      />
+                      <span className="text-xs text-slate-400">至</span>
+                      <input
+                        type="time"
+                        className="input flex-1"
+                        style={{ colorScheme: 'dark' }}
+                        value={winEnd}
+                        onChange={(e) => setWinEnd(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex gap-1.5">
+                      {([
+                        ['daily', '每天'],
+                        ['weekly', '按星期'],
+                        ['once', '一次性'],
+                      ] as [ScheduleRepeat, string][]).map(([v, l]) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setWinRepeat(v)}
+                          className={`flex-1 rounded-xl border px-2 py-1.5 text-xs font-bold transition-all ${
+                            winRepeat === v
+                              ? 'border-cyan-400/50 bg-cyan-400/10 text-cyan-300'
+                              : 'border-white/10 bg-white/[0.03] text-slate-400'
+                          }`}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                    {winRepeat === 'weekly' && (
+                      <div className="flex justify-between">
+                        {['日', '一', '二', '三', '四', '五', '六'].map((l, wd) => {
+                          const on = winWeekdays.includes(wd);
+                          return (
+                            <button
+                              key={wd}
+                              type="button"
+                              onClick={() =>
+                                setWinWeekdays((prev) =>
+                                  on
+                                    ? prev.filter((x) => x !== wd)
+                                    : [...prev, wd].sort(),
+                                )
+                              }
+                              className={`h-8 w-8 rounded-lg border text-xs font-bold ${
+                                on
+                                  ? 'border-cyan-400/50 bg-cyan-400/15 text-cyan-300'
+                                  : 'border-white/10 bg-white/[0.03] text-slate-400'
+                              }`}
+                            >
+                              {l}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {winRepeat === 'once' && (
+                      <input
+                        type="date"
+                        className="input"
+                        style={{ colorScheme: 'dark' }}
+                        value={winDate}
+                        onChange={(e) => setWinDate(e.target.value)}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
 
               {task && (
                 <div>

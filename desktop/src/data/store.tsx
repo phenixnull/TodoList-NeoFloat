@@ -8,9 +8,11 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { CheckIn, DayRecord, DayRecordImage, Task } from '../../../app/src/domain/types';
+import type { CheckIn, DayRecord, DayRecordImage, ScheduleWindow, Task } from '../../../app/src/domain/types';
 import { fetchServerData } from '../../../app/src/services/api';
 import { toggleTimer as domainToggleTimer } from '../../../app/src/domain/timeTracking';
+import { findAutoFailures } from '../../../app/src/domain/scheduleWindow';
+import { getTodayKey } from '../../../app/src/domain/streak';
 
 const SETTINGS_KEY = 'habitpulse.desktop.settings.v1';
 const CACHE_KEY = 'habitpulse.desktop.cache.v1';
@@ -33,6 +35,7 @@ export type NewTaskInput = {
   description?: string;
   customGroups?: string[];
   manualDurationMs?: number;
+  scheduleWindow?: ScheduleWindow | null;
 };
 
 export type DayRecordSaveInput = {
@@ -313,6 +316,52 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [jsonFetch, refresh],
   );
 
+  const sweepScheduleWindows = useCallback(async () => {
+    const today = getTodayKey();
+    const nowDate = new Date();
+    const failures = findAutoFailures(
+      dataRef.current.tasks,
+      dataRef.current.checkIns,
+      nowDate,
+      today,
+      nowDate.getDay(),
+    );
+    if (failures.length === 0) return;
+
+    setData((prev) => ({
+      ...prev,
+      checkIns: [
+        ...prev.checkIns,
+        ...failures.map((f) => ({
+          id: `${f.taskId}:${f.date}:auto`,
+          taskId: f.taskId,
+          date: f.date,
+          createdAt: nowDate.toISOString(),
+          status: 'failed' as const,
+        })),
+      ],
+    }));
+
+    await Promise.all(
+      failures.map((f) =>
+        jsonFetch('/api/checkins/status', {
+          method: 'POST',
+          body: { taskId: f.taskId, date: f.date, status: 'failed' },
+        }),
+      ),
+    );
+    await refresh();
+  }, [jsonFetch, refresh, setData]);
+
+  // Auto-fail planned tasks whose window has elapsed with no check-in. Runs on
+  // load and every minute; server stays the shared source of truth.
+  useEffect(() => {
+    if (loading) return;
+    void sweepScheduleWindows();
+    const id = window.setInterval(() => void sweepScheduleWindows(), 60_000);
+    return () => window.clearInterval(id);
+  }, [loading, sweepScheduleWindows]);
+
   const undoCheckIn = useCallback(
     () =>
       runWithBusy(async () => {
@@ -362,6 +411,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           sortOrder,
           timerSegments: [],
           manualDurationMs: input.manualDurationMs ?? 0,
+          scheduleWindow: input.scheduleWindow ?? null,
           createdAt: nowIso,
           updatedAt: nowIso,
           deletedAt: null,

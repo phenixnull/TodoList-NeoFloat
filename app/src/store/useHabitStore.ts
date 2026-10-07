@@ -4,6 +4,7 @@ import { AppData, CheckIn, CheckInStatus, DayRecord, DayRecordImage, SyncState, 
 import { toggleCheckIn as toggleLocalCheckIn } from '../domain/checkIns';
 import { getNextTaskAppearance } from '../domain/taskAppearance';
 import { getTodayKey } from '../domain/streak';
+import { findAutoFailures } from '../domain/scheduleWindow';
 import { reorderTaskGroup, TaskCompletionGroup } from '../domain/taskOrdering';
 import { toggleTimer as toggleLocalTimer } from '../domain/timeTracking';
 import { cancelTimeout, createDropFollowUpScheduler } from '../domain/dropInteraction';
@@ -337,6 +338,49 @@ function useHabitStoreInstance() {
     checkInStatusQueueRef.current.set(k, operation.catch(() => {}));
   }, [commit, schedulePull, settingsReady]);
 
+  // Auto-fail tasks whose planned window has ended with no check-in.
+  const sweepScheduleWindows = useCallback(() => {
+    const now = new Date();
+    const todayKey = getTodayKey(now);
+    const failures = findAutoFailures(
+      dataRef.current.tasks,
+      dataRef.current.checkIns,
+      now,
+      todayKey,
+      now.getDay(),
+    );
+    if (!failures.length) return;
+
+    const createdAt = now.toISOString();
+    const newCheckIns: CheckIn[] = failures.map((failure, index) => ({
+      id: `auto-fail-${now.getTime().toString(36)}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+      taskId: failure.taskId,
+      date: failure.date,
+      createdAt,
+      status: 'failed',
+    }));
+
+    void commit({
+      ...dataRef.current,
+      checkIns: [...dataRef.current.checkIns, ...newCheckIns],
+    });
+
+    for (const failure of failures) {
+      const k = keyOf(failure.taskId, failure.date);
+      const previous = checkInStatusQueueRef.current.get(k) ?? Promise.resolve();
+      const operation = previous.then(async () => {
+        const base = settingsReady();
+        if (!base) return;
+        await apiRequest(base, '/api/checkins/status', {
+          method: 'POST',
+          body: JSON.stringify({ taskId: failure.taskId, date: failure.date, status: 'failed' }),
+        });
+        schedulePull();
+      });
+      checkInStatusQueueRef.current.set(k, operation.catch(() => {}));
+    }
+  }, [commit, schedulePull, settingsReady]);
+
   const pushDayRecord = useCallback(async (record: DayRecord) => {
     const base = settingsReady();
     if (!base) return;
@@ -519,8 +563,22 @@ function useHabitStoreInstance() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commit]);
 
+  // ---- auto-fail expired schedule windows ----
+  useEffect(() => {
+    if (loading) return;
+    sweepScheduleWindows();
+    const interval = setInterval(() => sweepScheduleWindows(), 30_000);
+    const appStateSub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') sweepScheduleWindows();
+    });
+    return () => {
+      clearInterval(interval);
+      appStateSub.remove();
+    };
+  }, [loading, sweepScheduleWindows]);
+
   // ---- mutations (optimistic local + direct push) ----
-  const createTask = useCallback((input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs' | 'customGroups'>>) => {
+  const createTask = useCallback((input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs' | 'customGroups' | 'scheduleWindow'>>) => {
     const now = new Date().toISOString();
     const suggested = getNextTaskAppearance(dataRef.current.tasks);
     const nextSortOrder = dataRef.current.tasks
@@ -538,6 +596,7 @@ function useHabitStoreInstance() {
       timerSegments: [],
       removedSegmentIds: [],
       manualDurationMs: input.manualDurationMs ?? 0,
+      scheduleWindow: input.scheduleWindow ?? null,
       createdAt: now,
       updatedAt: now,
       deletedAt: null,
@@ -547,7 +606,7 @@ function useHabitStoreInstance() {
     void pushTask(task);
   }, [commit, pushTask]);
 
-  const updateTask = useCallback((id: string, input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs' | 'timerSegments' | 'removedSegmentIds' | 'customGroups'>>) => {
+  const updateTask = useCallback((id: string, input: Partial<Pick<Task, 'name' | 'icon' | 'color' | 'description' | 'iconImage' | 'manualDurationMs' | 'timerSegments' | 'removedSegmentIds' | 'customGroups' | 'scheduleWindow'>>) => {
     const tasks = dataRef.current.tasks.map((task) => (task.id === id
       ? { ...task, ...input, updatedAt: new Date().toISOString() }
       : task));

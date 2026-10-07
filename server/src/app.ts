@@ -16,6 +16,15 @@ const timeSegmentSchema = z.object({
 
 const stringIdListSchema = z.array(z.string().min(1));
 
+const hhmmSchema = z.string().regex(/^\d{2}:\d{2}$/, 'time must use HH:MM');
+const scheduleWindowSchema = z.object({
+  start: hhmmSchema,
+  end: hhmmSchema,
+  repeat: z.enum(['daily', 'weekly', 'once']),
+  weekdays: z.array(z.number().int().min(0).max(6)).optional(),
+  targetDate: dateKey.optional(),
+});
+
 const createTaskSchema = z.object({
   id: z.string().min(1).optional(),
   name: z.string().trim().min(1).max(80),
@@ -29,6 +38,7 @@ const createTaskSchema = z.object({
   removedSegmentIds: stringIdListSchema.default([]),
   // A negative value is a manual correction that can offset timer segments.
   manualDurationMs: z.number().int().default(0),
+  scheduleWindow: scheduleWindowSchema.nullable().default(null),
   createdAt: isoDateTime.optional(),
   updatedAt: isoDateTime.optional(),
 });
@@ -44,6 +54,7 @@ const updateTaskSchema = z.object({
   timerSegments: z.array(timeSegmentSchema).optional(),
   removedSegmentIds: stringIdListSchema.optional(),
   manualDurationMs: z.number().int().optional(),
+  scheduleWindow: scheduleWindowSchema.nullable().optional(),
 });
 
 const toggleCheckInSchema = z.object({
@@ -442,6 +453,7 @@ export function buildApp({
       timerSegments: parsed.data.timerSegments,
       removedSegmentIds: parsed.data.removedSegmentIds,
       manualDurationMs: parsed.data.manualDurationMs,
+      scheduleWindow: parsed.data.scheduleWindow ?? null,
       createdAt: parsed.data.createdAt ?? now,
       updatedAt: parsed.data.updatedAt ?? now,
       deletedAt: null,
@@ -451,12 +463,12 @@ export function buildApp({
       INSERT INTO tasks (
         id, name, icon, icon_image, color, description, sort_order, custom_groups, timer_segments,
         removed_segment_ids,
-        manual_duration_ms, created_at, updated_at, deleted_at
+        manual_duration_ms, schedule_window, created_at, updated_at, deleted_at
       )
       VALUES (
         @id, @name, @icon, @iconImage, @color, @description, @sortOrder, @customGroupsJson, @timerSegmentsJson,
         @removedSegmentIdsJson,
-        @manualDurationMs, @createdAt, @updatedAt, @deletedAt
+        @manualDurationMs, @scheduleWindowJson, @createdAt, @updatedAt, @deletedAt
       )
   `).run({
     ...task,
@@ -466,6 +478,7 @@ export function buildApp({
     timerSegmentsJson: JSON.stringify(parsed.data.timerSegments),
     removedSegmentIds: undefined,
     removedSegmentIdsJson: JSON.stringify(parsed.data.removedSegmentIds),
+    scheduleWindowJson: JSON.stringify(parsed.data.scheduleWindow ?? null),
   });
 
     broadcast('task.created', { id: task.id });
@@ -541,6 +554,7 @@ export function buildApp({
         timer_segments = @timerSegmentsJson,
         removed_segment_ids = @removedSegmentIdsJson,
         manual_duration_ms = @manualDurationMs,
+        schedule_window = @scheduleWindowJson,
         updated_at = @updatedAt
       WHERE id = @id
     `).run({
@@ -550,6 +564,7 @@ export function buildApp({
       customGroupsJson: JSON.stringify(updated.customGroups ?? []),
       timerSegmentsJson: JSON.stringify(updated.timerSegments),
       removedSegmentIdsJson: JSON.stringify(updated.removedSegmentIds),
+      scheduleWindowJson: JSON.stringify(updated.scheduleWindow ?? null),
       deletedAt: undefined,
     });
 
@@ -888,6 +903,24 @@ export function buildApp({
   return app;
 }
 
+function parseScheduleWindow(value: string | null | undefined) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (
+      parsed
+      && typeof parsed.start === 'string'
+      && typeof parsed.end === 'string'
+      && ['daily', 'weekly', 'once'].includes(parsed.repeat)
+    ) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function rowFromTask(row: any) {
   return {
     id: row.id,
@@ -903,6 +936,7 @@ function rowFromTask(row: any) {
     timerSegments: parseTimerSegments(row.timer_segments ?? '[]'),
     removedSegmentIds: parseIdList(row.removed_segment_ids ?? '[]'),
     manualDurationMs: row.manual_duration_ms ?? 0,
+    scheduleWindow: parseScheduleWindow(row.schedule_window),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at ?? null,

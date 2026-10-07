@@ -31,6 +31,7 @@ export function createDatabase({ database = 'habitpulse.db' }: DatabaseOptions =
       manual_duration_ms INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
+      schedule_window TEXT,
       deleted_at TEXT
     );
 
@@ -112,6 +113,10 @@ export function createDatabase({ database = 'habitpulse.db' }: DatabaseOptions =
     if (!taskColumns.some((column) => column.name === migration.column)) {
       db.prepare(migration.sql).run();
     }
+  }
+
+  if (!taskColumns.some((column) => column.name === 'schedule_window')) {
+    db.prepare('ALTER TABLE tasks ADD COLUMN schedule_window TEXT').run();
   }
 
   const dayColumns = db.prepare('PRAGMA table_info(day_records)').all() as Array<{ name: string }>;
