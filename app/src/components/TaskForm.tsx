@@ -12,7 +12,6 @@ import GlassCard from './GlassCard';
 import PressableScale from './PressableScale';
 import GroupSelect from './GroupSelect';
 import AppUsageBindingSelect from './AppUsageBindingSelect';
-import VoiceInputButton from './VoiceInputButton';
 import { getAvailableTaskGroups } from '../domain/taskOrdering';
 import { taskColors, taskIcons } from '../domain/taskAppearance';
 import { AppUsageBinding, ScheduleRepeat, ScheduleWindow, Task, TimeSegment } from '../domain/types';
@@ -26,6 +25,7 @@ type Props = {
   title: string;
   submitLabel: string;
   initialTask?: Task;
+  initialName?: string;
   defaultIcon?: string;
   defaultColor?: string;
   defaultIconImage?: string | null;
@@ -48,6 +48,7 @@ export default function TaskForm({
   title,
   submitLabel,
   initialTask,
+  initialName,
   defaultIcon,
   defaultColor,
   defaultIconImage,
@@ -58,7 +59,7 @@ export default function TaskForm({
   const router = useRouter();
   const { settings, activeTasks, updateSettings, updateTask } = useHabitStore();
   const theme = useTheme(settings.appearance);
-  const [name, setName] = useState(initialTask?.name ?? '');
+  const [name, setName] = useState(initialTask?.name ?? initialName ?? '');
   const [description, setDescription] = useState(initialTask?.description ?? '');
   const [icon, setIcon] = useState<string>(initialTask?.icon ?? defaultIcon ?? taskIcons[0]);
   const [color, setColor] = useState<string>(initialTask?.color ?? defaultColor ?? taskColors[0]);
@@ -192,19 +193,16 @@ export default function TaskForm({
 
       <GlassCard style={styles.form}>
         <Text style={[styles.label, { color: theme.mutedText }]}>名称</Text>
-        <View style={styles.nameRow}>
-          <TextInput
-            value={name}
-            onChangeText={(value) => {
-              setName(value);
-              setError('');
-            }}
-            placeholder="例如：每天阅读 20 分钟"
-            placeholderTextColor={theme.isLight ? 'rgba(71,85,105,0.55)' : 'rgba(148,163,184,0.45)'}
-            style={[styles.input, styles.nameInput, { borderColor: theme.inputBorder, backgroundColor: theme.inputBackground, color: theme.text }]}
-          />
-          <VoiceInputButton onTranscribed={(text) => { setName(text); setError(''); }} />
-        </View>
+        <TextInput
+          value={name}
+          onChangeText={(value) => {
+            setName(value);
+            setError('');
+          }}
+          placeholder="例如：每天阅读 20 分钟"
+          placeholderTextColor={theme.isLight ? 'rgba(71,85,105,0.55)' : 'rgba(148,163,184,0.45)'}
+          style={[styles.input, { borderColor: theme.inputBorder, backgroundColor: theme.inputBackground, color: theme.text }]}
+        />
 
         <Text style={[styles.label, { color: theme.mutedText }]}>描述</Text>
         <TextInput
@@ -537,14 +535,6 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     fontSize: 14,
     fontWeight: '700',
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  nameInput: {
-    flex: 1,
   },
   input: {
     borderWidth: 1,

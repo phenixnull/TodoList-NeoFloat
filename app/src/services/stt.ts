@@ -9,6 +9,34 @@ export interface SttTranscription {
 const STT_TIMEOUT_MS = 60_000;
 const MAX_AUDIO_BYTES = 24_000_000;
 
+export interface SttHealth {
+  ok: boolean;
+  model?: string;
+}
+
+export async function fetchSttHealth(serverUrl: string): Promise<SttHealth> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5_000);
+  try {
+    const response = await fetch(`${normalizeServerUrl(serverUrl)}/api/stt/health`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) return { ok: false };
+    const payload = (await response.json()) as {
+      ok?: boolean;
+      upstream?: { ok?: boolean; model?: string } | null;
+    };
+    return {
+      ok: !!payload.upstream?.ok,
+      model: payload.upstream?.model,
+    };
+  } catch {
+    return { ok: false };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function audioFormatFromUri(uri: string): string {
   const match = /\.([a-z0-9]{2,5})(?:[?#]|$)/i.exec(uri);
   const extension = match?.[1]?.toLowerCase();

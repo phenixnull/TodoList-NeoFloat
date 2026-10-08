@@ -1,10 +1,12 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Link, Stack } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Platform, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { NestableDraggableFlatList } from 'react-native-draggable-flatlist';
+import { Drawer } from 'react-native-drawer-layout';
 import { dialog } from '@/components/dialog/dialogs';
+import AppSidebar from '@/components/AppSidebar';
 import DailyOverviewCard from '@/components/DailyOverviewCard';
 import GlassCard from '@/components/GlassCard';
 import GroupSelect from '@/components/GroupSelect';
@@ -23,6 +25,9 @@ import type { Task } from '@/domain/types';
 
 export default function HomeScreen() {
   const today = useTodayKey();
+  const { width } = useWindowDimensions();
+  const drawerWidth = Math.min(320, width * 0.84);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [dragListKey, setDragListKey] = useState(0);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
   const [sortDesc, setSortDesc] = useState(true);
@@ -309,10 +314,34 @@ export default function HomeScreen() {
   }, [reorderTasks, taskGroups]);
 
   return (
-    <ScreenShell style={styles.homeContent}>
-      <Stack.Screen options={{ headerShown: false }} />
-      <Animated.View entering={FadeInUp.springify().damping(16)} style={styles.header}>
-        <View>
+    <Drawer
+      open={drawerOpen}
+      onOpen={() => setDrawerOpen(true)}
+      onClose={() => setDrawerOpen(false)}
+      drawerPosition="left"
+      drawerType="front"
+      swipeEdgeWidth={40}
+      drawerStyle={{ width: drawerWidth }}
+      overlayStyle={{ backgroundColor: theme.isLight ? 'rgba(15,23,42,0.35)' : 'rgba(0,0,0,0.55)' }}
+      renderDrawerContent={() => <AppSidebar onClose={() => setDrawerOpen(false)} />}
+      style={{ flex: 1 }}
+    >
+      <ScreenShell style={styles.homeContent}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <Animated.View entering={FadeInUp.springify().damping(16)} style={styles.header}>
+          <View style={styles.headerLeading}>
+            <PressableScale
+              accessibilityLabel="打开侧边栏"
+              accessibilityRole="button"
+              onPress={() => setDrawerOpen(true)}
+              style={StyleSheet.flatten([styles.menuButton, {
+                borderColor: theme.surfaceBorder,
+                backgroundColor: theme.surface,
+              }])}
+            >
+              <MaterialCommunityIcons name="menu" size={19} color={theme.mutedText} />
+            </PressableScale>
+            <View>
           <Text style={[styles.eyebrow, { color: theme.subtleText }]}>
             {new Date(`${today}T00:00:00`).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
           </Text>
@@ -337,6 +366,8 @@ export default function HomeScreen() {
             </Text>
           </View>
         </View>
+
+          </View>
 
         <View style={styles.headerActions}>
           <ThemeQuickToggle
@@ -522,7 +553,8 @@ export default function HomeScreen() {
         </>
       )}
 
-    </ScreenShell>
+      </ScreenShell>
+    </Drawer>
   );
 }
 
@@ -536,6 +568,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
+  },
+  headerLeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  menuButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   settingsButton: {
     width: 36,
