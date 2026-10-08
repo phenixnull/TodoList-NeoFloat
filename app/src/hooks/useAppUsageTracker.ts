@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { mergeAppUsageSegments } from '../domain/appUsage';
 import { getTodayKey } from '../domain/streak';
@@ -19,11 +19,17 @@ export default function useAppUsageTracker() {
   const tasksRef = useRef(activeTasks);
   const updateTaskRef = useRef(updateTask);
   const busyRef = useRef(false);
+  const [appState, setAppState] = useState(AppState.currentState);
 
   useEffect(() => {
     tasksRef.current = activeTasks;
     updateTaskRef.current = updateTask;
   }, [activeTasks, updateTask]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', setAppState);
+    return () => subscription.remove();
+  }, []);
 
   const trackingBindings = activeTasks
     .filter((task) => task.appUsageBinding?.packageName)
@@ -70,7 +76,7 @@ export default function useAppUsageTracker() {
     };
     // trackingConfig is a stable JSON fingerprint that avoids restarting the
     // foreground service on every unrelated task/check-in state update.
-  }, [trackingConfig]);
+  }, [trackingConfig, appState]);
 
   useEffect(() => {
     if (Platform.OS !== 'android' || !isAppUsageSupported()) return;

@@ -55,7 +55,7 @@ export default function TaskForm({
   onSubmit,
 }: Props) {
   const router = useRouter();
-  const { settings, activeTasks, updateSettings } = useHabitStore();
+  const { settings, activeTasks, updateSettings, updateTask } = useHabitStore();
   const theme = useTheme(settings.appearance);
   const [name, setName] = useState(initialTask?.name ?? '');
   const [description, setDescription] = useState(initialTask?.description ?? '');
@@ -89,6 +89,16 @@ export default function TaskForm({
     }
     setCustomGroups((prev) => prev.includes(name) ? prev : [...prev, name]);
   };
+  const changeAppUsageBinding = (binding: AppUsageBinding | null) => {
+    setAppUsageBinding(binding);
+    if (!initialTask) return;
+
+    const replaceUsage = shouldReplaceAppUsage(initialTask, binding);
+    updateTask(initialTask.id, {
+      appUsageBinding: binding,
+      ...(replaceUsage ? { appUsageSegments: [] } : {}),
+    });
+  };
   const save = () => {
     if (!name.trim()) {
       setError('请输入任务名称');
@@ -96,7 +106,7 @@ export default function TaskForm({
     }
 
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    const replaceUsage = !initialTask || shouldReplaceAppUsage(initialTask, appUsageBinding);
+      const replaceUsage = !initialTask || shouldReplaceAppUsage(initialTask, appUsageBinding);
     onSubmit({
       name,
       description,
@@ -221,7 +231,7 @@ export default function TaskForm({
           value={appUsageBinding}
           onChange={(binding) => {
             void Haptics.selectionAsync();
-            setAppUsageBinding(binding);
+            changeAppUsageBinding(binding);
           }}
         />
 

@@ -136,6 +136,17 @@ export function getTaskTimeSegmentsForDate(task: Task, dateKey: string): TimeSeg
   });
 }
 
+export function getTaskAppUsageSegmentsForDate(task: Task, dateKey: string): TimeSegment[] {
+  const range = getDateRange(dateKey);
+  if (!range) return [];
+
+  return (task.appUsageSegments ?? []).filter((segment) => {
+    const start = new Date(segment.startAt).getTime();
+    const stop = segment.stopAt ? new Date(segment.stopAt).getTime() : Date.now();
+    return !Number.isNaN(start) && !Number.isNaN(stop) && start < range.end && stop > range.start;
+  });
+}
+
 export function calculateTimeSegmentsDurationForDate(
   task: Task,
   dateKey: string,
@@ -146,7 +157,8 @@ export function calculateTimeSegmentsDurationForDate(
     return 0;
   }
 
-  return task.timerSegments.reduce((total, segment) => {
+  const allSegments = [...task.timerSegments, ...(task.appUsageSegments ?? [])];
+  return allSegments.reduce((total, segment) => {
     const start = new Date(segment.startAt).getTime();
     const stop = segment.stopAt ? new Date(segment.stopAt).getTime() : nowMs;
     const overlapStart = Math.max(start, range.start);

@@ -6,6 +6,7 @@ type NativeAppUsageModule = {
   hasUsageAccess(): Promise<boolean>;
   openUsageAccessSettings(): Promise<void>;
   getInstalledApps(): Promise<AppUsageBinding[]>;
+  getInstalledAppIcon(packageName: string): Promise<string | null>;
   getAppUsageSegments(
     packageName: string,
     startMs: number,
@@ -36,6 +37,11 @@ export function openUsageAccessSettings(): Promise<void> {
 export function getInstalledApps(): Promise<AppUsageBinding[]> {
   if (!native) return Promise.resolve([]);
   return native.getInstalledApps();
+}
+
+export function getInstalledAppIcon(packageName: string): Promise<string | null> {
+  if (!native) return Promise.resolve(null);
+  return native.getInstalledAppIcon(packageName);
 }
 
 export async function getAppUsageSegments(

@@ -36,12 +36,12 @@ describe('app usage bindings', () => {
 
   it('detects binding replacement and unbinding so stale usage is not mixed into a new app', () => {
     const source = task({
-      appUsageBinding: { packageName: 'com.old.app', appName: 'Old' },
+      appUsageBinding: { packageName: 'com.old.app', appName: 'Old', icon: null },
       appUsageSegments: [{ id: 'a', startAt: '2026-10-07T01:00:00.000Z' }],
     });
 
-    expect(shouldReplaceAppUsage(source, { packageName: 'com.new.app', appName: 'New' })).toBe(true);
-    expect(shouldReplaceAppUsage(source, { packageName: 'com.old.app', appName: 'Renamed' })).toBe(false);
+    expect(shouldReplaceAppUsage(source, { packageName: 'com.new.app', appName: 'New', icon: null })).toBe(true);
+    expect(shouldReplaceAppUsage(source, { packageName: 'com.old.app', appName: 'Renamed', icon: null })).toBe(false);
     expect(shouldReplaceAppUsage(source, null)).toBe(true);
     expect(shouldReplaceAppUsage(task(), null)).toBe(false);
   });

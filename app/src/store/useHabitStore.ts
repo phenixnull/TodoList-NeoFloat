@@ -238,6 +238,8 @@ function useHabitStoreInstance() {
             customGroups: task.customGroups ?? [],
             timerSegments: task.timerSegments,
             removedSegmentIds: task.removedSegmentIds ?? [],
+            appUsageSegments: task.appUsageSegments ?? [],
+            appUsageBinding: task.appUsageBinding ?? null,
             manualDurationMs: task.manualDurationMs,
           }),
         });
@@ -447,6 +449,8 @@ function useHabitStoreInstance() {
               color: task.color, description: task.description, sortOrder: task.sortOrder,
               customGroups: task.customGroups ?? [],
               timerSegments: task.timerSegments, removedSegmentIds: task.removedSegmentIds ?? [],
+              appUsageSegments: task.appUsageSegments ?? [],
+              appUsageBinding: task.appUsageBinding ?? null,
               manualDurationMs: task.manualDurationMs,
             }),
           });

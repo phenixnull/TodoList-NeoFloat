@@ -6,6 +6,7 @@ import {
   createTimeSegment,
   formatDuration,
   formatManualDuration,
+  getTaskAppUsageSegmentsForDate,
   getTaskTimeSegmentsForDate,
   isTimerRunning,
   parseDurationInput,
@@ -216,6 +217,14 @@ describe('time tracking', () => {
     const calibrated = setTaskTotalDuration(source, 60 * 60_000, new Date('2026-10-07T03:00:00Z'));
     expect(calibrated.manualDurationMs).toBe(30 * 60_000);
     expect(calculateTaskDurationMs(calibrated)).toBe(60 * 60_000);
+
+    expect(getTaskTimeSegmentsForDate(source, '2026-10-07')).toHaveLength(1);
+    expect(getTaskAppUsageSegmentsForDate(source, '2026-10-07')).toHaveLength(1);
+    expect(calculateTimeSegmentsDurationForDate(
+      source,
+      '2026-10-07',
+      Date.parse('2026-10-07T03:00:00Z'),
+    )).toBe(30 * 60_000);
   });
 
   it('parses minutes, hours, compact units, and clock durations', () => {

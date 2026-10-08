@@ -2,8 +2,13 @@ package com.sagittarius.habitpulse.usage
 
 import android.app.AppOpsManager
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.content.Intent
 import android.app.usage.UsageStatsManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.util.Base64
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
@@ -15,6 +20,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.WritableArray
 
+import java.io.ByteArrayOutputStream
 import java.util.Date
 import java.util.Locale
 import java.text.SimpleDateFormat
@@ -28,6 +34,8 @@ class HabitPulseUsageModule(private val reactContext: ReactApplicationContext) :
   private val isoFormatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
     timeZone = TimeZone.getTimeZone("UTC")
   }
+
+  private val iconCache = mutableMapOf<String, String?>()
 
   private fun hasUsageAccess(): Boolean = try {
     val appOps = reactContext.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager
@@ -96,11 +104,12 @@ class HabitPulseUsageModule(private val reactContext: ReactApplicationContext) :
             )
           }
           .sortedWith(compareBy({ it.second.lowercase() }, { it.first }))
-          .forEach { (packageName, label, _) ->
+          .forEach { (packageName, label, info) ->
             if (seen.add(packageName)) {
               val map = Arguments.createMap()
               map.putString("packageName", packageName)
               map.putString("appName", label)
+              map.putString("icon", encodeAppIcon(info))
               result.pushMap(map)
             }
           }
@@ -109,6 +118,41 @@ class HabitPulseUsageModule(private val reactContext: ReactApplicationContext) :
     } catch (error: Exception) {
       promise.reject("APP_LIST_FAILED", error)
     }
+  }
+
+  @Synchronized
+  private fun encodeAppIcon(info: ApplicationInfo): String? {
+    iconCache[info.packageName]?.let { return it }
+
+    val icon = try {
+      val drawable = reactContext.packageManager.getApplicationIcon(info)
+      val size = 72
+      val bitmap = if (
+          drawable is BitmapDrawable &&
+          drawable.bitmap.width == size &&
+          drawable.bitmap.height == size
+      ) {
+        drawable.bitmap
+      } else {
+        Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { created ->
+          val canvas = Canvas(created)
+          drawable.setBounds(0, 0, size, size)
+          drawable.draw(canvas)
+        }
+      }
+      val output = ByteArrayOutputStream()
+      bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+      val encoded = "data:image/png;base64," + Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP)
+      if (drawable is BitmapDrawable && drawable.bitmap !== bitmap) {
+        bitmap.recycle()
+      }
+      encoded
+    } catch (error: Exception) {
+      null
+    }
+
+    iconCache[info.packageName] = icon
+    return icon
   }
 
   @ReactMethod
@@ -154,6 +198,21 @@ class HabitPulseUsageModule(private val reactContext: ReactApplicationContext) :
       promise.resolve(result)
     } catch (error: Exception) {
       promise.reject("USAGE_SEGMENTS_FAILED", error)
+    }
+  }
+
+  @ReactMethod
+  fun getInstalledAppIcon(packageName: String, promise: Promise) {
+    if (!hasUsageAccess()) {
+      promise.reject("NO_USAGE_ACCESS", "缺少使用情况访问权限")
+      return
+    }
+
+    try {
+      val info = reactContext.packageManager.getApplicationInfo(packageName, 0)
+      promise.resolve(encodeAppIcon(info))
+    } catch (error: Exception) {
+      promise.reject("APP_ICON_FAILED", error)
     }
   }
 

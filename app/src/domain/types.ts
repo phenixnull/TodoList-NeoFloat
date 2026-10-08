@@ -32,6 +32,8 @@ export type TimeSegment = {
 export type AppUsageBinding = {
   packageName: string;
   appName?: string;
+  /** Runtime-only launcher icon. The server intentionally strips this to keep task sync small. */
+  icon?: string | null;
 };
 
 export type ScheduleRepeat = 'daily' | 'weekly' | 'once';

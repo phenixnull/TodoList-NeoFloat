@@ -15,6 +15,7 @@ import {
   createTimeSegment,
   formatDuration,
   getTaskTimeSegmentsForDate,
+  getTaskAppUsageSegmentsForDate,
   isTimerRunning,
   parseDurationInput,
   removeTimeSegments,
@@ -346,6 +347,7 @@ export default function TimeSegmentsEditor({
   const theme = useTheme(settings.appearance);
   const [error, setError] = useState('');
   const segments = getTaskTimeSegmentsForDate(task, date);
+  const usageSegments = getTaskAppUsageSegmentsForDate(task, date);
   const dayDuration = calculateTimeSegmentsDurationForDate(task, date);
   const totalDuration = calculateTaskDurationMs(task);
   const running = isTimerRunning(task);
@@ -423,7 +425,7 @@ export default function TimeSegmentsEditor({
         </View>
       </View>
 
-      {segments.length === 0 ? (
+      {segments.length === 0 && usageSegments.length === 0 ? (
         <Text style={[styles.empty, { color: theme.subtleText }]}>
           这一天还没有时间段，可以随时开始/暂停。
         </Text>
@@ -439,6 +441,39 @@ export default function TimeSegmentsEditor({
               onDelete={deleteSegment}
             />
           ))}
+          {usageSegments.map((segment) => {
+            const start = new Date(segment.startAt);
+            const stop = segment.stopAt ? new Date(segment.stopAt) : null;
+            const duration = calculateSegmentDurationMs(
+              segment.startAt,
+              stop?.toISOString() ?? new Date().toISOString(),
+            );
+
+            return (
+              <View
+                key={`${segment.id}-${segment.startAt}-${segment.stopAt ?? 'live'}`}
+                style={[styles.usageSegment, {
+                  borderColor: theme.surfaceBorder,
+                  backgroundColor: theme.inputBackground,
+                }]}
+              >
+                <View style={styles.usageHeader}>
+                  <View style={styles.usageTitle}>
+                    <MaterialCommunityIcons name="android" size={15} color={accentColor} />
+                    <Text style={[styles.usageText, { color: accentColor }]}>APP 自动记录</Text>
+                  </View>
+                  <Text style={[styles.usageDuration, { color: theme.text }]}>
+                    {formatDuration(duration)}
+                  </Text>
+                </View>
+                <Text style={[styles.usageRange, { color: theme.subtleText }]}>
+                  {start.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                  {' - '}
+                  {stop?.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }) ?? '进行中'}
+                </Text>
+              </View>
+            );
+          })}
         </View>
       )}
 
@@ -843,5 +878,36 @@ const styles = StyleSheet.create({
   secondaryText: {
     fontSize: 12,
     fontWeight: '800',
+  },
+  usageSegment: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 5,
+  },
+  usageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  usageTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  usageText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  usageDuration: {
+    fontSize: 13,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  usageRange: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

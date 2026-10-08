@@ -185,6 +185,18 @@ describe('HabitPulse API', () => {
       appName: 'Reader',
     });
 
+    const renamed = await app.inject({
+      method: 'PATCH',
+      url: `/api/tasks/${created.json().id}`,
+      payload: { name: 'Renamed bound usage' },
+    });
+    expect(renamed.statusCode).toBe(200);
+    expect(renamed.json().appUsageBinding).toEqual({
+      packageName: 'com.example.reader',
+      appName: 'Reader',
+    });
+    expect(renamed.json().appUsageSegments).toHaveLength(1);
+
     const rebound = await app.inject({
       method: 'PATCH',
       url: `/api/tasks/${created.json().id}`,

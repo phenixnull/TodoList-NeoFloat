@@ -1,9 +1,11 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useEffect, useMemo, useState } from 'react';
 import { AppState, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import PressableScale from './PressableScale';
 import {
   getInstalledApps,
+  getInstalledAppIcon,
   hasUsageAccess,
   openUsageAccessSettings,
 } from '../services/appUsage';
@@ -25,6 +27,7 @@ export default function AppUsageBindingSelect({ value, onChange }: Props) {
   const [pickerVisible, setPickerVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [selectedIconOverride, setSelectedIconOverride] = useState<string | null>(null);
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
@@ -86,6 +89,29 @@ export default function AppUsageBindingSelect({ value, onChange }: Props) {
       || app.appName?.toLowerCase().includes(keyword));
   }, [apps, query]);
 
+  const iconFor = (binding: AppUsageBinding | null | undefined) => (
+    binding?.icon
+      ?? selectedIconOverride
+      ?? apps.find((app) => app.packageName === binding?.packageName)?.icon
+      ?? null
+  );
+  const selectedIcon = iconFor(value);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !value || value.icon) return;
+    let active = true;
+
+    getInstalledAppIcon(value.packageName)
+      .then((icon) => {
+        if (active) setSelectedIconOverride(icon);
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [value]);
+
   if (Platform.OS !== 'android') return null;
 
   return (
@@ -104,7 +130,11 @@ export default function AppUsageBindingSelect({ value, onChange }: Props) {
           }]}
           onPress={() => setPickerVisible(true)}
         >
-          <MaterialCommunityIcons name="android" size={18} color={theme.accent} />
+          {selectedIcon ? (
+            <Image source={{ uri: selectedIcon }} style={styles.selectorIcon} />
+          ) : (
+            <MaterialCommunityIcons name="android" size={18} color={theme.accent} />
+          )}
           <Text numberOfLines={1} style={[styles.selectorText, { color: theme.text }]}>
             {value?.appName || value?.packageName || '选择应用'}
           </Text>
@@ -181,6 +211,11 @@ export default function AppUsageBindingSelect({ value, onChange }: Props) {
                       setPickerVisible(false);
                     }}
                   >
+                    {app.icon ? (
+                      <Image source={{ uri: app.icon }} style={styles.appIcon} />
+                    ) : (
+                      <MaterialCommunityIcons name="application" size={30} color={theme.mutedText} />
+                    )}
                     <View style={styles.appText}>
                       <Text numberOfLines={1} style={[styles.appName, { color: theme.text }]}>
                         {app.appName || app.packageName}
@@ -240,6 +275,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '600',
+  },
+  selectorIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
   },
   clearButton: {
     width: 46,
@@ -306,6 +346,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 8,
+  },
+  appIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
   },
   appText: {
     flex: 1,
