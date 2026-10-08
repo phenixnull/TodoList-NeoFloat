@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,6 +11,71 @@ describe('HabitPulse API', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ ok: true });
+  });
+
+  it('forwards voice recordings to the local STT service', async () => {
+    const upstreamCalls: Array<{ url: string; init: RequestInit }> = [];
+    vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
+      upstreamCalls.push({ url: String(url), init: init ?? {} });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ text: '每天阅读二十分钟', language: 'Chinese' }),
+      } as Response;
+    });
+
+    try {
+      const app = buildApp({ database: ':memory:' });
+      const audioBase64 = Buffer.from('RIFF-test-audio-payload-16-bytes', 'ascii').toString('base64');
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/stt/transcribe',
+        payload: { audioBase64, audioFormat: 'm4a' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ text: '每天阅读二十分钟', language: 'Chinese' });
+      expect(upstreamCalls).toHaveLength(1);
+      expect(upstreamCalls[0].url).toContain('/transcribe');
+      const upstreamBody = JSON.parse(String(upstreamCalls[0].init.body));
+      expect(upstreamBody.audio_base64).toBe(audioBase64);
+      expect(upstreamBody.audio_format).toBe('m4a');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('returns 502 when the local STT service is offline', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('connect ECONNREFUSED 127.0.0.1:8100');
+    });
+
+    try {
+      const app = buildApp({ database: ':memory:' });
+      const audioBase64 = Buffer.from('RIFF-test-audio-payload-16-bytes', 'ascii').toString('base64');
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/stt/transcribe',
+        payload: { audioBase64, audioFormat: 'wav' },
+      });
+
+      expect(response.statusCode).toBe(502);
+      expect(response.json().error).toBe('STT_SERVICE_UNAVAILABLE');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('rejects invalid STT payloads', async () => {
+    const app = buildApp({ database: ':memory:' });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/stt/transcribe',
+      payload: { audioBase64: 'not-valid-base64!!!', audioFormat: 'wav' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('INVALID_STT_REQUEST');
   });
 
   it('streams update APKs with byte ranges so interrupted downloads can resume', async () => {

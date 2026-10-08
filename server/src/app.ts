@@ -76,6 +76,14 @@ const usageSamplesSchema = z.object({
   samples: z.array(usageSampleSchema).max(500),
 });
 
+const sttTranscribeSchema = z.object({
+  audioBase64: z.string().base64().min(8).max(24_000_000),
+  audioFormat: z.string().max(16).default('wav'),
+  language: z.string().max(40).nullable().optional(),
+});
+
+const STT_SERVICE_URL = process.env.STT_SERVICE_URL ?? 'http://127.0.0.1:8100';
+
 const toggleCheckInSchema = z.object({
   taskId: z.string().min(1),
   date: dateKey,
@@ -422,6 +430,51 @@ export function buildApp({
   }
 
   app.get('/api/health', async () => ({ ok: true }));
+
+  app.get('/api/stt/health', async () => {
+    try {
+      const response = await fetch(`${STT_SERVICE_URL}/health`, {
+        signal: AbortSignal.timeout(3_000),
+      });
+      const payload = await response.json().catch(() => null);
+      return { ok: response.ok, upstream: payload };
+    } catch (error) {
+      return { ok: false, error: String(error) };
+    }
+  });
+
+  // Mobile recordings are forwarded to the local PC-side STT service so the
+  // phone never runs ASR itself. Base64 matches the day-record image pattern.
+  app.post('/api/stt/transcribe', async (request, reply) => {
+    const parsed = sttTranscribeSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'INVALID_STT_REQUEST' });
+    }
+
+    try {
+      const upstream = await fetch(`${STT_SERVICE_URL}/transcribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audio_base64: parsed.data.audioBase64,
+          audio_format: parsed.data.audioFormat,
+          language: parsed.data.language ?? null,
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      const payload = (await upstream.json().catch(() => null)) as Record<string, unknown> | null;
+
+      if (!upstream.ok || !payload || typeof payload.text !== 'string') {
+        return reply.status(upstream.status === 400 ? 400 : 502).send({
+          error: 'STT_FAILED',
+          detail: (payload as { detail?: unknown } | null)?.detail ?? null,
+        });
+      }
+      return payload;
+    } catch (error) {
+      return reply.status(502).send({ error: 'STT_SERVICE_UNAVAILABLE', detail: String(error) });
+    }
+  });
 
   // A snapshot must represent one database generation. Fetching tasks,
   // check-ins and records through separate endpoints can otherwise combine

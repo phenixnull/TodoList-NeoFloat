@@ -1,4 +1,9 @@
 node_modules/
+stt-service/.venv/
+stt-service/__pycache__/
+stt-service/stt-error.log
+stt-service/stt-out.log
+stt-service/stt-err.log
 desktop/dist/
 desktop/dist-builder/
 *.log

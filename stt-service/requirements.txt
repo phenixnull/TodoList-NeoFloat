@@ -1,0 +1,5 @@
+# torch must be installed first with the CUDA index, e.g.:
+#   uv pip install torch --index-url https://download.pytorch.org/whl/cu124
+fastapi>=0.115
+uvicorn[standard]>=0.30
+qwen-asr>=0.0.6

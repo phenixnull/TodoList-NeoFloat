@@ -12,6 +12,7 @@ import GlassCard from './GlassCard';
 import PressableScale from './PressableScale';
 import GroupSelect from './GroupSelect';
 import AppUsageBindingSelect from './AppUsageBindingSelect';
+import VoiceInputButton from './VoiceInputButton';
 import { getAvailableTaskGroups } from '../domain/taskOrdering';
 import { taskColors, taskIcons } from '../domain/taskAppearance';
 import { AppUsageBinding, ScheduleRepeat, ScheduleWindow, Task, TimeSegment } from '../domain/types';
@@ -191,16 +192,19 @@ export default function TaskForm({
 
       <GlassCard style={styles.form}>
         <Text style={[styles.label, { color: theme.mutedText }]}>名称</Text>
-        <TextInput
-          value={name}
-          onChangeText={(value) => {
-            setName(value);
-            setError('');
-          }}
-          placeholder="例如：每天阅读 20 分钟"
-          placeholderTextColor={theme.isLight ? 'rgba(71,85,105,0.55)' : 'rgba(148,163,184,0.45)'}
-          style={[styles.input, { borderColor: theme.inputBorder, backgroundColor: theme.inputBackground, color: theme.text }]}
-        />
+        <View style={styles.nameRow}>
+          <TextInput
+            value={name}
+            onChangeText={(value) => {
+              setName(value);
+              setError('');
+            }}
+            placeholder="例如：每天阅读 20 分钟"
+            placeholderTextColor={theme.isLight ? 'rgba(71,85,105,0.55)' : 'rgba(148,163,184,0.45)'}
+            style={[styles.input, styles.nameInput, { borderColor: theme.inputBorder, backgroundColor: theme.inputBackground, color: theme.text }]}
+          />
+          <VoiceInputButton onTranscribed={(text) => { setName(text); setError(''); }} />
+        </View>
 
         <Text style={[styles.label, { color: theme.mutedText }]}>描述</Text>
         <TextInput
@@ -533,6 +537,14 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     fontSize: 14,
     fontWeight: '700',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  nameInput: {
+    flex: 1,
   },
   input: {
     borderWidth: 1,

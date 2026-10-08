@@ -2,7 +2,7 @@
   "expo": {
     "name": "HabitPulse",
     "slug": "habitpulse",
-    "version": "1.7.20",
+    "version": "1.7.21",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "habitpulse",
@@ -12,11 +12,9 @@
     },
     "android": {
       "package": "com.sagittarius.habitpulse",
-      "versionCode": 55,
+      "versionCode": 56,
       "permissions": [
-        "android.permission.REQUEST_INSTALL_PACKAGES"
-      ],
-      "blockedPermissions": [
+        "android.permission.REQUEST_INSTALL_PACKAGES",
         "android.permission.RECORD_AUDIO"
       ],
       "adaptiveIcon": {
@@ -62,7 +60,8 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,
