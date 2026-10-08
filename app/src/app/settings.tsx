@@ -9,6 +9,7 @@ import ScreenShell from '@/components/ScreenShell';
 import {
   downloadUpdate,
   getDownloadedApk,
+  getPartialDownloadProgress,
   fetchUpdateManifest,
   getCurrentVersionCode,
   getCurrentVersionName,
@@ -22,7 +23,7 @@ type UpdateUiState =
   | { phase: 'idle' }
   | { phase: 'checking' }
   | { phase: 'uptodate' }
-  | { phase: 'available'; manifest: UpdateManifest; alreadyDownloaded?: boolean }
+  | { phase: 'available'; manifest: UpdateManifest; alreadyDownloaded?: boolean; partialDownloaded?: number }
   | { phase: 'downloading'; progress: number; manifest: UpdateManifest }
   | { phase: 'error'; message: string };
 
@@ -47,7 +48,13 @@ export default function SettingsScreen() {
 
       if (isNewer(manifest, currentVersionCode)) {
         const downloaded = await getDownloadedApk(manifest);
-        setUpdateState({ phase: 'available', manifest, alreadyDownloaded: !!downloaded });
+        const partialDownloaded = downloaded ? 0 : await getPartialDownloadProgress(settings.serverUrl, manifest);
+        setUpdateState({
+          phase: 'available',
+          manifest,
+          alreadyDownloaded: !!downloaded,
+          partialDownloaded,
+        });
       } else {
         setUpdateState({ phase: 'uptodate' });
       }
@@ -60,7 +67,8 @@ export default function SettingsScreen() {
   };
 
   const performUpdate = async (manifest: UpdateManifest) => {
-    setUpdateState({ phase: 'downloading', progress: 0, manifest });
+    const initialProgress = await getPartialDownloadProgress(settings.serverUrl, manifest);
+    setUpdateState({ phase: 'downloading', progress: initialProgress, manifest });
 
     try {
       // Check if already downloaded
@@ -78,6 +86,17 @@ export default function SettingsScreen() {
       // Stay on "downloading/complete" until the system installer takes over.
       setUpdateState({ phase: 'available', manifest });
     } catch (error) {
+      const partialDownloaded = await getPartialDownloadProgress(settings.serverUrl, manifest).catch(() => 0);
+      if (partialDownloaded > 0) {
+        setUpdateState({
+          phase: 'available',
+          manifest,
+          alreadyDownloaded: false,
+          partialDownloaded,
+        });
+        return;
+      }
+
       setUpdateState({
         phase: 'error',
         message: error instanceof Error ? error.message : '下载更新失败',
@@ -119,7 +138,9 @@ export default function SettingsScreen() {
       case 'uptodate':
         return `已是最新版本 v${currentVersionName}`;
       case 'available':
-        return `发现新版本 v${updateState.manifest.versionName}`;
+        return updateState.partialDownloaded
+          ? `发现新版本 v${updateState.manifest.versionName} · 已下载 ${Math.round(updateState.partialDownloaded * 100)}%`
+          : `发现新版本 v${updateState.manifest.versionName}`;
       case 'downloading':
         return `正在下载更新 ${Math.round(updateState.progress * 100)}%`;
       case 'error':
@@ -135,6 +156,14 @@ export default function SettingsScreen() {
       case 'downloading':
         return { label: '请稍候', icon: 'progress-clock', disabled: true, onPress: () => {} };
       case 'available':
+        if (updateState.partialDownloaded && !updateState.alreadyDownloaded) {
+          return {
+            label: `继续下载 v${updateState.manifest.versionName}`,
+            icon: 'download-outline',
+            disabled: false,
+            onPress: () => void performUpdate(updateState.manifest),
+          };
+        }
         return {
           label: `立即更新到 v${updateState.manifest.versionName}`,
           icon: 'download-outline',

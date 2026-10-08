@@ -13,6 +13,57 @@ describe('HabitPulse API', () => {
     expect(response.json()).toEqual({ ok: true });
   });
 
+  it('streams update APKs with byte ranges so interrupted downloads can resume', async () => {
+    const releaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'habitpulse-updates-'));
+    const apk = Buffer.from('ABCDEFGHIJ', 'ascii');
+    fs.writeFileSync(path.join(releaseDir, 'test.apk'), apk);
+    fs.writeFileSync(path.join(releaseDir, 'update-manifest.json'), JSON.stringify({
+      versionName: '1.0.0',
+      versionCode: 1,
+      fileName: 'test.apk',
+      apkPath: '/api/updates/apk',
+      mandatory: false,
+      releaseNotes: [],
+      publishedAt: '2026-10-08T00:00:00.000Z',
+    }));
+
+    const app = buildApp({ database: ':memory:', releaseDir });
+    const head = await app.inject({ method: 'HEAD', url: '/api/updates/apk' });
+    expect(head.statusCode).toBe(200);
+    expect(head.headers['content-length']).toBe('10');
+    expect(head.headers['accept-ranges']).toBe('bytes');
+
+    const range = await app.inject({
+      method: 'GET',
+      url: '/api/updates/apk',
+      headers: { range: 'bytes=2-5' },
+    });
+    expect(range.statusCode).toBe(206);
+    expect(range.headers['content-range']).toBe('bytes 2-5/10');
+    expect(range.headers['content-length']).toBe('4');
+    expect(range.headers['accept-ranges']).toBe('bytes');
+    expect(range.rawPayload).toEqual(Buffer.from('CDEF', 'ascii'));
+
+    const suffix = await app.inject({
+      method: 'GET',
+      url: '/api/updates/apk',
+      headers: { range: 'bytes=-3' },
+    });
+    expect(suffix.statusCode).toBe(206);
+    expect(suffix.headers['content-range']).toBe('bytes 7-9/10');
+    expect(suffix.rawPayload).toEqual(Buffer.from('HIJ', 'ascii'));
+
+    const invalid = await app.inject({
+      method: 'GET',
+      url: '/api/updates/apk',
+      headers: { range: 'bytes=20-30' },
+    });
+    expect(invalid.statusCode).toBe(416);
+    expect(invalid.headers['content-range']).toBe('bytes */10');
+
+    fs.rmSync(releaseDir, { recursive: true, force: true });
+  });
+
   it('creates, reads, updates, and soft-deletes tasks', async () => {
     const app = buildApp({ database: ':memory:' });
     await app.inject({

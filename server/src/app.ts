@@ -280,23 +280,102 @@ export function buildApp({
     }
   });
 
-  app.get('/api/updates/apk', (_request: any, reply: any) => {
-    try {
-      const manifest = readUpdateManifest();
-      const apkPath = path.join(resolvedReleaseDir, manifest.fileName);
+  const resolveUpdateApk = () => {
+    const manifest = readUpdateManifest();
+    const apkPath = path.resolve(resolvedReleaseDir, manifest.fileName);
+    if (!apkPath.startsWith(path.resolve(resolvedReleaseDir) + path.sep)) {
+      throw new Error('Invalid APK path');
+    }
+    if (!fs.existsSync(apkPath)) {
+      throw new Error('APK not found');
+    }
+    const stat = fs.statSync(apkPath);
+    if (!stat.isFile()) {
+      throw new Error('APK not found');
+    }
+    return {
+      manifest,
+      apkPath,
+      size: stat.size,
+      etag: `"${stat.size}-${stat.mtimeMs.toString(36)}"`,
+      lastModified: stat.mtime.toUTCString(),
+    };
+  };
 
-      if (!fs.existsSync(apkPath)) {
-        return reply.code(404).send({ error: 'APK not found' });
+  const sendApkHeaders = (
+    reply: any,
+    size: number,
+    fileName: string,
+    update?: { etag: string; lastModified: string },
+    range?: { start: number; end: number },
+  ) => {
+    reply
+      .header('Content-Type', 'application/vnd.android.package-archive')
+      .header('Cache-Control', 'no-cache')
+      .header('Accept-Ranges', 'bytes')
+      .header('ETag', update?.etag ?? '')
+      .header('Last-Modified', update?.lastModified ?? '')
+      .header('Content-Disposition', `attachment; filename="${fileName}"`);
+
+    if (range) {
+      reply
+        .code(206)
+        .header('Content-Length', range.end - range.start + 1)
+        .header('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
+    } else {
+      reply.code(200).header('Content-Length', size);
+    }
+  };
+
+  app.head('/api/updates/apk', (_request: any, reply: any) => {
+    try {
+      const update = resolveUpdateApk();
+      sendApkHeaders(reply, update.size, update.manifest.fileName);
+      return reply.send();
+    } catch {
+      return reply.code(404).send();
+    }
+  });
+
+  app.get('/api/updates/apk', (request: any, reply: any) => {
+    try {
+      const update = resolveUpdateApk();
+      const rangeHeader = String(request.headers.range ?? '');
+      const range = (() => {
+        if (!rangeHeader) return null;
+        const match = /^bytes=(\d*)-(\d*)$/i.exec(rangeHeader.trim());
+        if (!match || (!match[1] && !match[2])) return 'invalid';
+        let start: number;
+        let end: number;
+        if (match[1]) {
+          start = Number(match[1]);
+          end = match[2] ? Math.min(Number(match[2]), update.size - 1) : update.size - 1;
+        } else {
+          start = Math.max(0, update.size - Number(match[2]));
+          end = update.size - 1;
+        }
+        if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || start > end || start >= update.size) {
+          return 'invalid';
+        }
+        return { start, end };
+      })();
+
+      if (range === 'invalid') {
+        return reply
+          .code(416)
+          .header('Content-Range', `bytes */${update.size}`)
+          .header('Accept-Ranges', 'bytes')
+          .send();
       }
 
-      return reply
-        .header('Content-Type', 'application/vnd.android.package-archive')
-        .header('Cache-Control', 'no-cache')
-        .header(
-          'Content-Disposition',
-          `attachment; filename="${manifest.fileName}"`,
-        )
-        .send(fs.readFileSync(apkPath));
+      sendApkHeaders(
+        reply,
+        update.size,
+        update.manifest.fileName,
+        update,
+        range ?? undefined,
+      );
+      return reply.send(fs.createReadStream(update.apkPath, range ?? undefined));
     } catch {
       return reply.code(404).send({ error: 'Update package not found' });
     }
