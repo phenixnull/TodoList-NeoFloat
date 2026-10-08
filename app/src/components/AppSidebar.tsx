@@ -30,9 +30,9 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
     items: [
       {
         icon: 'microphone',
-        label: 'AI 语音输入',
+        label: 'AI 语音记录',
         href: '/voice',
-        description: '说话即转文字，中英混合',
+        description: '语音速记 · 图片 · 搜索',
         highlight: true,
       },
     ],

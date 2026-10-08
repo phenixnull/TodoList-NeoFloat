@@ -88,6 +88,16 @@ export function createDatabase({ database = 'habitpulse.db' }: DatabaseOptions =
 
     CREATE INDEX IF NOT EXISTS idx_feedback_images_feedback ON feedback_images(feedback_id);
 
+    CREATE TABLE IF NOT EXISTS voice_records (
+      id TEXT PRIMARY KEY,
+      text TEXT NOT NULL,
+      language TEXT,
+      source TEXT NOT NULL DEFAULT 'keyboard',
+      images_json TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL,
+      deleted_at TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS sync_state (
       id INTEGER PRIMARY KEY CHECK(id = 1),
       instance_id TEXT NOT NULL,

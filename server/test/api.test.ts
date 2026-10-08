@@ -36,8 +36,9 @@ describe('HabitPulse API', () => {
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({ text: '每天阅读二十分钟', language: 'Chinese' });
       expect(upstreamCalls).toHaveLength(1);
-      expect(upstreamCalls[0].url).toContain('/transcribe');
-      const upstreamBody = JSON.parse(String(upstreamCalls[0].init.body));
+      const upstreamCall = upstreamCalls[0]!;
+      expect(upstreamCall.url).toContain('/transcribe');
+      const upstreamBody = JSON.parse(String(upstreamCall.init.body));
       expect(upstreamBody.audio_base64).toBe(audioBase64);
       expect(upstreamBody.audio_format).toBe('m4a');
     } finally {
@@ -76,6 +77,44 @@ describe('HabitPulse API', () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json().error).toBe('INVALID_STT_REQUEST');
+  });
+
+  it('stores, snapshots, and soft-deletes voice records', async () => {
+    const app = buildApp({ database: ':memory:' });
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/voice-records',
+      payload: {
+        id: 'vr1',
+        text: '今天完成了三次深呼吸练习',
+        language: 'Chinese',
+        source: 'voice',
+        createdAt: '2026-10-08T02:00:00.000Z',
+      },
+    });
+
+    expect(created.statusCode).toBe(200);
+    expect(created.json()).toMatchObject({ id: 'vr1', text: '今天完成了三次深呼吸练习', source: 'voice' });
+
+    const list = await app.inject({ method: 'GET', url: '/api/voice-records' });
+    expect(list.json()).toHaveLength(1);
+
+    const snapshot = (await app.inject({ url: '/api/snapshot' })).json() as any;
+    expect(snapshot.voiceRecords).toHaveLength(1);
+    expect(snapshot.voiceRecords[0].text).toBe('今天完成了三次深呼吸练习');
+
+    const invalid = await app.inject({
+      method: 'POST',
+      url: '/api/voice-records',
+      payload: { text: '' },
+    });
+    expect(invalid.statusCode).toBe(400);
+
+    const deleted = await app.inject({ method: 'DELETE', url: '/api/voice-records/vr1' });
+    expect(deleted.statusCode).toBe(200);
+
+    const afterDelete = await app.inject({ method: 'GET', url: '/api/voice-records' });
+    expect(afterDelete.json()).toHaveLength(0);
   });
 
   it('streams update APKs with byte ranges so interrupted downloads can resume', async () => {

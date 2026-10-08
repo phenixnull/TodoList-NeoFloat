@@ -1,6 +1,6 @@
 import { createContext, createElement, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
-import { AppData, CheckIn, CheckInStatus, DayRecord, DayRecordImage, SyncState, Task } from '../domain/types';
+import { AppData, CheckIn, CheckInStatus, DayRecord, DayRecordImage, SyncState, Task, VoiceRecord } from '../domain/types';
 import { toggleCheckIn as toggleLocalCheckIn } from '../domain/checkIns';
 import { getNextTaskAppearance } from '../domain/taskAppearance';
 import { getTodayKey } from '../domain/streak';
@@ -22,6 +22,33 @@ function createId(): string {
 }
 
 const keyOf = (taskId: string, date: string) => `${taskId}:${date}`;
+
+// Voice records are immutable. Server set wins; local-only entries stay until
+// their replay succeeds, and locally pending deletions hide server rows.
+function mergeVoiceRecordSets(
+  localRecords: VoiceRecord[],
+  remoteRecords: VoiceRecord[],
+  pendingCreations: Set<string>,
+  pendingDeletions: Set<string>,
+): VoiceRecord[] {
+  const byId = new Map<string, VoiceRecord>();
+  const local = Array.isArray(localRecords) ? localRecords : [];
+  const remote = Array.isArray(remoteRecords) ? remoteRecords : [];
+
+  for (const record of remote) {
+    if (pendingDeletions.has(record.id)) continue;
+    byId.set(record.id, record);
+  }
+  for (const record of local) {
+    if (pendingDeletions.has(record.id)) continue;
+    if (!byId.has(record.id)) byId.set(record.id, record);
+  }
+  void pendingCreations;
+
+  return [...byId.values()].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+}
 
 function imageMetadataMatches(
   a: DayRecordImage | null | undefined,
@@ -51,6 +78,8 @@ function useHabitStoreInstance() {
   const pendingTasksRef = useRef<Set<string>>(new Set());
   const pendingCheckInsRef = useRef<Set<string>>(new Set());
   const pendingCheckInDeletionsRef = useRef<Set<string>>(new Set());
+  const pendingVoiceRecordsRef = useRef<Set<string>>(new Set());
+  const pendingVoiceRecordDeletionsRef = useRef<Set<string>>(new Set());
   const pullTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const syncChainRef = useRef<Promise<void>>(Promise.resolve());
   const lastServerRevisionRef = useRef(0);
@@ -80,7 +109,7 @@ function useHabitStoreInstance() {
   }, []);
 
   // ---- snapshot application (server is source of truth) ----
-  const applySnapshot = useCallback((snapshot: Pick<AppData, 'tasks' | 'checkIns' | 'dayRecords'>): AppData => {
+  const applySnapshot = useCallback((snapshot: Pick<AppData, 'tasks' | 'checkIns' | 'dayRecords' | 'voiceRecords'>): AppData => {
     const local = dataRef.current;
     const remoteTasksById = new Map(snapshot.tasks.map((t) => [t.id, t]));
     const pendingTasks = pendingTasksRef.current;
@@ -147,6 +176,7 @@ function useHabitStoreInstance() {
       tasks,
       checkIns,
       dayRecords: mergeDayRecordSets(local.dayRecords, snapshot.dayRecords),
+      voiceRecords: mergeVoiceRecordSets(local.voiceRecords ?? [], snapshot.voiceRecords ?? [], pendingVoiceRecordsRef.current, pendingVoiceRecordDeletionsRef.current),
       settings: {
         ...local.settings,
         lastSyncedAt: new Date().toISOString(),
@@ -494,6 +524,28 @@ function useHabitStoreInstance() {
           await pushDayRecord(record);
         }
       }
+
+      const remoteVoiceIds = new Set((remote.voiceRecords ?? []).map((r) => r.id));
+      for (const record of dataRef.current.voiceRecords ?? []) {
+        if (!pendingVoiceRecordsRef.current.has(record.id)) continue;
+        if (remoteVoiceIds.has(record.id)) {
+          pendingVoiceRecordsRef.current.delete(record.id);
+          continue;
+        }
+        await apiRequest(base, '/api/voice-records', {
+          method: 'POST',
+          body: JSON.stringify(record),
+        });
+        pendingVoiceRecordsRef.current.delete(record.id);
+      }
+      for (const id of Array.from(pendingVoiceRecordDeletionsRef.current)) {
+        if (!remoteVoiceIds.has(id)) {
+          pendingVoiceRecordDeletionsRef.current.delete(id);
+          continue;
+        }
+        await apiRequest(base, `/api/voice-records/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        pendingVoiceRecordDeletionsRef.current.delete(id);
+      }
     });
   }, [enqueueSyncOperation, pushDayRecord, settingsReady]);
 
@@ -731,6 +783,61 @@ function useHabitStoreInstance() {
     void pushDayRecord(record);
   }, [commit, pushDayRecord]);
 
+  const pushVoiceRecord = useCallback(async (record: VoiceRecord) => {
+    const base = settingsReady();
+    if (!base) return;
+    pendingVoiceRecordsRef.current.add(record.id);
+    try {
+      await apiRequest(base, '/api/voice-records', {
+        method: 'POST',
+        body: JSON.stringify(record),
+      });
+      pendingVoiceRecordsRef.current.delete(record.id);
+    } catch {
+      // Kept pending; flushLocal replays it when connectivity returns.
+    }
+  }, [settingsReady]);
+
+  const createVoiceRecord = useCallback((input: {
+    text: string;
+    language?: string | null;
+    source: 'voice' | 'keyboard';
+    images?: string[];
+  }): VoiceRecord => {
+    const record: VoiceRecord = {
+      id: createId(),
+      text: input.text.trim(),
+      language: input.language ?? null,
+      source: input.source,
+      images: input.images ?? [],
+      createdAt: new Date().toISOString(),
+    };
+    const nextData: AppData = {
+      ...dataRef.current,
+      voiceRecords: [record, ...(dataRef.current.voiceRecords ?? [])],
+    };
+    void commit(nextData);
+    void pushVoiceRecord(record);
+    return record;
+  }, [commit, pushVoiceRecord]);
+
+  const deleteVoiceRecord = useCallback(async (id: string) => {
+    const nextData: AppData = {
+      ...dataRef.current,
+      voiceRecords: (dataRef.current.voiceRecords ?? []).filter((record) => record.id !== id),
+    };
+    await commit(nextData);
+    const base = settingsReady();
+    if (!base) return;
+    pendingVoiceRecordDeletionsRef.current.add(id);
+    try {
+      await apiRequest(base, `/api/voice-records/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      pendingVoiceRecordDeletionsRef.current.delete(id);
+    } catch {
+      // Kept pending; flushLocal replays it when connectivity returns.
+    }
+  }, [commit, settingsReady]);
+
   const syncNow = useCallback(async () => {
     if (!settingsReady()) {
       setSyncState({ status: 'idle' });
@@ -753,6 +860,7 @@ function useHabitStoreInstance() {
     activeTasks,
     checkIns: data.checkIns,
     dayRecords: data.dayRecords,
+    voiceRecords: data.voiceRecords ?? [],
     settings: data.settings,
     loading,
     syncState,
@@ -764,6 +872,8 @@ function useHabitStoreInstance() {
     toggleCheckIn,
     setCheckInStatus,
     saveDayRecord,
+    createVoiceRecord,
+    deleteVoiceRecord,
     updateSettings,
     syncNow,
   };

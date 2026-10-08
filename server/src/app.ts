@@ -76,6 +76,15 @@ const usageSamplesSchema = z.object({
   samples: z.array(usageSampleSchema).max(500),
 });
 
+const voiceRecordSchema = z.object({
+  id: z.string().min(1).optional(),
+  text: z.string().trim().min(1).max(4000),
+  language: z.string().max(40).nullable().optional(),
+  source: z.enum(['voice', 'keyboard']).default('keyboard'),
+  images: z.array(z.string().startsWith('data:image/').max(3_500_000)).max(3).default([]),
+  createdAt: isoDateTime.optional(),
+});
+
 const sttTranscribeSchema = z.object({
   audioBase64: z.string().base64().min(8).max(24_000_000),
   audioFormat: z.string().max(16).default('wav'),
@@ -179,6 +188,17 @@ function parseIdList(value: string): string[] {
   }
 }
 
+function rowFromVoiceRecord(row: any) {
+  return {
+    id: row.id,
+    text: row.text,
+    language: row.language ?? null,
+    source: row.source === 'voice' ? 'voice' : 'keyboard',
+    images: parseStoredImages(row.images_json),
+    createdAt: row.created_at,
+  };
+}
+
 export function buildApp({
   database = 'habitpulse.db',
   imageRoot = 'data/day-record-images',
@@ -205,6 +225,7 @@ export function buildApp({
       const tasks = db.prepare('SELECT * FROM tasks WHERE deleted_at IS NULL ORDER BY created_at').all() as Array<any>;
       const checkIns = db.prepare('SELECT * FROM check_ins WHERE deleted_at IS NULL ORDER BY date, created_at').all() as Array<any>;
       const dayRecords = db.prepare('SELECT * FROM day_records ORDER BY date DESC, updated_at').all() as Array<any>;
+      const voiceRecords = db.prepare('SELECT * FROM voice_records WHERE deleted_at IS NULL ORDER BY created_at DESC, id DESC').all() as Array<any>;
 
       return {
         revision: state.revision,
@@ -212,6 +233,7 @@ export function buildApp({
         tasks: tasks.map(rowFromTask),
         checkIns: checkIns.map(rowFromCheckIn),
         dayRecords: dayRecords.map(rowFromDayRecord),
+        voiceRecords: voiceRecords.map(rowFromVoiceRecord),
       };
     })();
   }
@@ -582,6 +604,47 @@ export function buildApp({
     const rows = db.prepare('SELECT * FROM tasks WHERE deleted_at IS NULL ORDER BY created_at').all() as Array<any>;
 
     return rows.map(rowFromTask);
+  });
+
+  app.get('/api/voice-records', async () => {
+    const rows = db.prepare('SELECT * FROM voice_records WHERE deleted_at IS NULL ORDER BY created_at DESC, id DESC').all() as Array<any>;
+
+    return rows.map(rowFromVoiceRecord);
+  });
+
+  // Records are immutable; create uses upsert-by-id so offline replays are idempotent.
+  app.post('/api/voice-records', async (request, reply) => {
+    const parsed = voiceRecordSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid voice record', details: parsed.error.flatten() });
+    }
+
+    const id = parsed.data.id ?? randomUUID();
+    const createdAt = parsed.data.createdAt ?? new Date().toISOString();
+
+    db.prepare(`
+      INSERT OR REPLACE INTO voice_records (id, text, language, source, images_json, created_at, deleted_at)
+      VALUES (?, ?, ?, ?, ?, ?, NULL)
+    `).run(id, parsed.data.text, parsed.data.language ?? null, parsed.data.source, JSON.stringify(parsed.data.images), createdAt);
+
+    const row = db.prepare('SELECT * FROM voice_records WHERE id = ?').get(id) as any;
+    broadcast('voice-records.changed', { id });
+    return rowFromVoiceRecord(row);
+  });
+
+  app.delete('/api/voice-records/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const result = db.prepare(
+      'UPDATE voice_records SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL',
+    ).run(new Date().toISOString(), id);
+
+    if (result.changes === 0) {
+      return reply.code(404).send({ error: 'Voice record not found' });
+    }
+
+    broadcast('voice-records.changed', { id });
+    return { ok: true };
   });
 
   app.post('/api/tasks', async (request, reply) => {

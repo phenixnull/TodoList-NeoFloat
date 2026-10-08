@@ -12,6 +12,7 @@ export const defaultData: AppData = {
   checkIns: [],
   deletedCheckIns: [],
   dayRecords: [],
+  voiceRecords: [],
   settings: {
     syncEnabled: true,
     serverUrl: 'https://habitpulse.vip.cpolar.top',
@@ -54,6 +55,7 @@ export function normalizeStoredData(parsed: Partial<AppData> | null | undefined)
     checkIns: parsed.checkIns ?? [],
     deletedCheckIns: parsed.deletedCheckIns ?? [],
     dayRecords: (parsed.dayRecords ?? []).map(normalizeDayRecord),
+    voiceRecords: parsed.voiceRecords ?? [],
     settings: {
       ...defaultData.settings,
       ...(parsed.settings ?? {}),

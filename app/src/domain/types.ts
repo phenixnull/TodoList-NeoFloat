@@ -102,7 +102,19 @@ export type AppData = {
   checkIns: CheckIn[];
   deletedCheckIns?: DeletedCheckIn[];
   dayRecords: DayRecord[];
+  voiceRecords?: VoiceRecord[];
   settings: HabitSettings;
+};
+
+export type VoiceRecordSource = 'voice' | 'keyboard';
+
+export type VoiceRecord = {
+  id: string;
+  text: string;
+  language: string | null;
+  source: VoiceRecordSource;
+  images: string[];
+  createdAt: string;
 };
 
 export type SyncState = {
