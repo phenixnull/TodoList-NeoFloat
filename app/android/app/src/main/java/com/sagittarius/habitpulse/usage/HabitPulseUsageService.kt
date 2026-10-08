@@ -11,6 +11,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 
 import org.json.JSONArray
 import org.json.JSONObject
@@ -44,6 +45,18 @@ class HabitPulseUsageService : Service() {
   private var lastPostedPayload: String = ""
 
   private var worker: Thread? = null
+  private var wakeLock: PowerManager.WakeLock? = null
+
+  override fun onCreate() {
+    super.onCreate()
+    val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+    wakeLock = powerManager?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "HabitPulse:UsageSampler")?.apply {
+      acquire()
+    }
+    // Android requires every startForegroundService() contract to be satisfied
+    // even when a queued stop/config race destroys the service immediately.
+    startUsageForeground()
+  }
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -68,13 +81,16 @@ class HabitPulseUsageService : Service() {
       return START_NOT_STICKY
     }
 
-    startUsageForeground()
     startWorker()
     return START_STICKY
   }
 
   override fun onDestroy() {
     running = false
+    worker?.interrupt()
+    worker = null
+    wakeLock?.takeIf { it.isHeld }?.release()
+    wakeLock = null
     super.onDestroy()
   }
 
@@ -301,7 +317,7 @@ class HabitPulseUsageService : Service() {
     private const val CHANNEL_ID = "habitpulse_app_usage"
     private const val NOTIFICATION_ID = 47821
     private const val CACHE_FILE_NAME = "habitpulse-background-usage.json"
-    private const val CONFIG_FILE_NAME = "habitpulse-usage-service-config.json"
+    const val CONFIG_FILE_NAME = "habitpulse-usage-service-config.json"
     private const val SAMPLE_INTERVAL_MS = 5_000L
 
     private fun usageSegmentId(packageName: String, startMs: Long): String {
