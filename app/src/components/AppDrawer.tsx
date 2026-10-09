@@ -32,7 +32,9 @@ export default function AppDrawerHost({ children }: { children: ReactNode }) {
       configureGestureHandler={(gesture) =>
         // Fail fast on taps and vertical scrolls so buttons respond instantly;
         // only deliberate horizontal drags near the edge open the drawer.
-        gesture.activeOffsetX([-28, 28]).failOffsetY([-14, 14])
+        // Large thresholds: task-card drags drift horizontally; the drawer
+        // must never hijack a reorder mid-drag.
+        gesture.activeOffsetX([-64, 64]).failOffsetY([-24, 24])
       }
       drawerStyle={{ width: Math.min(320, width * 0.84) }}
       overlayStyle={{ backgroundColor: 'rgba(0,0,0,0.55)' }}

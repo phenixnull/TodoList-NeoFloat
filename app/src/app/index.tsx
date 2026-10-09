@@ -24,7 +24,6 @@ import type { Task } from '@/domain/types';
 
 export default function HomeScreen() {
   const today = useTodayKey();
-  const [dragListKey, setDragListKey] = useState(0);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
   const [sortDesc, setSortDesc] = useState(true);
   const {
@@ -307,7 +306,8 @@ export default function HomeScreen() {
   ) => {
     const fullTasks = group === 'unfinished' ? taskGroups.unfinished : taskGroups.finished;
     reorderTasks(mergeVisibleReorder(fullTasks.map((task) => task.id), ids, from, to), group);
-    setDragListKey((prev) => prev + 1);
+    // No forced remount: rebuilding every gradient card after each drop is
+    // what froze the UI mid/post drag. Data updates drive the list directly.
   }, [reorderTasks, taskGroups]);
 
   return (
@@ -474,7 +474,7 @@ export default function HomeScreen() {
                 />
               ) : (
                 <NestableDraggableFlatList
-                  key={`uf-${dragListKey}-${groupFilter?.join('\u0000') ?? 'all'}-${statusFilter}`}
+                  key={`uf-${groupFilter?.join('\u0000') ?? 'all'}-${statusFilter}`}
                   data={sortedUnfinished}
                   keyExtractor={(item) => item.id}
                   renderItem={renderTask}
@@ -512,7 +512,7 @@ export default function HomeScreen() {
                 />
               ) : (
                 <NestableDraggableFlatList
-                  key={`fin-${dragListKey}-${groupFilter?.join('\u0000') ?? 'all'}-${statusFilter}`}
+                  key={`fin-${groupFilter?.join('\u0000') ?? 'all'}-${statusFilter}`}
                   data={sortedFinished}
                   keyExtractor={(item) => item.id}
                   renderItem={renderTask}
