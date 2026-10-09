@@ -10,12 +10,13 @@ type Props = {
   children: ReactNode;
   scroll?: boolean;
   style?: ViewStyle;
+  forceLight?: boolean;
 };
 
-export default function ScreenShell({ children, scroll = true, style }: Props) {
+export default function ScreenShell({ children, scroll = true, style, forceLight = false }: Props) {
   const insets = useSafeAreaInsets();
   const { settings } = useHabitStore();
-  const theme = useTheme(settings.appearance);
+  const theme = useTheme(forceLight ? 'light' : settings.appearance);
 
   return (
     <LinearGradient

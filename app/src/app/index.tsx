@@ -1,12 +1,11 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Link, Stack } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Platform, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { FlatList, Platform, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { NestableDraggableFlatList } from 'react-native-draggable-flatlist';
-import { Drawer } from 'react-native-drawer-layout';
 import { dialog } from '@/components/dialog/dialogs';
-import AppSidebar from '@/components/AppSidebar';
+import { openAppDrawer } from '@/components/AppDrawer';
 import DailyOverviewCard from '@/components/DailyOverviewCard';
 import GlassCard from '@/components/GlassCard';
 import GroupSelect from '@/components/GroupSelect';
@@ -25,9 +24,6 @@ import type { Task } from '@/domain/types';
 
 export default function HomeScreen() {
   const today = useTodayKey();
-  const { width } = useWindowDimensions();
-  const drawerWidth = Math.min(320, width * 0.84);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [dragListKey, setDragListKey] = useState(0);
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
   const [sortDesc, setSortDesc] = useState(true);
@@ -45,7 +41,8 @@ export default function HomeScreen() {
     updateSettings,
   } = useHabitStore();
   const { settings } = useHabitStore();
-  const theme = useTheme(settings.appearance);
+  // Home follows the light-orange diary style regardless of app theme.
+  const theme = useTheme('light');
   const [groupFilter, setGroupFilter] = useState<string[] | null>(() => {
     const persisted = settings.selectedGroups ?? (settings.selectedGroup ? [settings.selectedGroup] : null);
     return persisted?.length ? persisted : null;
@@ -314,26 +311,14 @@ export default function HomeScreen() {
   }, [reorderTasks, taskGroups]);
 
   return (
-    <Drawer
-      open={drawerOpen}
-      onOpen={() => setDrawerOpen(true)}
-      onClose={() => setDrawerOpen(false)}
-      drawerPosition="left"
-      drawerType="front"
-      swipeEdgeWidth={40}
-      drawerStyle={{ width: drawerWidth }}
-      overlayStyle={{ backgroundColor: theme.isLight ? 'rgba(15,23,42,0.35)' : 'rgba(0,0,0,0.55)' }}
-      renderDrawerContent={() => <AppSidebar onClose={() => setDrawerOpen(false)} />}
-      style={{ flex: 1 }}
-    >
-      <ScreenShell style={styles.homeContent}>
+    <ScreenShell style={styles.homeContent} forceLight>
         <Stack.Screen options={{ headerShown: false }} />
         <Animated.View entering={FadeInUp.springify().damping(16)} style={styles.header}>
           <View style={styles.headerLeading}>
             <PressableScale
               accessibilityLabel="打开侧边栏"
               accessibilityRole="button"
-              onPress={() => setDrawerOpen(true)}
+              onPress={openAppDrawer}
               style={StyleSheet.flatten([styles.menuButton, {
                 borderColor: theme.surfaceBorder,
                 backgroundColor: theme.surface,
@@ -342,10 +327,13 @@ export default function HomeScreen() {
               <MaterialCommunityIcons name="menu" size={19} color={theme.mutedText} />
             </PressableScale>
             <View>
-          <Text style={[styles.eyebrow, { color: theme.subtleText }]}>
-            {new Date(`${today}T00:00:00`).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
-          </Text>
-          <Text style={[styles.title, { color: theme.text }]}>HabitPulse</Text>
+              <Text style={[styles.eyebrow, { color: theme.subtleText }]}>
+                {new Date(`${today}T00:00:00`).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}
+              </Text>
+              <View style={styles.titleWrap}>
+                <Text style={[styles.title, { color: theme.text }]}>打卡主页</Text>
+                <View style={styles.titleUnderline} />
+              </View>
           <View style={styles.syncRow}>
             <View
               style={[
@@ -407,11 +395,11 @@ export default function HomeScreen() {
       </View>
 
       {loading ? (
-        <GlassCard>
+        <GlassCard light>
           <Text style={[styles.emptyText, { color: theme.subtleText }]}>正在载入...</Text>
         </GlassCard>
       ) : activeTasks.length === 0 ? (
-        <GlassCard style={styles.emptyCard}>
+        <GlassCard light style={styles.emptyCard}>
           <MaterialCommunityIcons name="rocket-launch-outline" size={34} color={theme.accentText} />
           <Text style={[styles.emptyTitle, { color: theme.text }]}>开始你的第一条记录</Text>
           <Text style={[styles.emptyText, { color: theme.subtleText }]}>运动、阅读、写作或任何想坚持的事情。</Text>
@@ -424,6 +412,7 @@ export default function HomeScreen() {
       ) : (
         <>
           <GroupSelect
+            light
             label="分组"
             groups={availableGroups}
             selected={groupFilter ?? []}
@@ -554,7 +543,6 @@ export default function HomeScreen() {
       )}
 
       </ScreenShell>
-    </Drawer>
   );
 }
 
@@ -573,6 +561,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  titleWrap: {
+    position: 'relative',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
+  },
+  titleUnderline: {
+    position: 'absolute',
+    left: 2,
+    right: 2,
+    bottom: 2,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#f59e0b',
+    opacity: 0.85,
   },
   menuButton: {
     width: 36,
@@ -611,7 +615,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   title: {
-    color: '#f8fafc',
     fontSize: 34,
     fontWeight: '900',
     letterSpacing: -1,
@@ -623,7 +626,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   sectionTitle: {
-    color: '#f8fafc',
     fontSize: 20,
     fontWeight: '800',
   },
@@ -705,7 +707,6 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
   },
   emptyTitle: {
-    color: '#f8fafc',
     fontSize: 20,
     fontWeight: '800',
   },

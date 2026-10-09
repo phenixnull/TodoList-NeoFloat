@@ -1,8 +1,8 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImageManipulator from 'expo-image-manipulator';
-import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
+import { launchPhotoPicker, showPhotoSourceSheet, type PhotoSource } from './PhotoSourceSheet';
 import { ReactNode, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -126,20 +126,17 @@ export default function TaskForm({
   };
 
   const pickCustomIcon = async () => {
+    showPhotoSourceSheet((source) => {
+      void runPickCustomIcon(source);
+    });
+  };
+
+  const runPickCustomIcon = async (source: PhotoSource) => {
     setProcessingImage(true);
 
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (!permission.granted) {
-        dialog.alert('无法访问图片', '请在系统设置中允许 HabitPulse 访问照片。');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'images',
+      const result = await launchPhotoPicker(source, {
         allowsEditing: true,
-        aspect: [1, 1],
         quality: 0.88,
       });
 

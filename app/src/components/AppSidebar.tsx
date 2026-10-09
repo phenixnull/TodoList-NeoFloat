@@ -22,7 +22,6 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
     title: '导航',
     items: [
       { icon: 'home-circle-outline', label: '打卡主页', href: '/' },
-      { icon: 'format-list-checks', label: '任务库', href: '/tasks' },
     ],
   },
   {

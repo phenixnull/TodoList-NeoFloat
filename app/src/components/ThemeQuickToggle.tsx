@@ -9,7 +9,8 @@ type Props = {
 };
 
 export default function ThemeQuickToggle({ value, onChange }: Props) {
-  const theme = useTheme(value);
+  // Home header follows the light diary palette.
+  const theme = useTheme('light');
   const isLight = theme.isLight;
 
   const options = [

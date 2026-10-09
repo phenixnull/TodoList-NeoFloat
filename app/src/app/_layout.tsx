@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { HabitStoreProvider, useHabitStore } from '@/store/useHabitStore';
 import DialogHost from '@/components/dialog/DialogHost';
 import useAppUsageTracker from '@/hooks/useAppUsageTracker';
+import AppDrawerHost from '@/components/AppDrawer';
 
 const darkTheme = {
   ...DarkTheme,
@@ -39,12 +40,14 @@ function AppChrome() {
     <>
       <StatusBar style={isLight ? 'dark' : 'light'} />
       <ThemeProvider value={isLight ? lightTheme : darkTheme}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: 'transparent' },
-          }}
-        />
+        <AppDrawerHost>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: 'transparent' },
+            }}
+          />
+        </AppDrawerHost>
         <DialogHost />
       </ThemeProvider>
     </>

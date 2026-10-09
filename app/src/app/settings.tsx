@@ -6,6 +6,7 @@ import { ThemeMode, useTheme } from '../theme/theme';
 import GlassCard from '@/components/GlassCard';
 import PressableScale from '@/components/PressableScale';
 import ScreenShell from '@/components/ScreenShell';
+import { openAppDrawer } from '@/components/AppDrawer';
 import {
   downloadUpdate,
   getDownloadedApk,
@@ -178,7 +179,17 @@ export default function SettingsScreen() {
   return (
     <ScreenShell>
       <Stack.Screen options={{ headerShown: false }} />
-      <Text style={[styles.title, { color: theme.text }]}>设置</Text>
+      <View style={styles.headerRow}>
+        <PressableScale
+          accessibilityLabel="打开侧边栏"
+          accessibilityRole="button"
+          onPress={openAppDrawer}
+          style={styles.menuButton}
+        >
+          <MaterialCommunityIcons name="menu" size={20} color={theme.text} />
+        </PressableScale>
+        <Text style={[styles.title, { color: theme.text }]}>设置</Text>
+      </View>
 
       <GlassCard style={styles.card}>
         <Text style={[styles.cardTitle, { color: theme.text }]}>外观</Text>
@@ -332,6 +343,19 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 18,
+  },
+  menuButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   title: {
     color: '#f8fafc',
     fontSize: 32,

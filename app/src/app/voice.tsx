@@ -4,16 +4,26 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { Stack, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Keyboard,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import Svg, { Circle } from 'react-native-svg';
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withDelay, withRepeat, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { openAppDrawer } from '@/components/AppDrawer';
 import { dialog } from '@/components/dialog/dialogs';
+import { launchPhotoPicker, showPhotoSourceSheet } from '@/components/PhotoSourceSheet';
 import { VoiceRecord } from '@/domain/types';
 import { useVoiceTranscription } from '@/hooks/useVoiceTranscription';
 import { useHabitStore } from '@/store/useHabitStore';
+import type { SharedValue } from 'react-native-reanimated';
 
-/* Diary-style light palette (mirrors Diary/app/index.html) */
 const C = {
   page: '#f2f2f4',
   bg: '#ffffff',
@@ -86,7 +96,7 @@ export default function VoiceScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { voiceRecords, createVoiceRecord, deleteVoiceRecord } = useHabitStore();
-  const { phase, error, start, stop, clearError } = useVoiceTranscription();
+  const { phase, error, metering, partialText, beginVoice, endVoice, clearError } = useVoiceTranscription();
 
   const [mode, setMode] = useState<ComposerMode>('voice');
   const [draft, setDraft] = useState('');
@@ -95,19 +105,58 @@ export default function VoiceScreen() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const searchInputRef = useRef<TextInput>(null);
 
-  const recording = phase === 'recording';
+  const recording = phase === 'streaming';
   const composing = mode === 'text' && (draft.trim().length > 0 || pendingImages.length > 0);
+
+  const createVoiceSttRecord = useCallback(
+    (text: string) => {
+      createVoiceRecord({ text, source: 'voice' });
+    },
+    [createVoiceRecord],
+  );
+
+  // Leaving the screen mid-dictation still saves what was captured.
+  const liveRef = useRef({ phase, mode });
+  useEffect(() => {
+    liveRef.current = { phase, mode };
+  });
+  useEffect(
+    () => () => {
+      const snapshot = liveRef.current;
+      if (snapshot.mode === 'voice' && snapshot.phase === 'streaming') {
+        void endVoice().then((text) => {
+          if (text) createVoiceSttRecord(text);
+        });
+      }
+    },
+    [createVoiceSttRecord, endVoice],
+  );
+
+  // Lift the composer above the keyboard while typing.
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (event) => {
+      setKeyboardHeight(event.endCoordinates.height);
+    });
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   const now = useMemo(() => new Date(), []);
   const filteredRecords = useMemo(() => {
-    return (voiceRecords ?? []).filter((record) => {
-      if (filter === 'text') return record.source !== 'voice' && record.images.length === 0;
-      if (filter === 'image') return record.images.length > 0;
-      if (filter === 'voice') return record.source === 'voice';
-      return true;
-    }).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return (voiceRecords ?? [])
+      .filter((record) => {
+        if (filter === 'text') return record.source !== 'voice' && record.images.length === 0;
+        if (filter === 'image') return record.images.length > 0;
+        if (filter === 'voice') return record.source === 'voice';
+        return true;
+      })
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [filter, voiceRecords]);
 
   const dayGroups = useMemo(() => {
@@ -179,24 +228,21 @@ export default function VoiceScreen() {
     setPendingImages([]);
   }, [createVoiceRecord, draft, pendingImages]);
 
-  const finishRecording = useCallback(async () => {
-    const result = await stop();
-    if (!result) {
-      if (error) dialog.alert('语音记录', error);
+  // Tapping the mic toggles modes; switching off voice flushes the streamed
+  // text into one record.
+  const toggleMode = useCallback(async () => {
+    if (mode === 'voice') {
+      setMode('text');
+      if (phase === 'streaming') {
+        const text = await endVoice();
+        if (text) createVoiceSttRecord(text);
+      }
       return;
     }
-    createVoiceRecord({ text: result.text, language: result.language, source: 'voice' });
-  }, [createVoiceRecord, error, stop]);
-
-  const handleCenterPressIn = useCallback(() => {
-    if (mode !== 'voice' || recording) return;
     clearError();
-    void start();
-  }, [clearError, mode, recording, start]);
-
-  const handleCenterPressOut = useCallback(() => {
-    if (recording) void finishRecording();
-  }, [finishRecording, recording]);
+    setMode('voice');
+    await beginVoice();
+  }, [beginVoice, clearError, createVoiceSttRecord, endVoice, mode, phase]);
 
   const pickImages = useCallback(async () => {
     const remaining = 3 - pendingImages.length;
@@ -204,33 +250,35 @@ export default function VoiceScreen() {
       dialog.alert('图片数量已达上限', '每条记录最多附带 3 张图片。');
       return;
     }
-    const picked = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      selectionLimit: remaining,
-      quality: 0.8,
-      exif: false,
-    });
-    if (picked.canceled) return;
-    const next: PendingImage[] = [];
-    for (const asset of picked.assets) {
-      try {
-        const manipulated = await ImageManipulator.manipulateAsync(
-          asset.uri,
-          [{ resize: { width: 1080 } }],
-          { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG, base64: true },
-        );
-        if (manipulated.base64) {
-          next.push({
-            id: `${asset.assetId ?? asset.uri}-${Date.now()}-${next.length}`,
-            dataUrl: `data:image/jpeg;base64,${manipulated.base64}`,
-          });
+    showPhotoSourceSheet((source) => {
+      void (async () => {
+        const picked = await launchPhotoPicker(source, {
+          allowsMultipleSelection: true,
+          selectionLimit: remaining,
+          quality: 0.8,
+        });
+        if (picked.canceled) return;
+        const next: PendingImage[] = [];
+        for (const asset of picked.assets) {
+          try {
+            const manipulated = await ImageManipulator.manipulateAsync(
+              asset.uri,
+              asset.width > 1280 ? [{ resize: { width: 1280 } }] : [],
+              { compress: 0.72, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+            );
+            if (manipulated.base64) {
+              next.push({
+                id: `${asset.assetId ?? asset.uri}-${Date.now()}-${next.length}`,
+                dataUrl: `data:image/jpeg;base64,${manipulated.base64}`,
+              });
+            }
+          } catch {
+            dialog.alert('图片处理失败', '请换一张图片再试。');
+          }
         }
-      } catch {
-        dialog.alert('图片处理失败', '请换一张图片再试。');
-      }
-    }
-    setPendingImages((prev) => [...prev, ...next].slice(0, 3));
+        setPendingImages((prev) => [...prev, ...next].slice(0, 3));
+      })();
+    });
   }, [pendingImages.length]);
 
   const confirmDelete = useCallback((record: VoiceRecord) => {
@@ -288,16 +336,16 @@ export default function VoiceScreen() {
   }, [confirmDelete, expandedId]);
 
   return (
-    <View style={styles.fill}>
+    <View style={[styles.fill, keyboardHeight > 0 ? { paddingBottom: keyboardHeight } : null]}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <Pressable
-          accessibilityLabel="返回"
+          accessibilityLabel="打开侧边栏"
           accessibilityRole="button"
-          onPress={() => router.back()}
+          onPress={openAppDrawer}
           style={styles.headerIconBtn}
         >
-          <MaterialCommunityIcons name="arrow-left" size={22} color={C.ink} />
+          <MaterialCommunityIcons name="menu" size={22} color={C.ink} />
         </Pressable>
         <View style={styles.appTitle}>
           <View style={styles.appTitleUnderline} />
@@ -402,9 +450,7 @@ export default function VoiceScreen() {
             ))}
           </View>
         ) : null}
-        {error ? (
-          <Text style={styles.composerError}>{error}</Text>
-        ) : null}
+        {error ? <Text style={styles.composerError}>{error}</Text> : null}
 
         <View style={styles.barRow}>
           <Pressable
@@ -422,7 +468,9 @@ export default function VoiceScreen() {
           <View style={[styles.pillBar, recording ? styles.pillRecording : null]}>
             {recording ? (
               <View style={styles.recTip}>
-                <Text style={styles.recTipText}>松开 发送</Text>
+                <Text style={styles.recTipText} numberOfLines={1}>
+                  {partialText ? `…${partialText.slice(-12)}` : '聆听中…'}
+                </Text>
               </View>
             ) : null}
             <Pressable
@@ -435,23 +483,13 @@ export default function VoiceScreen() {
             </Pressable>
 
             {mode === 'voice' ? (
-              <Pressable
-                accessibilityLabel={recording ? '松开发送' : '长按说话'}
-                accessibilityRole="button"
-                delayLongPress={200}
-                disabled={phase === 'transcribing'}
-                onPressIn={() => void handleCenterPressIn()}
-                onPressOut={handleCenterPressOut}
-                style={styles.center}
-              >
-                {recording ? (
-                  <WaveBars active />
-                ) : phase === 'transcribing' ? (
+              <View style={styles.center}>
+                {phase === 'finalizing' ? (
                   <Text style={styles.placeholder}>识别中…</Text>
                 ) : (
-                  <WaveBars active={false} />
+                  <WaveBars metering={metering} active={recording} />
                 )}
-              </Pressable>
+              </View>
             ) : (
               <TextInput
                 value={draft}
@@ -472,14 +510,11 @@ export default function VoiceScreen() {
               <Pressable
                 accessibilityLabel={mode === 'voice' ? '切换键盘输入' : '切换语音输入'}
                 accessibilityRole="button"
-                onPress={() => {
-                  setMode((prev) => (prev === 'voice' ? 'text' : 'voice'));
-                  setDraft('');
-                }}
+                onPress={() => void toggleMode()}
                 style={[styles.micBtn, mode === 'voice' ? styles.micActive : null]}
               >
                 <MaterialCommunityIcons
-                  name={mode === 'voice' ? 'microphone' : 'microphone-off'}
+                  name={mode === 'voice' ? 'keyboard-outline' : 'microphone'}
                   size={20}
                   color="#fff"
                 />
@@ -526,39 +561,39 @@ export default function VoiceScreen() {
 }
 
 const BAR_COUNT = 14;
-const BAR_SPECS: { delay: number; envelope: number }[] = Array.from({ length: BAR_COUNT }, (_, index) => ({
-  delay: index * 45,
-  envelope: Math.sin((Math.PI * (index + 0.5)) / BAR_COUNT),
-}));
+const BAR_ENVELOPES = Array.from({ length: BAR_COUNT }, (_, index) =>
+  Math.sin((Math.PI * (index + 0.5)) / BAR_COUNT),
+);
 
-function WaveBars({ active }: { active: boolean }) {
+// Bars are driven by the live mic metering: narrow straight bars when silent,
+// bouncing as soon as voice amplitude arrives.
+function WaveBars({ metering, active }: { metering: SharedValue<number>; active: boolean }) {
   return (
     <View style={styles.waveRow}>
-      {BAR_SPECS.map((spec, index) => (
-        <WaveBar key={index} index={index} active={active} envelope={spec.envelope} />
+      {BAR_ENVELOPES.map((envelope, index) => (
+        <WaveBar key={index} index={index} metering={metering} active={active} envelope={envelope} />
       ))}
     </View>
   );
 }
 
-function WaveBar({ index, active, envelope }: { index: number; active: boolean; envelope: number }) {
-  const height = useSharedValue(4);
-
-  useEffect(() => {
-    const base = active ? 10 : 5;
-    const peak = active ? 30 * envelope + 8 : 12 * envelope + 5;
-    height.value = base;
-    height.value = withDelay(
-      index * 40,
-      withRepeat(
-        withTiming(peak, { duration: active ? 320 : 640, easing: Easing.inOut(Easing.quad) }),
-        -1,
-        true,
-      ),
-    );
-  }, [active, envelope, height, index]);
-
-  const style = useAnimatedStyle(() => ({ height: height.value }));
+function WaveBar({
+  index,
+  metering,
+  active,
+  envelope,
+}: {
+  index: number;
+  metering: SharedValue<number>;
+  active: boolean;
+  envelope: number;
+}) {
+  const style = useAnimatedStyle(() => {
+    const level = metering.value;
+    const idle = 4 + (index % 2) * 2;
+    const height = active ? Math.max(4, idle + level * 34 * envelope) : idle;
+    return { height };
+  });
   return <Animated.View style={[styles.waveBar, style, { backgroundColor: active ? C.recording : '#8e8e96' }]} />;
 }
 
@@ -917,6 +952,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 5,
+    maxWidth: '86%',
   },
   recTipText: {
     color: '#fff',

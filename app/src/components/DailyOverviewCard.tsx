@@ -1,9 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import GlassCard from './GlassCard';
 import ProgressRing from './ProgressRing';
-import { useHabitStore } from '../store/useHabitStore';
 import { useTheme } from '../theme/theme';
 
 type Props = {
@@ -31,8 +29,8 @@ function formatCountdown(remainingMs: number): string {
 }
 
 export default function DailyOverviewCard({ today, completedCount, totalCount }: Props) {
-  const { settings } = useHabitStore();
-  const theme = useTheme(settings.appearance);
+  // Home follows the light-orange diary palette.
+  const theme = useTheme('light');
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
@@ -51,18 +49,18 @@ export default function DailyOverviewCard({ today, completedCount, totalCount }:
   const countdownUrgent = remaining < 60_000;
 
   return (
-    <GlassCard style={styles.card}>
-      <Text style={[styles.eyebrow, { color: theme.subtleText }]}>今日进度 · {today}</Text>
+    <View style={[styles.card, { backgroundColor: '#fff6d6' }]}>
+      <Text style={[styles.eyebrow, { color: '#b09355' }]}>今日进度 · {today}</Text>
 
       <View style={styles.mainRow}>
         <View style={styles.copyBox}>
           <Text style={styles.bigValue}>
-            <Text style={{ color: theme.text }}>{completedCount}</Text>
+            <Text style={{ color: '#26262a' }}>{completedCount}</Text>
             <Text style={[styles.totalValue, { color: theme.subtleText }]}> / {totalCount}</Text>
           </Text>
-          <Text style={[styles.caption, { color: theme.mutedText }]}>已完成任务</Text>
+          <Text style={[styles.caption, { color: '#55555c' }]}>已完成任务</Text>
           <Text
-            style={[styles.message, { color: theme.accentText }]}
+            style={[styles.message, { color: '#e8890c' }]}
             numberOfLines={1}
           >
             {progress === 1 ? '🎉 ' : ''}{message}
@@ -73,21 +71,21 @@ export default function DailyOverviewCard({ today, completedCount, totalCount }:
           <ProgressRing
             progress={progress}
             size={98}
-            color={theme.accent}
-            trackColor={theme.isLight ? 'rgba(15,23,42,0.08)' : 'rgba(255,255,255,0.08)'}
+            color="#f59e0b"
+            trackColor="#f3e3b2"
           />
-          <Text style={[styles.ringPercent, { color: theme.text }]}>{percent}%</Text>
+          <Text style={[styles.ringPercent, { color: '#26262a' }]}>{percent}%</Text>
         </View>
       </View>
 
-      <View style={[styles.divider, { backgroundColor: theme.surfaceBorder }]} />
+      <View style={[styles.divider, { backgroundColor: 'rgba(160,120,20,0.18)' }]} />
 
       <View style={styles.countdownRow}>
         <View style={styles.countdownLabel}>
           <MaterialCommunityIcons
             name="clock-time-four-outline"
             size={13}
-            color={theme.subtleText}
+            color="#b09355"
           />
           <Text style={[styles.countdownText, { color: theme.subtleText }]}>
             距次日刷新
@@ -96,13 +94,13 @@ export default function DailyOverviewCard({ today, completedCount, totalCount }:
         <Text
           style={[
             styles.countdownValue,
-            { color: countdownUrgent ? theme.accentText : theme.text },
+            { color: countdownUrgent ? '#e8890c' : '#26262a' },
           ]}
         >
           {formatCountdown(remaining)}
         </Text>
       </View>
-    </GlassCard>
+    </View>
   );
 }
 
@@ -110,6 +108,7 @@ const styles = StyleSheet.create({
   card: {
     padding: 16,
     gap: 12,
+    borderRadius: 18,
   },
   eyebrow: {
     fontSize: 11.5,

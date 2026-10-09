@@ -6,11 +6,12 @@ import { useTheme } from '../theme/theme';
 type Props = {
   children: ReactNode;
   style?: ViewStyle;
+  light?: boolean;
 };
 
-export default function GlassCard({ children, style }: Props) {
+export default function GlassCard({ children, style, light = false }: Props) {
   const { settings } = useHabitStore();
-  const theme = useTheme(settings.appearance);
+  const theme = useTheme(light ? 'light' : settings.appearance);
 
   return (
     <View

@@ -28,6 +28,7 @@ type Props = {
   onCreateGroup?: (name: string) => void;
   onRenameGroup?: (oldName: string, newName: string) => void;
   onDeleteGroup?: (group: string) => void;
+  light?: boolean;
 };
 
 export default function GroupSelect({
@@ -39,9 +40,10 @@ export default function GroupSelect({
   onCreateGroup,
   onRenameGroup,
   onDeleteGroup,
+  light = false,
 }: Props) {
   const { settings } = useHabitStore();
-  const theme = useTheme(settings.appearance);
+  const theme = useTheme(light ? 'light' : settings.appearance);
   const [creatorVisible, setCreatorVisible] = useState(false);
   const [newName, setNewName] = useState('');
   const [renameTarget, setRenameTarget] = useState<string | null>(null);

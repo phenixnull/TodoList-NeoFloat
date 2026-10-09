@@ -15,6 +15,8 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { dialog } from '@/components/dialog/dialogs';
+import { launchPhotoPicker, showPhotoSourceSheet, type PhotoSource } from '@/components/PhotoSourceSheet';
+import { openAppDrawer } from '@/components/AppDrawer';
 import GlassCard from '@/components/GlassCard';
 import PressableScale from '@/components/PressableScale';
 import ScreenShell from '@/components/ScreenShell';
@@ -41,15 +43,13 @@ export default function FeedbackScreen() {
   const [message, setMessage] = useState('');
 
   const pickImages = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    showPhotoSourceSheet((source) => {
+      void runPickImages(source);
+    });
+  };
 
-    if (!permission.granted) {
-      dialog.alert('无法访问图片', '请在系统设置中允许 HabitPulse 访问照片。');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'images',
+  const runPickImages = async (source: PhotoSource) => {
+    const result = await launchPhotoPicker(source, {
       allowsMultipleSelection: true,
       selectionLimit: 6 - images.length,
       quality: 0.82,
@@ -143,6 +143,14 @@ export default function FeedbackScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <View style={styles.header}>
+        <Pressable
+          accessibilityLabel="打开侧边栏"
+          accessibilityRole="button"
+          onPress={openAppDrawer}
+          style={styles.menuButton}
+        >
+          <MaterialCommunityIcons name="menu" size={20} color={theme.text} />
+        </Pressable>
         <MaterialCommunityIcons name="bug-outline" size={22} color="#fbbf24" />
         <Text style={[styles.title, { color: theme.text }]}>问题反馈</Text>
       </View>
@@ -220,6 +228,14 @@ export default function FeedbackScreen() {
 }
 
 const styles = StyleSheet.create({
+  menuButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
