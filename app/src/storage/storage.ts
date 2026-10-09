@@ -101,32 +101,28 @@ export async function saveData(data: AppData): Promise<void> {
   saveTimer = setTimeout(() => flushPendingWrite(), 250);
 }
 
-const yieldToJs = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-
-// Large arrays (task icons, record images are base64) would block the JS
-// thread for 100-300ms in one JSON.stringify. Serialize item-by-item and
-// yield between batches so no single frame stalls.
-async function stringifyArrayWithYield(items: unknown[]): Promise<string> {
-  let out = '[';
-  for (let i = 0; i < items.length; i += 1) {
-    out += (i > 0 ? ',' : '') + JSON.stringify(items[i]);
-    if (i % 4 === 3) await yieldToJs();
-  }
-  return `${out}]`;
+async function stringifyAppData(data: AppData): Promise<string> {
+  // Section-level memoization keyed by array/object IDENTITY: commits create
+  // new references only for sections that changed, so a group-chip tap
+  // (settings only) reuses the cached multi-megabyte task/record strings and
+  // serializes just the tiny settings section.
+  const tasks = cachedSection('tasks', data.tasks ?? []);
+  const checkIns = cachedSection('checkins', data.checkIns ?? []);
+  const dayRecords = cachedSection('dayrecords', data.dayRecords ?? []);
+  const voiceRecords = cachedSection('voicerecords', data.voiceRecords ?? []);
+  const deletedCheckIns = cachedSection('deletedCheckIns', data.deletedCheckIns ?? []);
+  const settings = cachedSection('settings', data.settings);
+  return `{"tasks":${tasks},"checkIns":${checkIns},"deletedCheckIns":${deletedCheckIns},"dayRecords":${dayRecords},"voiceRecords":${voiceRecords},"settings":${settings}}`;
 }
 
-async function stringifyAppData(data: AppData): Promise<string> {
-  const tasks = await stringifyArrayWithYield(data.tasks ?? []);
-  await yieldToJs();
-  const checkIns = await stringifyArrayWithYield(data.checkIns ?? []);
-  await yieldToJs();
-  const dayRecords = await stringifyArrayWithYield(data.dayRecords ?? []);
-  await yieldToJs();
-  const voiceRecords = await stringifyArrayWithYield(data.voiceRecords ?? []);
-  await yieldToJs();
-  return `{"tasks":${tasks},"checkIns":${checkIns},"deletedCheckIns":${JSON.stringify(
-    data.deletedCheckIns ?? [],
-  )},"dayRecords":${dayRecords},"voiceRecords":${voiceRecords},"settings":${JSON.stringify(data.settings)}}`;
+const sectionCache = new Map<string, { ref: unknown; str: string }>();
+
+function cachedSection(key: string, ref: unknown): string {
+  const hit = sectionCache.get(key);
+  if (hit && hit.ref === ref) return hit.str;
+  const str = JSON.stringify(ref);
+  sectionCache.set(key, { ref, str });
+  return str;
 }
 
 function flushPendingWrite(done?: () => void): void {
