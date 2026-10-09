@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Link, Stack } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, startTransition, useState } from 'react';
 import { FlatList, Platform, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { NestableDraggableFlatList } from 'react-native-draggable-flatlist';
@@ -46,21 +46,24 @@ export default function HomeScreen() {
     const persisted = settings.selectedGroups ?? (settings.selectedGroup ? [settings.selectedGroup] : null);
     return persisted?.length ? persisted : null;
   });
+
+  // The list swap on filter change is expensive (dozens of gradient cards).
+  // Chip selection persists + highlights immediately; the heavy list swap is
+  // rendered as a low-priority transition so taps never stall.
+  const applyGroupFilter = useCallback((next: string[] | null) => {
+    startTransition(() => setGroupFilter(next));
+  }, []);
   const selectGroup = useCallback((g: string | null) => {
-    setGroupFilter((prev) => {
-      if (g === null) {
-        updateSettings({ selectedGroup: null });
-        return null;
-      }
-      const base = prev ?? [];
-      const next = base.includes(g) ? base.filter((x) => x !== g) : [...base, g];
-      updateSettings({
-        selectedGroups: next.length ? next : [],
-        selectedGroup: next.length === 1 ? next[0] : null,
-      });
-      return next.length ? next : null;
+    const prev = groupFilter ?? [];
+    const next = g === null
+      ? []
+      : prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g];
+    updateSettings({
+      selectedGroups: next,
+      selectedGroup: next.length === 1 ? next[0] : null,
     });
-  }, [updateSettings]);
+    applyGroupFilter(next.length ? next : null);
+  }, [applyGroupFilter, groupFilter, updateSettings]);
   const customGroups = useMemo(() => settings.customGroups ?? [], [settings.customGroups]);
   const todayCheckIns = useMemo(
     () => checkIns.filter((checkIn) => checkIn.date === today),
@@ -142,7 +145,13 @@ export default function HomeScreen() {
     const persisted = settings.selectedGroups
       ?? (settings.selectedGroup ? [settings.selectedGroup] : null);
     const valid = (persisted ?? []).filter((group) => availableGroups.includes(group));
-    const timer = setTimeout(() => setGroupFilter(valid.length ? valid : null), 0);
+    const timer = setTimeout(() => {
+      setGroupFilter((prev) => {
+        const p = prev ?? [];
+        if (p.length === valid.length && p.every((g, i) => g === valid[i])) return prev;
+        return valid.length ? valid : null;
+      });
+    }, 0);
     return () => clearTimeout(timer);
   }, [availableGroups, loading, settings.selectedGroup, settings.selectedGroups]);
   const checkInTimeMap = useMemo(() => {
@@ -185,12 +194,12 @@ export default function HomeScreen() {
   }, [sortDesc, recencyIds, taskGroups, reorderTasks]);
 
   const changeGroupFilter = useCallback((next: string[]) => {
-    setGroupFilter(next.length ? next : null);
+    applyGroupFilter(next.length ? next : null);
     updateSettings({
       selectedGroups: next,
       selectedGroup: next.length === 1 ? next[0] : null,
     });
-  }, [updateSettings]);
+  }, [applyGroupFilter, updateSettings]);
 
   const createGroup = useCallback((rawName: string) => {
     const name = rawName.trim();
