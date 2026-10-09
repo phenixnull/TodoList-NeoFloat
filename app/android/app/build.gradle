@@ -92,8 +92,8 @@ android {
         applicationId 'com.sagittarius.habitpulse'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 65
-        versionName "1.7.30"
+        versionCode 66
+        versionName "1.7.31"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }

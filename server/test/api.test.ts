@@ -79,6 +79,39 @@ describe('HabitPulse API', () => {
     expect(response.json().error).toBe('INVALID_STT_REQUEST');
   });
 
+  it('batch-reorders tasks within a completion group', async () => {
+    const app = buildApp({ database: ':memory:' });
+    const mk = (id: string, sort: number) => ({
+      id, name: id, icon: 'heart', color: '#22d3ee', description: '', iconImage: null,
+      sortOrder: sort, customGroups: [], timerSegments: [], removedSegmentIds: [],
+      appUsageSegments: [], manualDurationMs: 0,
+      createdAt: `2026-10-01T0${sort}:00:00.000Z`, updatedAt: `2026-10-01T0${sort}:00:00.000Z`,
+    });
+    for (const task of [mk('ta', 0), mk('tb', 1), mk('tc', 2)]) {
+      const r = await app.inject({ method: 'POST', url: '/api/tasks', payload: task });
+      expect(r.statusCode).toBe(201);
+    }
+
+    const reorder = await app.inject({
+      method: 'POST',
+      url: '/api/tasks/reorder',
+      payload: { group: 'unfinished', orderedIds: ['tc', 'ta', 'tb'] },
+    });
+    expect(reorder.statusCode).toBe(200);
+    expect(reorder.json().changed).toBeGreaterThan(0);
+
+    const after = (await app.inject({ url: '/api/tasks' })).json() as Array<{ id: string; sortOrder: number }>;
+    const ordered = after.sort((a, b) => a.sortOrder - b.sortOrder).map((task) => task.id);
+    expect(ordered).toEqual(['tc', 'ta', 'tb']);
+
+    const stale = await app.inject({
+      method: 'POST',
+      url: '/api/tasks/reorder',
+      payload: { group: 'unfinished', orderedIds: ['tc', 'ta', 'tb', 'tx'] },
+    });
+    expect(stale.statusCode).toBe(409);
+  });
+
   it('stores, snapshots, and soft-deletes voice records', async () => {
     const app = buildApp({ database: ':memory:' });
     const created = await app.inject({
@@ -673,3 +706,5 @@ describe('HabitPulse API', () => {
     fs.rmSync(imageRoot, { recursive: true, force: true });
   });
 });
+
+// debug

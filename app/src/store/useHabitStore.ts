@@ -237,6 +237,21 @@ function useHabitStoreInstance() {
     });
   }, [applySnapshot, commit, enqueueSyncOperation, settingsReady]);
 
+  const pushReorder = useCallback(async (group: TaskCompletionGroup, orderedIds: string[]) => {
+    const base = settingsReady();
+    if (!base) return;
+    try {
+      await apiRequest(base, '/api/tasks/reorder', {
+        method: 'POST',
+        body: JSON.stringify({ group, orderedIds }),
+      });
+    } catch {
+      // Completion state diverged across devices: re-pull so the UI shows
+      // the server's true order instead of silently ignoring the drop.
+      void pullFromServer();
+    }
+  }, [pullFromServer, settingsReady]);
+
   const schedulePull = useCallback(() => {
     if (pullTimerRef.current) clearTimeout(pullTimerRef.current);
     pullTimerRef.current = setTimeout(() => {
@@ -699,11 +714,11 @@ function useHabitStoreInstance() {
       },
       shouldSync
         ? () => {
-          for (const task of dataRef.current.tasks) void pushTask(task);
+          void pushReorder(group, orderedIds);
         }
         : undefined,
     );
-  }, [commit, dropFollowUpScheduler, pushTask]);
+  }, [commit, dropFollowUpScheduler, pushReorder]);
 
   const toggleTimer = useCallback((taskId: string) => {
     const tasks = dataRef.current.tasks.map((task) => (

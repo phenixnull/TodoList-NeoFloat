@@ -612,6 +612,61 @@ export function buildApp({
     return rows.map(rowFromVoiceRecord);
   });
 
+  const reorderTasksSchema = z.object({
+    group: z.enum(['unfinished', 'finished']),
+    orderedIds: z.array(z.string().min(1)).min(1).max(500),
+  });
+
+  // Batch reorder: one request replaces the per-task push storm after a drag.
+  // Mirrors the client's reorderTaskGroup semantics for the completion group.
+  app.post('/api/tasks/reorder', async (request, reply) => {
+    const parsed = reorderTasksSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid reorder', details: parsed.error.flatten() });
+    }
+
+    const rows = db.prepare('SELECT * FROM tasks WHERE deleted_at IS NULL').all() as Array<any>;
+    const now = new Date();
+    const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const completed = new Set(
+      (db.prepare('SELECT task_id FROM check_ins WHERE date = ? AND deleted_at IS NULL').all(todayKey) as Array<any>)
+        .map((row) => row.task_id),
+    );
+
+    const compare = (a: any, b: any) =>
+      (a.sort_order !== b.sort_order ? a.sort_order - b.sort_order : String(a.created_at).localeCompare(String(b.created_at)));
+    const groupOf = (row: any) => (completed.has(row.id) ? 'finished' : 'unfinished');
+    const inGroup = rows.filter((row) => groupOf(row) === parsed.data.group).sort(compare);
+    const expected = new Set(inGroup.map((row) => row.id));
+    const orderedIds = [...new Set(parsed.data.orderedIds)];
+
+    if (orderedIds.length !== expected.size || orderedIds.some((id) => !expected.has(id))) {
+      return reply.code(409).send({ error: 'REORDER_STALE', got: orderedIds.length, expected: expected.size, group: parsed.data.group });
+    }
+
+    const unfinishedIds = parsed.data.group === 'unfinished'
+      ? orderedIds
+      : inGroup.filter((row) => groupOf(row) === 'unfinished').map((row) => row.id);
+    const finishedIds = parsed.data.group === 'finished'
+      ? orderedIds
+      : inGroup.filter((row) => groupOf(row) === 'finished').map((row) => row.id);
+    const orderById = new Map([...unfinishedIds, ...finishedIds].map((id, index) => [id, index]));
+
+    const nowIso = new Date().toISOString();
+    const updateAll = db.prepare('UPDATE tasks SET sort_order = ?, updated_at = ? WHERE id = ?');
+    let changed = 0;
+    for (const row of [...rows].sort(compare)) {
+      const next = orderById.get(row.id) ?? row.sort_order;
+      if (next !== row.sort_order) changed += 1;
+      updateAll.run(next, nowIso, row.id);
+    }
+
+    if (changed > 0) {
+      broadcast('tasks.reorder', { changed });
+    }
+    return { ok: true, changed };
+  });
+
   // Records are immutable; create uses upsert-by-id so offline replays are idempotent.
   app.post('/api/voice-records', async (request, reply) => {
     const parsed = voiceRecordSchema.safeParse(request.body);
