@@ -24,5 +24,14 @@ uv pip install -p .venv\Scripts\python.exe modelscope
 powershell -ExecutionPolicy Bypass -File start-stt-service.ps1
 ```
 
+脚本会以隐藏窗口拉起 uvicorn（日志写入 `stt-out.log` / `stt-err.log`），
+适合开机自启，不会留下终端窗口。
+
+计划任务推荐用 VBS 包裹，彻底无窗口：
+
+```powershell
+wscript.exe //B //Nologo <本目录>\run-hidden.vbs
+```
+
 服务监听 `http://127.0.0.1:8100`，仅本机可访问；
 手机端通过 HabitPulse 服务端（Fastify）代理访问，不直接暴露。

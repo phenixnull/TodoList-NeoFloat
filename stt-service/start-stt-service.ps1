@@ -10,4 +10,14 @@ if ($listener) {
     exit 0
 }
 Write-Host "Starting HabitPulse STT service on http://127.0.0.1:8100 ..."
-& $python -m uvicorn stt_service:app --host 127.0.0.1 --port 8100
+
+# Spawn uvicorn fully detached and hidden, with logs redirected to files, so
+# no console window stays open (scheduled task launches this script hidden).
+$outLog = Join-Path $dir "stt-out.log"
+$errLog = Join-Path $dir "stt-err.log"
+Start-Process -FilePath $python `
+    -ArgumentList @("-m", "uvicorn", "stt_service:app", "--host", "127.0.0.1", "--port", "8100") `
+    -WorkingDirectory $dir `
+    -WindowStyle Hidden `
+    -RedirectStandardOutput $outLog `
+    -RedirectStandardError $errLog
