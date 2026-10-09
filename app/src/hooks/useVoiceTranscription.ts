@@ -4,7 +4,6 @@ import {
   RecordingPresets,
   setAudioModeAsync,
   useAudioRecorder,
-  useAudioRecorderState,
 } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import { useSharedValue } from 'react-native-reanimated';
@@ -58,15 +57,22 @@ export function useVoiceTranscription() {
 
   const clearError = useCallback(() => setError(null), []);
   const recorder = useAudioRecorder(recOptions);
-  // Polling state carries the live `metering` (dB) when metering is enabled.
-  const recorderState = useAudioRecorderState(recorder, 120);
-
   useEffect(() => {
-    if (typeof recorderState.metering === 'number') {
+    // Poll the native metering ONLY while streaming; the voice screen stays
+    // mounted in the stack, so an always-on poll would tax every screen.
+    if (phase !== 'streaming') return;
+    const interval = setInterval(() => {
+      const state = recorder.getStatus();
+      if (typeof state.metering === 'number') {
       // metering is dB (roughly -60..0); normalize into 0..1.
-      metering.value = Math.min(1, Math.max(0, (recorderState.metering + 50) / 50));
+        metering.value = Math.min(1, Math.max(0, (state.metering + 50) / 50));
+      }
+    }, 100);
+    return () => {
+      clearInterval(interval);
+      metering.value = 0;
     }
-  }, [metering, recorderState.metering]);
+  }, [metering, phase, recorder]);
 
   const transcribeSegment = useCallback(
     async (index: number, uri: string) => {

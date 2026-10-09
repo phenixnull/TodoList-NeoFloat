@@ -15,7 +15,7 @@ import {
   downloadDayRecordImages,
   readDayRecordImageBase64,
 } from '../services/dayRecordFiles';
-import { defaultData, loadData, saveData } from '../storage/storage';
+import { defaultData, loadData, saveData, setupStorageFlushListener } from '../storage/storage';
 
 function createId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -65,6 +65,9 @@ function imageMetadataMatches(
 }
 
 function useHabitStoreInstance() {
+  // Flush debounced local writes when the app leaves the foreground.
+  setupStorageFlushListener();
+
   const [data, setData] = useState<AppData>(defaultData);
   const [loading, setLoading] = useState(true);
   const [syncState, setSyncState] = useState<SyncState>({ status: 'idle' });

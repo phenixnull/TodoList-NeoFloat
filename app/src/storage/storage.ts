@@ -4,6 +4,9 @@ import { AppData, DayRecord, Task } from '../domain/types';
 const STORAGE_KEY = 'habitpulse.data.v1';
 let memoryData: AppData | null = null;
 let writeQueue: Promise<void> = Promise.resolve();
+let pendingData: AppData | null = null;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let flushListenerInstalled = false;
 
 const ignoreWriteError = () => {};
 
@@ -88,7 +91,41 @@ export async function loadData(): Promise<AppData> {
 
 export async function saveData(data: AppData): Promise<void> {
   memoryData = data;
-  const task = writeQueue.then(() => AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data)));
+  pendingData = data;
+  if (saveTimer) clearTimeout(saveTimer);
+
+  // Coalesce rapid commits (group chips, toggles) into one write so the
+  // potentially multi-megabyte JSON.stringify never runs per tap.
+  // Callers resolve immediately; the trailing write happens off the interaction
+  // and is force-flushed when the app leaves the foreground.
+  saveTimer = setTimeout(() => flushPendingWrite(), 250);
+}
+
+function flushPendingWrite(done?: () => void): void {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  const toWrite = pendingData;
+  pendingData = null;
+  if (!toWrite) {
+    done?.();
+    return;
+  }
+  const task = writeQueue.then(() => AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(toWrite)));
   writeQueue = task.then(ignoreWriteError, ignoreWriteError);
-  await task;
+  task.then(() => done?.(), () => done?.());
+}
+
+// Never lose queued data when the app goes to background / is killed.
+export function setupStorageFlushListener(): void {
+  if (flushListenerInstalled) return;
+  flushListenerInstalled = true;
+  // Lazy require keeps web/vitest free of the react-native import.
+  const { AppState } = require('react-native') as typeof import('react-native');
+  AppState.addEventListener('change', (state: string) => {
+    if (state === 'background' || state === 'inactive') {
+      flushPendingWrite();
+    }
+  });
 }
