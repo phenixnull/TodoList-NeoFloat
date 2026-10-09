@@ -101,6 +101,34 @@ export async function saveData(data: AppData): Promise<void> {
   saveTimer = setTimeout(() => flushPendingWrite(), 250);
 }
 
+const yieldToJs = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+// Large arrays (task icons, record images are base64) would block the JS
+// thread for 100-300ms in one JSON.stringify. Serialize item-by-item and
+// yield between batches so no single frame stalls.
+async function stringifyArrayWithYield(items: unknown[]): Promise<string> {
+  let out = '[';
+  for (let i = 0; i < items.length; i += 1) {
+    out += (i > 0 ? ',' : '') + JSON.stringify(items[i]);
+    if (i % 4 === 3) await yieldToJs();
+  }
+  return `${out}]`;
+}
+
+async function stringifyAppData(data: AppData): Promise<string> {
+  const tasks = await stringifyArrayWithYield(data.tasks ?? []);
+  await yieldToJs();
+  const checkIns = await stringifyArrayWithYield(data.checkIns ?? []);
+  await yieldToJs();
+  const dayRecords = await stringifyArrayWithYield(data.dayRecords ?? []);
+  await yieldToJs();
+  const voiceRecords = await stringifyArrayWithYield(data.voiceRecords ?? []);
+  await yieldToJs();
+  return `{"tasks":${tasks},"checkIns":${checkIns},"deletedCheckIns":${JSON.stringify(
+    data.deletedCheckIns ?? [],
+  )},"dayRecords":${dayRecords},"voiceRecords":${voiceRecords},"settings":${JSON.stringify(data.settings)}}`;
+}
+
 function flushPendingWrite(done?: () => void): void {
   if (saveTimer) {
     clearTimeout(saveTimer);
@@ -112,7 +140,9 @@ function flushPendingWrite(done?: () => void): void {
     done?.();
     return;
   }
-  const task = writeQueue.then(() => AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(toWrite)));
+  const task = writeQueue
+    .then(() => stringifyAppData(toWrite))
+    .then((raw) => AsyncStorage.setItem(STORAGE_KEY, raw));
   writeQueue = task.then(ignoreWriteError, ignoreWriteError);
   task.then(() => done?.(), () => done?.());
 }
